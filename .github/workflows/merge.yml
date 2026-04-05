@@ -128,6 +128,7 @@ jobs:
             mv jell_tmp/upx-static opd/
             mv jell_tmp/luci-lib-taskd opd/
             mv jell_tmp/luci-lib-xterm opd/
+            mv jell_tmp/taskd opd/
             
             rm -rf jell_tmp
           } &
