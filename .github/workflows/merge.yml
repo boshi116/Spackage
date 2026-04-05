@@ -18,14 +18,12 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          submodules: 'false'
 
-      - name: 清理残留子模块
+      - name: 清理残留子模块与文件
         run: |
-          rm -rf .gitmodules
+          rm -rf .gitmodules OpenAppFilter
           git submodule deinit --all -f 2>/dev/null || true
           git rm --cached OpenAppFilter 2>/dev/null || true
-          rm -rf OpenAppFilter
 
       - name: 设置 Git 与时区
         run: |
@@ -33,12 +31,12 @@ jobs:
           git config --global user.email "actions@github.com"
           sudo timedatectl set-timezone Asia/Shanghai || true
 
-      - name: 清理并下载所有插件到 opd
+      - name: 清理环境并并行下载插件
         run: |
           set -euo pipefail
           shopt -s extglob
           
-          echo "🧹 清理环境..."
+          echo "🧹 清理工作目录..."
           rm -rf !( .github | README.md | .gitignore | .git )
           mkdir -p opd
 
@@ -48,9 +46,10 @@ jobs:
             echo "🔽 下载 → opd/$dir"
             git clone --depth 1 "$repo" "opd/$dir"
           }
-          
-          echo "🚀 开始下载所有插件..."
 
+          echo "🚀 开始并行下载所有插件..."
+
+          # 分组并行下载，避免过多进程导致失败
           {
             git_clone https://github.com/kiddin9/luci-app-dnsfilter luci-app-dnsfilter
             git_clone https://github.com/kiddin9/aria2 aria2
@@ -61,7 +60,7 @@ jobs:
           {
             git_clone https://github.com/riverscn/openwrt-iptvhelper openwrt-iptvhelper
             git_clone https://github.com/kongfl888/luci-app-timedreboot luci-app-timedreboot
-            git clone --depth 1 https://github.com/destan19/OpenAppFilter.git opd/OpenAppFilter
+            git_clone https://github.com/destan19/OpenAppFilter.git OpenAppFilter
           } &
 
           {
@@ -92,7 +91,6 @@ jobs:
             git_clone https://github.com/gSpotx2f/luci-app-cpu-status luci-app-cpu-status
             git_clone https://github.com/ilxp/luci-app-ikoolproxy luci-app-ikoolproxy
             git_clone https://github.com/EasyTier/luci-app-easytier luci-app-easytier
-
             git_clone https://github.com/stackia/rtp2httpd rtp2httpd
             git_clone https://github.com/jerrykuku/luci-app-argon-config luci-app-argon-config
             git_clone https://github.com/jerrykuku/luci-theme-argon luci-theme-argon
@@ -126,23 +124,28 @@ jobs:
             mv jell_tmp/luci-app-unishare opd/
             mv jell_tmp/filebrowser opd/
             mv jell_tmp/luci-app-filebrowser opd/
+
+            # 👉 这里加上了 upx 和 upx-static
+            mv jell_tmp/upx opd/
+            mv jell_tmp/upx-static opd/
+            
             rm -rf jell_tmp
           } &
 
           wait
-          
-          echo "✅ 所有插件已下载到 opd 目录"
-          
+          echo "✅ 所有插件下载完成"
+
           echo "🧹 清理冗余文件..."
           rm -rf opd/*/.git* opd/*/README* opd/*/LICENSE opd/*/docs opd/*/.github 2>/dev/null
-          
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "ℹ️ 无更新，退出"
-            exit 0
-          fi
 
-      - name: 提交并推送
+      - name: 提交并推送更新
         run: |
           git add .
-          git commit -m "📦 自动更新 | 添加 filebrowser + luci-app-filebrowser"
-          git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+          if git status --porcelain | grep -q .; then
+            echo "📤 检测到更新，开始提交"
+            git commit -m "📦 自动更新插件集合 $(date '+%Y-%m-%d %H:%M:%S')"
+            git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+          else
+            echo "ℹ️ 无文件变更，退出"
+            exit 0
+          fi
