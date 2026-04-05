@@ -44,7 +44,7 @@ jobs:
             local repo="$1"
             local dir="$2"
             echo "🔽 下载 → opd/$dir"
-            git clone --depth 1 "$repo" "opd/$dir"
+            git clone --depth 1 --single-branch "$repo" "opd/$dir"
           }
 
           echo "🚀 开始并行下载所有插件..."
@@ -95,7 +95,6 @@ jobs:
             git_clone https://github.com/jerrykuku/luci-app-argon-config luci-app-argon-config
             git_clone https://github.com/jerrykuku/luci-theme-argon luci-theme-argon
             git_clone https://github.com/gaoyaxuan/luci-app-pushbot luci-app-pushbot
-            # 新增 netstat 插件
             git_clone https://github.com/nooblk-98/luci-app-netstat luci-app-netstat
           } &
 
@@ -111,29 +110,41 @@ jobs:
 
           {
             git clone --depth 1 https://github.com/kenzok8/jell jell_tmp
-            mv jell_tmp/luci-app-aria2 opd/
-            mv jell_tmp/luci-app-ipsec-server opd/
-            mv jell_tmp/luci-app-pptpd opd/
-            mv jell_tmp/webdav2 opd/
-            mv jell_tmp/luci-app-msd_lite opd/
-            mv jell_tmp/luci-app-onliner opd/
-            mv jell_tmp/msd_lite opd/
-            mv jell_tmp/luci-app-control-timewol opd/
-            mv jell_tmp/luci-app-control-webrestriction opd/
-            mv jell_tmp/luci-app-control-weburl opd/
-            mv jell_tmp/luci-app-xunlei opd/
-            mv jell_tmp/unishare opd/
-            mv jell_tmp/luci-app-unishare opd/
-            mv jell_tmp/filebrowser opd/
-            mv jell_tmp/luci-app-filebrowser opd/
-            mv jell_tmp/upx opd/
-            mv jell_tmp/upx-static opd/
-            mv jell_tmp/luci-lib-taskd opd/
-            mv jell_tmp/luci-lib-xterm opd/
-            mv jell_tmp/taskd opd/
-            
+            [ -d "jell_tmp" ] && {
+              mv jell_tmp/luci-app-aria2 opd/
+              mv jell_tmp/luci-app-ipsec-server opd/
+              mv jell_tmp/luci-app-pptpd opd/
+              mv jell_tmp/webdav2 opd/
+              mv jell_tmp/luci-app-msd_lite opd/
+              mv jell_tmp/luci-app-onliner opd/
+              mv jell_tmp/msd_lite opd/
+              mv jell_tmp/luci-app-control-timewol opd/
+              mv jell_tmp/luci-app-control-webrestriction opd/
+              mv jell_tmp/luci-app-control-weburl opd/
+              mv jell_tmp/luci-app-xunlei opd/
+              mv jell_tmp/unishare opd/
+              mv jell_tmp/luci-app-unishare opd/
+              mv jell_tmp/filebrowser opd/
+              mv jell_tmp/luci-app-filebrowser opd/
+              mv jell_tmp/upx opd/
+              mv jell_tmp/upx-static opd/
+              mv jell_tmp/luci-lib-taskd opd/
+              mv jell_tmp/luci-lib-xterm opd/
+              mv jell_tmp/taskd opd/
+            }
             rm -rf jell_tmp
           } &
+
+          # ====================== clashoo 全套插件 + 依赖 ======================
+          {
+            echo "🔽 下载 openwrt-clashoo 全套"
+            git clone --depth 1 https://github.com/kenzok8/openwrt-clashoo clashoo_tmp
+            [ -d "clashoo_tmp" ] && {
+              mv clashoo_tmp/* opd/ 2>/dev/null || true
+            }
+            rm -rf clashoo_tmp
+          } &
+          # ====================================================================
 
           wait
           echo "✅ 所有插件下载完成"
@@ -143,10 +154,10 @@ jobs:
 
       - name: 提交并推送更新
         run: |
-          git add .
+          git add -A
           if git status --porcelain | grep -q .; then
             echo "📤 检测到更新，开始提交"
-            FILES=$(git diff --name-only | tr '\n' ' ' | cut -c 1-120)
+            FILES=$(git diff --name-only | head -20 | tr '\n' ' ' || true)
             COMMIT_MSG="📦 自动更新 $(date '+%Y-%m-%d %H:%M:%S') | 变更：$FILES"
             git commit -m "$COMMIT_MSG"
             git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
