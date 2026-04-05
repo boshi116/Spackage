@@ -56,7 +56,6 @@ jobs:
             git_clone https://github.com/kiddin9/aria2 aria2
             git_clone https://github.com/kiddin9/autoshare autoshare
             git_clone https://github.com/kiddin9/luci-app-wizard luci-app-wizard
-            git_clone https://github.com/kiddin9/openwrt-filebrowser openwrt-filebrowser
           } &
 
           {
@@ -124,6 +123,8 @@ jobs:
             mv jell_tmp/luci-app-xunlei opd/
             mv jell_tmp/unishare opd/
             mv jell_tmp/luci-app-unishare opd/
+            mv jell_tmp/filebrowser opd/
+            mv jell_tmp/luci-app-filebrowser opd/
             rm -rf jell_tmp
           } &
 
@@ -142,5 +143,5 @@ jobs:
       - name: 提交并推送
         run: |
           git add .
-          git commit -m "📦 自动更新 | 添加 unishare + luci-app-unishare"
+          git commit -m "📦 自动更新 | 添加 filebrowser + luci-app-filebrowser"
           git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
