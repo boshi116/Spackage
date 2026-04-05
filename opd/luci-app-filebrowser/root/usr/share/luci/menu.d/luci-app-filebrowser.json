@@ -2,7 +2,7 @@
 	"admin/services/filebrowser": {
 		"title": "FileBrowser",
 		"action": {
-			"order": 100,
+			"order": 30,
 			"type": "view",
 			"path": "filebrowser"
 		},
