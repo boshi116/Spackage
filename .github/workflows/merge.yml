@@ -153,25 +153,21 @@ jobs:
 
             FILE_COUNT=$(git status --porcelain | wc -l)
             UPDATE_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-            
             UPDATE_PLUGINS=$(git status --porcelain | awk '{print $2}' | grep '^opd/' | cut -d'/' -f2 | sort -u | head -20 | awk '{print "🔹 " $0}')
 
-            cat > README_NEW.md << EOF
-## 📦 最近自动更新
-**更新时间**：${UPDATE_TIME}
-**更新文件数**：${FILE_COUNT} 个
-
-**更新插件**：
-${UPDATE_PLUGINS}
-
----
-EOF
+            echo "## 📦 最近自动更新" > README_NEW.md
+            echo "**更新时间**：$UPDATE_TIME" >> README_NEW.md
+            echo "**更新文件数**：$FILE_COUNT 个" >> README_NEW.md
+            echo "" >> README_NEW.md
+            echo "**更新插件**：" >> README_NEW.md
+            echo "$UPDATE_PLUGINS" >> README_NEW.md
+            echo "" >> README_NEW.md
+            echo "---" >> README_NEW.md
             cat README.md >> README_NEW.md
             mv -f README_NEW.md README.md
 
             git add README.md
             git commit -m "📦 自动更新 | $UPDATE_TIME | 共 $FILE_COUNT 个文件"
-
             git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
           else
             echo "ℹ️ 无文件变更，退出"
