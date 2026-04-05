@@ -67,7 +67,6 @@ jobs:
           {
             git_clone https://github.com/sirpdboy/luci-app-timecontrol luci-app-timecontrol
             git_clone https://github.com/sirpdboy/luci-app-advancedplus luci-app-advancedplus
-            git_clone https://github.com/sirpdboy/luci-app-autotimeset luci-app-autotimeset
             git_clone https://github.com/sirpdboy/luci-app-lucky luci-app-lucky
             git_clone https://github.com/sirpdboy/luci-app-partexp luci-app-partexp
             git_clone https://github.com/sirpdboy/netspeedtest netspeedtest
@@ -76,11 +75,9 @@ jobs:
             git_clone https://github.com/sirpdboy/luci-app-eqosplus luci-app-eqosplus
             git_clone https://github.com/sirpdboy/luci-app-taskplan luci-app-taskplan
             git_clone https://github.com/sirpdboy/luci-app-netwizard luci-app-netwizard
-            git_clone https://github.com/sirpdboy/luci-app-poweroffdevice luci-app-poweroffdevice
           } &
 
           {
-            git_clone https://github.com/peter-tank/luci-app-autorepeater luci-app-autorepeater
             git_clone https://github.com/brvphoenix/luci-app-wrtbwmon luci-app-wrtbwmon
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
@@ -140,5 +137,5 @@ jobs:
       - name: 提交并推送
         run: |
           git add .
-          git commit -m "📦 自动更新 | 删除 qbittorrent"
+          git commit -m "📦 自动更新 | 删除 poweroffdevice / autorepeater / autotimeset"
           git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
