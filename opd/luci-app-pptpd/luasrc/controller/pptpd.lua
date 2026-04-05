@@ -22,7 +22,7 @@ function index()
 
 	entry({"admin", "services", "pptpd"},
 		alias("admin", "services", "pptpd", "settings"),
-		_("VPN Server"), 48)
+		_("VPN Server"), 60)
 
 	entry({"admin", "services", "pptpd", "settings"},
 		cbi("pptpd/settings"),
