@@ -96,6 +96,8 @@ jobs:
             git_clone https://github.com/stackia/rtp2httpd rtp2httpd
             git_clone https://github.com/jerrykuku/luci-app-argon-config luci-app-argon-config
             git_clone https://github.com/jerrykuku/luci-theme-argon luci-theme-argon
+            # 新增 PushBot 推送助手
+            git_clone https://github.com/gaoyaxuan/luci-app-pushbot luci-app-pushbot
           } &
 
           {
@@ -138,5 +140,5 @@ jobs:
       - name: 提交并推送
         run: |
           git add .
-          git commit -m "📦 自动更新 | 添加 openwrt-smartdns 核心源码"
+          git commit -m "📦 自动更新 | 添加 PushBot 推送插件"
           git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
