@@ -146,7 +146,9 @@ jobs:
           git add .
           if git status --porcelain | grep -q .; then
             echo "📤 检测到更新，开始提交"
-            git commit -m "📦 自动更新插件集合 $(date '+%Y-%m-%d %H:%M:%S')"
+            FILES=$(git diff --name-only | tr '\n' ' ' | cut -c 1-120)
+            COMMIT_MSG="📦 自动更新 $(date '+%Y-%m-%d %H:%M:%S') | 变更：$FILES"
+            git commit -m "$COMMIT_MSG"
             git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
           else
             echo "ℹ️ 无文件变更，退出"
