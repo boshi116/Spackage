@@ -96,7 +96,6 @@ jobs:
             git_clone https://github.com/stackia/rtp2httpd rtp2httpd
             git_clone https://github.com/jerrykuku/luci-app-argon-config luci-app-argon-config
             git_clone https://github.com/jerrykuku/luci-theme-argon luci-theme-argon
-            # 新增 PushBot 推送助手
             git_clone https://github.com/gaoyaxuan/luci-app-pushbot luci-app-pushbot
           } &
 
@@ -122,6 +121,9 @@ jobs:
             mv jell_tmp/luci-app-control-timewol opd/
             mv jell_tmp/luci-app-control-webrestriction opd/
             mv jell_tmp/luci-app-control-weburl opd/
+            mv jell_tmp/luci-app-xunlei opd/
+            mv jell_tmp/unishare opd/
+            mv jell_tmp/luci-app-unishare opd/
             rm -rf jell_tmp
           } &
 
@@ -140,5 +142,5 @@ jobs:
       - name: 提交并推送
         run: |
           git add .
-          git commit -m "📦 自动更新 | 添加 PushBot 推送插件"
+          git commit -m "📦 自动更新 | 添加 unishare + luci-app-unishare"
           git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
