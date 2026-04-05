@@ -49,7 +49,6 @@ jobs:
 
           echo "🚀 开始并行下载所有插件..."
 
-          # 并行分组下载
           {
             git_clone https://github.com/kiddin9/luci-app-dnsfilter luci-app-dnsfilter
             git_clone https://github.com/kiddin9/aria2 aria2
@@ -152,34 +151,26 @@ jobs:
             git status --porcelain | awk '{print "✅ " $2}'
             echo "====================================="
 
-            # 统计信息
             FILE_COUNT=$(git status --porcelain | wc -l)
             UPDATE_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-            UPDATE_LIST=$(git status --porcelain | awk '{print "🔹 " $2}')
+            
+            UPDATE_PLUGINS=$(git status --porcelain | awk '{print $2}' | grep '^opd/' | cut -d'/' -f2 | sort -u | head -20 | awk '{print "🔹 " $0}')
 
-            # 拼接更新日志
-            UPDATE_LOG="## 📦 最近自动更新
-**更新时间**：$UPDATE_TIME
-**更新文件数**：$FILE_COUNT 个
+            cat > README_NEW.md << EOF
+## 📦 最近自动更新
+**更新时间**：${UPDATE_TIME}
+**更新文件数**：${FILE_COUNT} 个
 
-**更新内容**：
-$UPDATE_LIST
+**更新插件**：
+${UPDATE_PLUGINS}
 
 ---
-"
-
-            # 把更新日志写入 README.md 顶部
-            echo "$UPDATE_LOG" > README_NEW.md
+EOF
             cat README.md >> README_NEW.md
-            mv README_NEW.md README.md
+            mv -f README_NEW.md README.md
 
-            # Git 提交
             git add README.md
-            git commit -m "📦 自动更新插件集合（共 $FILE_COUNT 个文件）
-时间：$UPDATE_TIME
-
-已更新插件：
-$UPDATE_LIST"
+            git commit -m "📦 自动更新 | $UPDATE_TIME | 共 $FILE_COUNT 个文件"
 
             git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
           else
