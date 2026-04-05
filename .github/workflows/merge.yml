@@ -4,7 +4,7 @@ on:
     paths:
       - '.github/workflows/merge.yml'
   schedule:
-    - cron: '0 */6 * * *'
+    cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -77,11 +77,6 @@ jobs:
           } &
 
           {
-            # 新增：OpenAppFilter 应用过滤（无submodule报错版）
-            git clone --depth 1 https://github.com/destan19/OpenAppFilter tmp-oaf
-            mv tmp-oaf/* opd/
-            rm -rf tmp-oaf
-            
             git_clone https://github.com/brvphoenix/luci-app-wrtbwmon luci-app-wrtbwmon
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
@@ -148,5 +143,5 @@ jobs:
       - name: 提交并推送
         run: |
           git add .
-          git commit -m "📦 自动更新 | 添加 OpenAppFilter 应用过滤"
+          git commit -m "📦 自动更新 | 删除 OpenAppFilter"
           git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/boshi116/diy.git" HEAD:main
