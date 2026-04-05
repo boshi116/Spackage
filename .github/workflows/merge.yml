@@ -61,6 +61,7 @@ jobs:
           {
             git_clone https://github.com/riverscn/openwrt-iptvhelper openwrt-iptvhelper
             git_clone https://github.com/kongfl888/luci-app-timedreboot luci-app-timedreboot
+            git clone --depth 1 https://github.com/destan19/OpenAppFilter.git opd/OpenAppFilter
           } &
 
           {
