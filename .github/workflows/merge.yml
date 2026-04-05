@@ -154,14 +154,15 @@ jobs:
 
       - name: 提交并推送更新
         run: |
-          git add -A
-          if git status --porcelain | grep -q .; then
-            echo "📤 检测到更新，开始提交"
-            FILES=$(git diff --name-only | head -20 | tr '\n' ' ' || true)
-            COMMIT_MSG="📦 自动更新 $(date '+%Y-%m-%d %H:%M:%S') | 变更：$FILES"
-            git commit -m "$COMMIT_MSG"
-            git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
-          else
+          git add .
+          CHANGES=$(git status -s)
+          if [ -n "$CHANGES" ]; then
+             echo "📤 检测到更新，开始提交"
+             FILES=$(git diff --name-only | head -10 | tr '\n' ' ')
+             COMMIT_MSG="📦 自动更新 $(date '+%Y-%m-%d %H:%M:%S') | 变更：$FILES"
+             git commit -m "$COMMIT_MSG"
+             git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+            else
             echo "ℹ️ 无文件变更，退出"
             exit 0
           fi
