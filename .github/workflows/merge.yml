@@ -20,25 +20,22 @@ jobs:
           persist-credentials: false
           submodules: 'false'
 
-      - name: 清理残留子模块
+      - name: 清理残留
         run: |
           rm -rf .gitmodules
           git submodule deinit --all -f 2>/dev/null || true
           git rm --cached OpenAppFilter 2>/dev/null || true
           rm -rf OpenAppFilter
 
-      - name: 设置 Git 与时区
+      - name: 设置 Git
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          sudo timedatectl set-timezone Asia/Shanghai || true
+          git config --global user.name "bot"
+          git config --global user.email "bot@github.com"
 
-      - name: 清理并下载所有插件到 opd
+      - name: 下载所有插件到 opd
         run: |
           set -euo pipefail
           shopt -s extglob
-          
-          echo "🧹 清理环境..."
           rm -rf !( .github | README.md | .gitignore | .git )
           mkdir -p opd
 
@@ -48,8 +45,8 @@ jobs:
             echo "🔽 下载 → opd/$dir"
             git clone --depth 1 "$repo" "opd/$dir"
           }
-          
-          echo "🚀 开始下载所有插件..."
+
+          echo "🚀 开始下载插件..."
 
           {
             git_clone https://github.com/kiddin9/luci-app-dnsfilter luci-app-dnsfilter
@@ -77,6 +74,9 @@ jobs:
           } &
 
           {
+            # ✅ 正确添加 OpenAppFilter 全套（无报错版）
+            git clone --depth 1 https://github.com/destan19/OpenAppFilter.git opd/OpenAppFilter
+            
             git_clone https://github.com/brvphoenix/luci-app-wrtbwmon luci-app-wrtbwmon
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
@@ -129,19 +129,13 @@ jobs:
           } &
 
           wait
-          
+
           echo "✅ 所有插件已下载到 opd 目录"
-          
-          echo "🧹 清理冗余文件..."
+
           rm -rf opd/*/.git* opd/*/README* opd/*/LICENSE opd/*/docs opd/*/.github 2>/dev/null
-          
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "ℹ️ 无更新，退出"
-            exit 0
-          fi
 
       - name: 提交并推送
         run: |
           git add .
-          git commit -m "📦 自动更新 | 删除 OpenAppFilter"
+          git commit -m "📦 自动更新 | 正确添加 OpenAppFilter 全套依赖"
           git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/boshi116/diy.git" HEAD:main
