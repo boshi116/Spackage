@@ -124,10 +124,9 @@ jobs:
             mv jell_tmp/luci-app-unishare opd/
             mv jell_tmp/filebrowser opd/
             mv jell_tmp/luci-app-filebrowser opd/
-
-            # 👉 这里加上了 upx 和 upx-static
             mv jell_tmp/upx opd/
             mv jell_tmp/upx-static opd/
+            mv jell_tmp/luci-lib-taskd opd/
             
             rm -rf jell_tmp
           } &
