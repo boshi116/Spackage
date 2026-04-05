@@ -106,7 +106,6 @@ jobs:
             git_clone https://github.com/pymumu/luci-app-smartdns luci-app-smartdns
             git_clone https://github.com/Openwrt-Passwall/openwrt-passwall2 openwrt-passwall2
             git_clone https://github.com/Openwrt-Passwall/openwrt-passwall openwrt-passwall
-            git_clone https://github.com/sbwml/luci-app-qbittorrent luci-app-qbittorrent
             git_clone https://github.com/timsaya/luci-app-bandix luci-app-bandix
             git_clone https://github.com/timsaya/openwrt-bandix openwrt-bandix
           } &
@@ -141,5 +140,5 @@ jobs:
       - name: 提交并推送
         run: |
           git add .
-          git commit -m "📦 自动更新 | 新增 web限制 + url限制 + 定时唤醒"
+          git commit -m "📦 自动更新 | 删除 qbittorrent"
           git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
