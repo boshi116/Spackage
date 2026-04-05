@@ -13,14 +13,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout（禁用子模块，彻底解决报错）
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-          submodules: 'false'  # 核心：强制禁用git子模块
+          submodules: 'false'
 
-      - name: 彻底清理残留子模块（关键修复）
+      - name: 清理残留子模块
         run: |
           rm -rf .gitmodules
           git submodule deinit --all -f 2>/dev/null || true
@@ -33,24 +33,24 @@ jobs:
           git config --global user.email "actions@github.com"
           sudo timedatectl set-timezone Asia/Shanghai || true
 
-      - name: 清理并下载所有插件到 package
+      - name: 清理并下载所有插件到 opd
         run: |
           set -euo pipefail
           shopt -s extglob
           
           echo "🧹 清理环境..."
           rm -rf !( .github | README.md | .gitignore | .git )
-          mkdir -p package
-          
+          mkdir -p opd
+
           git_clone() {
             local repo="$1"
             local dir="$2"
-            echo "🔽 下载 → package/$dir"
-            git clone --depth 1 "$repo" "package/$dir"
+            echo "🔽 下载 → opd/$dir"
+            git clone --depth 1 "$repo" "opd/$dir"
           }
           
           echo "🚀 开始下载所有插件..."
-          
+
           {
             git_clone https://github.com/kiddin9/luci-app-dnsfilter luci-app-dnsfilter
             git_clone https://github.com/kiddin9/aria2 aria2
@@ -58,12 +58,12 @@ jobs:
             git_clone https://github.com/kiddin9/luci-app-wizard luci-app-wizard
             git_clone https://github.com/kiddin9/openwrt-filebrowser openwrt-filebrowser
           } &
-          
+
           {
             git_clone https://github.com/riverscn/openwrt-iptvhelper openwrt-iptvhelper
             git_clone https://github.com/kongfl888/luci-app-timedreboot luci-app-timedreboot
           } &
-          
+
           {
             git_clone https://github.com/sirpdboy/luci-app-timecontrol luci-app-timecontrol
             git_clone https://github.com/sirpdboy/luci-app-advancedplus luci-app-advancedplus
@@ -78,16 +78,15 @@ jobs:
             git_clone https://github.com/sirpdboy/luci-app-netwizard luci-app-netwizard
             git_clone https://github.com/sirpdboy/luci-app-poweroffdevice luci-app-poweroffdevice
           } &
-          
+
           {
-            # 完全移除报错的 OpenAppFilter
             git_clone https://github.com/peter-tank/luci-app-autorepeater luci-app-autorepeater
             git_clone https://github.com/brvphoenix/luci-app-wrtbwmon luci-app-wrtbwmon
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
             git_clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic luci-app-unblockneteasemusic
           } &
-          
+
           {
             git_clone https://github.com/tty228/luci-app-wechatpush luci-app-wechatpush
             git_clone https://github.com/ZeaKyX/speedtest-web speedtest-web
@@ -96,12 +95,12 @@ jobs:
             git_clone https://github.com/gSpotx2f/luci-app-cpu-status luci-app-cpu-status
             git_clone https://github.com/ilxp/luci-app-ikoolproxy luci-app-ikoolproxy
             git_clone https://github.com/EasyTier/luci-app-easytier luci-app-easytier
-            
+
             git_clone https://github.com/stackia/rtp2httpd rtp2httpd
             git_clone https://github.com/jerrykuku/luci-app-argon-config luci-app-argon-config
             git_clone https://github.com/jerrykuku/luci-theme-argon luci-theme-argon
           } &
-          
+
           {
             git_clone https://github.com/kenzok78/luci-app-adguardhome luci-app-adguardhome
             git_clone https://github.com/pymumu/luci-app-smartdns luci-app-smartdns
@@ -112,28 +111,25 @@ jobs:
             git_clone https://github.com/timsaya/openwrt-bandix openwrt-bandix
           } &
 
-          # kenzok8/jell 7个插件 全部进package
           {
             git clone --depth 1 https://github.com/kenzok8/jell jell_tmp
-            mv jell_tmp/luci-app-aria2 package/
-            mv jell_tmp/luci-app-ipsec-server package/
-            mv jell_tmp/luci-app-pptpd package/
-            mv jell_tmp/webdav2 package/
-            mv jell_tmp/luci-app-msd_lite package/
-            mv jell_tmp/luci-app-onliner package/
-            mv jell_tmp/msd_lite package/
+            mv jell_tmp/luci-app-aria2 opd/
+            mv jell_tmp/luci-app-ipsec-server opd/
+            mv jell_tmp/luci-app-pptpd opd/
+            mv jell_tmp/webdav2 opd/
+            mv jell_tmp/luci-app-msd_lite opd/
+            mv jell_tmp/luci-app-onliner opd/
+            mv jell_tmp/msd_lite opd/
             rm -rf jell_tmp
           } &
-          
+
           wait
           
-          echo "✅ 所有插件已下载到 package 目录"
+          echo "✅ 所有插件已下载到 opd 目录"
           
-          # 清理冗余文件
-          echo "🧹 清理垃圾文件..."
-          rm -rf package/*/.git* package/*/README* package/*/LICENSE package/*/docs package/*/.github 2>/dev/null
+          echo "🧹 清理冗余文件..."
+          rm -rf opd/*/.git* opd/*/README* opd/*/LICENSE opd/*/docs opd/*/.github 2>/dev/null
           
-          # 无变更则退出
           if [ -z "$(git status --porcelain)" ]; then
             echo "ℹ️ 无更新，退出"
             exit 0
@@ -142,5 +138,5 @@ jobs:
       - name: 提交并推送
         run: |
           git add .
-          git commit -m "📦 自动更新 | 彻底修复子模块报错 | 全插件进package"
+          git commit -m "📦 自动更新 | 全部插件放入 opd 目录"
           git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
