@@ -120,6 +120,9 @@ jobs:
             mv jell_tmp/luci-app-msd_lite opd/
             mv jell_tmp/luci-app-onliner opd/
             mv jell_tmp/msd_lite opd/
+            mv jell_tmp/luci-app-control-timewol opd/
+            mv jell_tmp/luci-app-control-webrestriction opd/
+            mv jell_tmp/luci-app-control-weburl opd/
             rm -rf jell_tmp
           } &
 
@@ -138,5 +141,5 @@ jobs:
       - name: 提交并推送
         run: |
           git add .
-          git commit -m "📦 自动更新 | 全部插件放入 opd 目录"
+          git commit -m "📦 自动更新 | 新增 web限制 + url限制 + 定时唤醒"
           git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
