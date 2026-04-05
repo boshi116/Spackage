@@ -101,6 +101,7 @@ jobs:
           {
             git_clone https://github.com/kenzok78/luci-app-adguardhome luci-app-adguardhome
             git_clone https://github.com/pymumu/luci-app-smartdns luci-app-smartdns
+            git_clone https://github.com/pymumu/openwrt-smartdns
             git_clone https://github.com/Openwrt-Passwall/openwrt-passwall2 openwrt-passwall2
             git_clone https://github.com/Openwrt-Passwall/openwrt-passwall openwrt-passwall
             git_clone https://github.com/timsaya/luci-app-bandix luci-app-bandix
