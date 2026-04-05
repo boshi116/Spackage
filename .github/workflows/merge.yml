@@ -133,7 +133,16 @@ jobs:
             }
             rm -rf jell_tmp
           } &
-
+          # ====================== clashoo 全套插件 + 依赖 ======================
+          {
+            echo "🔽 下载 openwrt-clashoo 全套"
+            git clone --depth 1 https://github.com/kenzok8/openwrt-clashoo clashoo_tmp
+            [ -d "clashoo_tmp" ] && {
+              mv -f clashoo_tmp/* opd/ 2>/dev/null || true
+            }
+            rm -rf clashoo_tmp
+          } &
+          # ====================================================================
           wait
           echo "✅ 所有插件下载完成"
 
