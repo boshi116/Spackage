@@ -101,7 +101,7 @@ jobs:
           {
             git_clone https://github.com/kenzok78/luci-app-adguardhome luci-app-adguardhome
             git_clone https://github.com/pymumu/luci-app-smartdns luci-app-smartdns
-            git_clone https://github.com/pymumu/openwrt-smartdns
+            git_clone https://github.com/pymumu/openwrt-smartdns smartdns
             git_clone https://github.com/Openwrt-Passwall/openwrt-passwall2 openwrt-passwall2
             git_clone https://github.com/Openwrt-Passwall/openwrt-passwall openwrt-passwall
             git_clone https://github.com/timsaya/luci-app-bandix luci-app-bandix
@@ -138,5 +138,5 @@ jobs:
       - name: 提交并推送
         run: |
           git add .
-          git commit -m "📦 自动更新 | 删除 poweroffdevice / autorepeater / autotimeset"
+          git commit -m "📦 自动更新 | 添加 openwrt-smartdns 核心源码"
           git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
