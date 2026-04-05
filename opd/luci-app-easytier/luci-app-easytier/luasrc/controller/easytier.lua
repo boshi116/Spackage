@@ -46,7 +46,7 @@ function index()
 		return
 	end
                   
-        entry({"admin", "vpn", "easytier"}, alias("admin", "vpn", "easytier", "easytier"),_("EasyTier"), 46).dependent = true
+    entry({"admin", "vpn", "easytier"}, alias("admin", "vpn", "easytier", "easytier"),_("EasyTier"), 1).dependent = true
 	entry({"admin", "vpn", "easytier", "easytier"}, cbi("easytier"),_("EasyTier"), 47).leaf = true
 	entry({"admin", "vpn",  "easytier",  "easytier_log"}, form("easytier_log"),_("core log"), 48).leaf = true
 	entry({"admin", "vpn", "easytier", "get_log"}, call("get_log")).leaf = true
