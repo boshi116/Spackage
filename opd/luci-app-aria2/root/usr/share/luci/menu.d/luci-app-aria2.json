@@ -1,7 +1,7 @@
 {
 	"admin/nas/aria2": {
 		"title": "Aria2",
-		"order": 30,
+		"order": -1,
 		"action": {
 			"type": "firstchild"
 		},
