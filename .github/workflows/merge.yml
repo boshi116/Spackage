@@ -75,8 +75,6 @@ jobs:
 
           {
             # ✅ 正确添加 OpenAppFilter 全套（无报错版）
-            git clone --depth 1 https://github.com/destan19/OpenAppFilter.git opd/OpenAppFilter
-            
             git_clone https://github.com/brvphoenix/luci-app-wrtbwmon luci-app-wrtbwmon
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
