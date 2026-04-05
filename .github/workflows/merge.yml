@@ -142,34 +142,38 @@ jobs:
 
       - name: 提交并推送更新 + 写入 README.md
         run: |
+          # 确保 README 存在
+          touch README.md
+          
           git add -A
-          if git status --porcelain | grep -q .; then
+          CHANGES=$(git status --porcelain)
+          
+          if [ -n "$CHANGES" ]; then
             echo "📤 检测到更新，开始提交"
             echo "====================================="
-            echo "📋 本次更新的文件列表："
-            echo "====================================="
-            git status --porcelain | awk '{print "✅ " $2}'
+            echo "$CHANGES"
             echo "====================================="
 
-            FILE_COUNT=$(git status --porcelain | wc -l)
+            FILE_COUNT=$(echo "$CHANGES" | wc -l)
             UPDATE_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-            UPDATE_PLUGINS=$(git status --porcelain | awk '{print $2}' | grep '^opd/' | cut -d'/' -f2 | sort -u | head -20 | awk '{print "🔹 " $0}')
+            UPDATE_PLUGINS=$(echo "$CHANGES" | awk '{print $2}' | grep '^opd/' | cut -d'/' -f2 | sort -u | head -15)
 
-            echo "## 📦 最近自动更新" > README_NEW.md
-            echo "**更新时间**：$UPDATE_TIME" >> README_NEW.md
-            echo "**更新文件数**：$FILE_COUNT 个" >> README_NEW.md
-            echo "" >> README_NEW.md
-            echo "**更新插件**：" >> README_NEW.md
-            echo "$UPDATE_PLUGINS" >> README_NEW.md
-            echo "" >> README_NEW.md
-            echo "---" >> README_NEW.md
-            cat README.md >> README_NEW.md
-            mv -f README_NEW.md README.md
+            # 安全写入 README
+            {
+              echo "## 📦 最近自动更新"
+              echo "- 更新时间：$UPDATE_TIME"
+              echo "- 更新文件数：$FILE_COUNT"
+              echo "- 更新插件："
+              echo "$UPDATE_PLUGINS" | while read p; do echo "  - $p"; done
+              echo "---"
+              echo
+              cat README.md
+            } > README.tmp && mv README.tmp README.md
 
             git add README.md
-            git commit -m "📦 自动更新 | $UPDATE_TIME | 共 $FILE_COUNT 个文件"
+            git commit -m "📦 自动更新 $UPDATE_TIME"
             git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
           else
-            echo "ℹ️ 无文件变更，退出"
+            echo "ℹ️ 无文件变更"
             exit 0
           fi
