@@ -1,0 +1,17 @@
+{
+	"luci-app-clashoo": {
+		"description": "Grant UCI access for luci-app-clashoo",
+		"read": {
+			"uci": [ "clash" ],
+			"ubus": {
+				"luci.clash": [ "*" ]
+			}
+		},
+		"write": {
+			"uci": [ "clash" ],
+			"ubus": {
+				"luci.clash": [ "*" ]
+			}
+		}
+	}
+}
