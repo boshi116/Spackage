@@ -1,0 +1,109 @@
+#ifndef __STREAM_H__
+#define __STREAM_H__
+
+#include "fcc.h"
+#include "http_proxy.h"
+#include "multicast.h"
+#include "rtp_fec.h"
+#include "rtp_reorder.h"
+#include "rtsp.h"
+#include "service.h"
+#include "snapshot.h"
+
+/* Multicast stream timeout (seconds) - if no data received for this duration,
+ * close connection */
+#define MCAST_TIMEOUT_SEC 1
+
+/* Snapshot timeout (seconds) - if no I-frame received for this duration,
+ * fallback to streaming */
+#define SNAPSHOT_TIMEOUT_SEC 2
+
+/* Stream processing context */
+typedef struct stream_context_s {
+  int epoll_fd;
+  connection_t *conn; /* Pointer to parent connection for output buffering */
+  service_t *service;
+  int status_index; /* Index in status_shared->clients array for status updates
+                     */
+
+  /* Statistics tracking */
+  uint64_t total_bytes_sent;
+  uint64_t last_bytes_sent;   /* Bytes sent at last bandwidth calculation */
+  int64_t last_status_update; /* Last status update time in milliseconds */
+
+  /* FCC session for Fast Channel Change */
+  fcc_session_t fcc;
+
+  /* Multicast session */
+  mcast_session_t mcast;
+
+  /* RTSP session for SERVICE_RTSP */
+  rtsp_session_t rtsp;
+
+  /* HTTP proxy session for SERVICE_HTTP */
+  http_proxy_session_t http_proxy;
+
+  /* RTP reorder context */
+  rtp_reorder_t reorder;
+
+  /* FEC context for packet recovery */
+  fec_context_t fec;
+
+  /* Snapshot context */
+  snapshot_context_t snapshot;
+} stream_context_t;
+
+/**
+ * Initialize a stream context for integration into a worker's unified epoll
+ * loop. Does not block; registers any required media sockets with the provided
+ * epoll fd. Client socket is already monitored by worker.c for disconnect
+ * detection.
+ * @param ctx Stream context to initialize
+ * @param conn Parent connection object for output buffering
+ * @param service Service configuration
+ * @param epoll_fd epoll file descriptor
+ * @param status_id Status tracking ID
+ * @param is_snapshot 1 if this is a snapshot request, 0 for normal streaming
+ * @return 0 on success, -1 on error
+ */
+int stream_context_init_for_worker(stream_context_t *ctx, connection_t *conn, service_t *service, int epoll_fd,
+                                   int status_index, int is_snapshot);
+
+/**
+ * Handle an event-ready fd that belongs to this stream context.
+ * @param ctx Stream context
+ * @param fd File descriptor that has events
+ * @param events Epoll event mask (EPOLLIN, EPOLLOUT, etc.)
+ * @param now Current timestamp in milliseconds (from get_time_ms())
+ * @return Return values:
+ *   0: Success, continue processing
+ *  -1: Connection should be closed (error or graceful TEARDOWN complete)
+ *  -2: Duration query completed, send response to client
+ */
+int stream_handle_fd_event(stream_context_t *ctx, int fd, uint32_t events, int64_t now);
+
+/**
+ * Periodic maintenance: update status, manage timers. Should be called ~1s.
+ * @return 0 on success, -1 if connection should be closed (e.g., timeout)
+ */
+int stream_tick(stream_context_t *ctx, int64_t now);
+
+/**
+ * Cleanup all resources owned by the stream context and free dynamic service.
+ * @param ctx Stream context to cleanup
+ * @return 0 if cleanup completed, 1 if async TEARDOWN in progress (cleanup
+ * deferred)
+ */
+int stream_context_cleanup(stream_context_t *ctx);
+
+/**
+ * Process RTP payload with reordering - either forward to client (streaming)
+ * or capture I-frame (snapshot)
+ * @param ctx Stream context
+ * @param buf_ref Buffer reference
+ * @return bytes forwarded (>= 0) for streaming, 1 if I-frame captured for
+ * snapshot, -1 on error
+ */
+int stream_process_rtp_payload(stream_context_t *ctx, buffer_ref_t *buf_ref);
+
+#endif /* __STREAM_H__ */

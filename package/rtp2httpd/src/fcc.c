@@ -1,0 +1,587 @@
+#include "fcc.h"
+#include "buffer_pool.h"
+#include "connection.h"
+#include "fcc_huawei.h"
+#include "fcc_telecom.h"
+#include "multicast.h"
+#include "poller.h"
+#include "rtp.h"
+#include "status.h"
+#include "stream.h"
+#include "utils.h"
+#include "worker.h"
+#include <errno.h>
+#include <inttypes.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+/* Forward declarations for internal functions */
+static void log_fcc_state_transition(fcc_state_t from, fcc_state_t to, const char *reason);
+static int fcc_send_term_packet(fcc_session_t *fcc, service_t *service, uint16_t seqn, const char *reason);
+static int fcc_send_termination_message(stream_context_t *ctx, uint16_t mcast_seqn);
+
+static int fcc_bind_socket_with_range(int sock, struct sockaddr_in *sin) {
+  if (!sin)
+    return -1;
+
+  if (config.fcc_listen_port_min <= 0 || config.fcc_listen_port_max <= 0) {
+    sin->sin_port = 0;
+    return bind(sock, (struct sockaddr *)sin, sizeof(*sin));
+  }
+
+  int min_port = config.fcc_listen_port_min;
+  int max_port = config.fcc_listen_port_max;
+  if (max_port < min_port) {
+    int tmp = min_port;
+    min_port = max_port;
+    max_port = tmp;
+  }
+
+  int range = max_port - min_port + 1;
+  if (range <= 0)
+    range = 1;
+
+  int start_offset = (int)(get_time_ms() % range);
+
+  for (int i = 0; i < range; i++) {
+    int port = min_port + ((start_offset + i) % range);
+    sin->sin_port = htons((uint16_t)port);
+    if (bind(sock, (struct sockaddr *)sin, sizeof(*sin)) == 0) {
+      logger(LOG_DEBUG, "FCC: Bound client socket to port %d", port);
+      return 0;
+    }
+
+    if (errno != EADDRINUSE && errno != EACCES) {
+      logger(LOG_DEBUG, "FCC: Failed to bind port %d: %s", port, strerror(errno));
+    }
+  }
+
+  logger(LOG_ERROR, "FCC: Unable to bind socket within configured port range %d-%d", min_port, max_port);
+  return -1;
+}
+
+ssize_t sendto_triple(int fd, const void *buf, size_t n, int flags, struct sockaddr_in *addr, socklen_t addr_len) {
+  static uint8_t i;
+  for (i = 0; i < 3; i++) {
+    if (sendto(fd, buf, n, flags, (struct sockaddr *)addr, addr_len) < 0) {
+      return -1;
+    }
+  }
+  return n;
+}
+
+void fcc_session_cleanup(fcc_session_t *fcc, service_t *service, int epoll_fd) {
+  if (!fcc || !fcc->initialized) {
+    return;
+  }
+
+  /* Send termination message ONLY if not sent before */
+  if (!fcc->fcc_term_sent && fcc->fcc_sock >= 0 && fcc->fcc_server && service) {
+    logger(LOG_DEBUG, "FCC: Sending termination packet (cleanup)");
+    if (fcc_send_term_packet(fcc, service, 0, "cleanup") == 0) {
+      fcc->fcc_term_sent = 1;
+    }
+  }
+
+  /* Clean up session resources - free pending buffer chain */
+  buffer_ref_t *node = fcc->pending_list_head;
+  while (node) {
+    buffer_ref_t *next = node->send_next;
+    buffer_ref_put(node);
+    node = next;
+  }
+  if (fcc->pending_list_head) {
+    logger(LOG_DEBUG, "FCC: Multicast pending buffer chain freed");
+  }
+  fcc->pending_list_head = NULL;
+  fcc->pending_list_tail = NULL;
+
+  /* Close FCC socket */
+  if (fcc->fcc_sock >= 0) {
+    worker_cleanup_socket_from_epoll(epoll_fd, fcc->fcc_sock);
+    fcc->fcc_sock = -1;
+    logger(LOG_DEBUG, "FCC: Socket closed");
+  }
+
+  /* Reset all session state to clean state */
+  fcc->state = FCC_STATE_INIT;
+  fcc->fcc_server = NULL; /* This was pointing to service memory, safe to NULL */
+  fcc->media_port = 0;
+  fcc->fcc_term_seqn = 0;
+  fcc->fcc_term_sent = 0;
+
+  /* Clear client address structure */
+  memset(&fcc->fcc_client, 0, sizeof(fcc->fcc_client));
+
+  /* Mark as not initialized */
+  fcc->initialized = 0;
+}
+
+int fcc_session_tick(stream_context_t *ctx, int64_t now) {
+  fcc_session_t *fcc = &ctx->fcc;
+
+  if (!fcc->initialized || fcc->fcc_sock < 0) {
+    return 0;
+  }
+
+  int64_t elapsed_ms = now - fcc->last_data_time;
+
+  /* Different timeouts for different FCC states */
+  if (fcc->state == FCC_STATE_REQUESTED || fcc->state == FCC_STATE_UNICAST_PENDING) {
+    /* Signaling phase - waiting for server response */
+    if (elapsed_ms >= FCC_TIMEOUT_SIGNALING_MS) {
+      logger(LOG_WARN, "FCC: Server response timeout (%d ms), falling back to multicast", FCC_TIMEOUT_SIGNALING_MS);
+      if (fcc->state == FCC_STATE_REQUESTED) {
+        fcc_session_set_state(fcc, FCC_STATE_MCAST_ACTIVE, "Signaling timeout");
+      } else {
+        fcc_session_set_state(fcc, FCC_STATE_MCAST_ACTIVE, "First unicast packet timeout");
+      }
+      mcast_session_join(&ctx->mcast, ctx);
+    }
+  } else if (fcc->state == FCC_STATE_UNICAST_ACTIVE || fcc->state == FCC_STATE_MCAST_REQUESTED) {
+    /* Already receiving unicast, check for stream interruption */
+    int timeout_ms = (int)(FCC_TIMEOUT_UNICAST_SEC * 1000);
+
+    if (elapsed_ms >= timeout_ms) {
+      logger(LOG_WARN,
+             "FCC: Unicast stream interrupted (%.1f seconds), falling back "
+             "to multicast",
+             FCC_TIMEOUT_UNICAST_SEC);
+      fcc_session_set_state(fcc, FCC_STATE_MCAST_ACTIVE, "Unicast interrupted");
+      mcast_session_join(&ctx->mcast, ctx);
+    }
+
+    /* Check if we've been waiting too long for sync notification */
+    if (fcc->state == FCC_STATE_UNICAST_ACTIVE && fcc->unicast_start_time > 0) {
+      int64_t unicast_duration_ms = now - fcc->unicast_start_time;
+      int64_t sync_wait_timeout_ms = (int64_t)(FCC_TIMEOUT_SYNC_WAIT_SEC * 1000);
+
+      if (unicast_duration_ms >= sync_wait_timeout_ms) {
+        fcc_handle_sync_notification(ctx, FCC_TIMEOUT_SYNC_WAIT_SEC * 1000);
+      }
+    }
+  }
+
+  return 0;
+}
+
+static bool is_rtcp_packet(const uint8_t *data, size_t len) {
+  if (!data || len < 8) {
+    return false;
+  }
+
+  uint8_t version = (data[0] >> 6) & 0x03;
+  if (version != 2) {
+    return false;
+  }
+
+  uint8_t payload_type = data[1];
+  if (payload_type < 200 || payload_type > 211) {
+    return false;
+  }
+
+  uint16_t length_words = ((uint16_t)data[2] << 8) | data[3];
+  size_t packet_len = (size_t)(length_words + 1) * 4;
+
+  return packet_len > 0 && packet_len <= len;
+}
+
+int fcc_handle_socket_event(stream_context_t *ctx, int64_t now) {
+  fcc_session_t *fcc = &ctx->fcc;
+
+  /* Drain all available packets for edge-triggered pollers (epoll EPOLLET / kqueue EV_CLEAR)
+   * where the read event fires only once per data arrival. */
+  for (;;) {
+    struct sockaddr_in peer_addr;
+    socklen_t slen = sizeof(peer_addr);
+
+    /* Allocate a fresh buffer from pool for this receive operation */
+    buffer_ref_t *recv_buf = buffer_pool_alloc();
+    if (!recv_buf) {
+      /* Buffer pool exhausted - drop this packet */
+      logger(LOG_DEBUG, "FCC: Buffer pool exhausted, dropping packet");
+      fcc->last_data_time = now;
+      /* Drain the socket to prevent event loop spinning */
+      uint8_t dummy[BUFFER_POOL_BUFFER_SIZE];
+      recvfrom(fcc->fcc_sock, dummy, sizeof(dummy), 0, NULL, NULL);
+      return 0;
+    }
+
+    /* Receive directly into zero-copy buffer (true zero-copy receive) */
+    int actualr =
+        recvfrom(fcc->fcc_sock, recv_buf->data, BUFFER_POOL_BUFFER_SIZE, 0, (struct sockaddr *)&peer_addr, &slen);
+    if (actualr < 0) {
+      buffer_ref_put(recv_buf);
+      if (errno != EAGAIN)
+        logger(LOG_ERROR, "FCC: Receive failed: %s", strerror(errno));
+      break; /* No more data available */
+    }
+
+    /* Verify packet comes from expected FCC server */
+    if (fcc->verify_server_ip && peer_addr.sin_addr.s_addr != fcc->fcc_server->sin_addr.s_addr) {
+      buffer_ref_put(recv_buf);
+      continue; /* Skip and read next packet */
+    }
+
+    fcc->last_data_time = now;
+    recv_buf->data_size = (size_t)actualr;
+
+    /* Handle different types of FCC packets */
+    uint8_t *recv_data = (uint8_t *)recv_buf->data;
+    int result = 0;
+    if (is_rtcp_packet(recv_data, (size_t)actualr)) {
+      /* RTCP control message from FCC server */
+      int res = fcc_handle_server_response(ctx, recv_data, actualr);
+      if (res == 1) {
+        /* FCC redirect - retry request with new server */
+        if (fcc_initialize_and_request(ctx) < 0) {
+          logger(LOG_ERROR, "FCC redirect retry failed");
+          buffer_ref_put(recv_buf);
+          return -1;
+        }
+        buffer_ref_put(recv_buf);
+        return 0; /* Redirect handled successfully */
+      }
+      result = res;
+    } else {
+      /* RTP media packet from FCC unicast stream */
+      result = fcc_handle_unicast_media(ctx, recv_buf);
+    }
+
+    /* Release our reference to the buffer */
+    buffer_ref_put(recv_buf);
+
+    if (result != 0)
+      return result;
+  }
+
+  return 0;
+}
+
+/*
+ * FCC Logging Functions
+ */
+static void log_fcc_state_transition(fcc_state_t from, fcc_state_t to, const char *reason) {
+  const char *state_names[] = {"INIT",         "REQUESTED", "UNICAST_PENDING", "UNICAST_ACTIVE", "MCAST_REQUESTED",
+                               "MCAST_ACTIVE", "ERROR"};
+  logger(LOG_DEBUG, "FCC State: %s -> %s (%s)", state_names[from], state_names[to], reason ? reason : "");
+}
+
+/*
+ * FCC Session Management Functions
+ */
+void fcc_session_init(fcc_session_t *fcc) {
+  memset(fcc, 0, sizeof(fcc_session_t));
+  fcc->initialized = 1;
+  fcc->state = FCC_STATE_INIT;
+  fcc->fcc_sock = -1;
+  fcc->status_index = -1;
+  fcc->redirect_count = 0;
+}
+
+int fcc_session_set_state(fcc_session_t *fcc, fcc_state_t new_state, const char *reason) {
+  /* State mapping lookup table */
+  static const client_state_type_t fcc_to_client_state[] = {
+      [FCC_STATE_INIT] = CLIENT_STATE_FCC_INIT,
+      [FCC_STATE_REQUESTED] = CLIENT_STATE_FCC_REQUESTED,
+      [FCC_STATE_UNICAST_PENDING] = CLIENT_STATE_FCC_UNICAST_PENDING,
+      [FCC_STATE_UNICAST_ACTIVE] = CLIENT_STATE_FCC_UNICAST_ACTIVE,
+      [FCC_STATE_MCAST_REQUESTED] = CLIENT_STATE_FCC_MCAST_REQUESTED,
+      [FCC_STATE_MCAST_ACTIVE] = CLIENT_STATE_FCC_MCAST_ACTIVE,
+      [FCC_STATE_ERROR] = CLIENT_STATE_ERROR};
+
+  if (fcc->state == new_state) {
+    return 0; /* No change */
+  }
+
+  log_fcc_state_transition(fcc->state, new_state, reason);
+  fcc->state = new_state;
+
+  /* Update client status immediately */
+  if (new_state < ARRAY_SIZE(fcc_to_client_state)) {
+    status_update_client_state(fcc->status_index, fcc_to_client_state[new_state]);
+  }
+
+  return 1;
+}
+
+/*
+ * FCC Protocol Handler Functions
+ */
+
+/*
+ * FCC Protocol Stage 1: Initialize FCC socket and send request
+ */
+int fcc_initialize_and_request(stream_context_t *ctx) {
+  fcc_session_t *fcc = &ctx->fcc;
+  service_t *service = ctx->service;
+  struct sockaddr_in sin;
+  socklen_t slen;
+  int r;
+  const char *upstream_if;
+
+  logger(LOG_DEBUG, "FCC: Initializing FCC session and sending request");
+
+  if (fcc->fcc_sock < 0) {
+    /* Create and configure FCC socket */
+    fcc->fcc_sock = socket(AF_INET, service->fcc_addr->ai_socktype, service->fcc_addr->ai_protocol);
+    if (fcc->fcc_sock < 0) {
+      logger(LOG_ERROR, "FCC: Failed to create socket: %s", strerror(errno));
+      return -1;
+    }
+
+    /* Set socket to non-blocking mode for poller */
+    if (connection_set_nonblocking(fcc->fcc_sock) < 0) {
+      logger(LOG_ERROR, "FCC: Failed to set socket non-blocking: %s", strerror(errno));
+      close(fcc->fcc_sock);
+      fcc->fcc_sock = -1;
+      return -1;
+    }
+
+    /* Set receive buffer size */
+    if (set_socket_rcvbuf(fcc->fcc_sock, config.udp_rcvbuf_size) < 0) {
+      logger(LOG_WARN, "FCC: Failed to set SO_RCVBUF to %d: %s", config.udp_rcvbuf_size, strerror(errno));
+    }
+
+    upstream_if = get_upstream_interface_for_fcc(service->ifname, service->ifname_fcc);
+    bind_to_upstream_interface(fcc->fcc_sock, upstream_if);
+
+    /* Bind to configured or ephemeral port */
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = INADDR_ANY;
+    if (fcc_bind_socket_with_range(fcc->fcc_sock, &sin) != 0) {
+      logger(LOG_ERROR, "FCC: Cannot bind socket within configured range");
+      close(fcc->fcc_sock);
+      fcc->fcc_sock = -1;
+      return -1;
+    }
+
+    /* Get the assigned local address */
+    slen = sizeof(fcc->fcc_client);
+    getsockname(fcc->fcc_sock, (struct sockaddr *)&fcc->fcc_client, &slen);
+
+    fcc->fcc_server = (struct sockaddr_in *)(uintptr_t)service->fcc_addr->ai_addr;
+
+    /* Register socket with poller immediately after creation */
+    if (poller_add(ctx->epoll_fd, fcc->fcc_sock, POLLER_IN) < 0) {
+      logger(LOG_ERROR, "FCC: Failed to add socket to poller: %s", strerror(errno));
+      close(fcc->fcc_sock);
+      fcc->fcc_sock = -1;
+      return -1;
+    }
+    fdmap_set(fcc->fcc_sock, ctx->conn);
+    logger(LOG_DEBUG, "FCC: Socket registered with poller");
+  }
+
+  /* Send FCC request - different format for Huawei vs Telecom */
+  if (fcc->type == FCC_TYPE_HUAWEI) {
+    r = fcc_huawei_initialize_and_request(ctx);
+  } else {
+    r = fcc_telecom_initialize_and_request(ctx);
+  }
+
+  if (r < 0) {
+    return -1;
+  }
+
+  fcc->last_data_time = get_time_ms();
+  fcc_session_set_state(fcc, FCC_STATE_REQUESTED, "Request sent");
+
+  return 0;
+}
+
+/*
+ * FCC Protocol Stage 2: Handle server response
+ * Dispatches to vendor-specific handler based on FCC type
+ */
+int fcc_handle_server_response(stream_context_t *ctx, uint8_t *buf, int buf_len) {
+  fcc_session_t *fcc = &ctx->fcc;
+
+  /* Dispatch to vendor-specific handler based on FCC type */
+  if (fcc->type == FCC_TYPE_HUAWEI) {
+    return fcc_huawei_handle_server_response(ctx, buf, buf_len);
+  } else if (fcc->type == FCC_TYPE_TELECOM) {
+    return fcc_telecom_handle_server_response(ctx, buf, buf_len);
+  }
+
+  return 0;
+}
+
+/*
+ * FCC Protocol Stage 3: Handle synchronization notification (FMT 4)
+ */
+int fcc_handle_sync_notification(stream_context_t *ctx, int timeout_ms) {
+  fcc_session_t *fcc = &ctx->fcc;
+
+  // Ignore if already using mcast stream
+  if (fcc->state == FCC_STATE_MCAST_REQUESTED || fcc->state == FCC_STATE_MCAST_ACTIVE)
+    return 0;
+
+  if (timeout_ms) {
+    logger(LOG_DEBUG,
+           "FCC: Sync notification timeout reached (%.1f seconds) - joining "
+           "multicast",
+           timeout_ms / 1000.0);
+  } else {
+    logger(LOG_DEBUG, "FCC: Sync notification received - joining multicast");
+  }
+  fcc_session_set_state(fcc, FCC_STATE_MCAST_REQUESTED,
+                        timeout_ms ? "Sync notification timeout" : "Sync notification received");
+
+  mcast_session_join(&ctx->mcast, ctx);
+
+  return 0; /* Signal to join multicast */
+}
+
+/*
+ * FCC Protocol Stage 4: Handle RTP media packets from unicast stream
+ */
+int fcc_handle_unicast_media(stream_context_t *ctx, buffer_ref_t *buf_ref) {
+  fcc_session_t *fcc = &ctx->fcc;
+
+  /* Drop unicast packets if we've already switched to multicast */
+  if (fcc->state == FCC_STATE_MCAST_ACTIVE) {
+    return 0;
+  }
+
+  /* Transition from PENDING to ACTIVE on first unicast packet */
+  if (fcc->state == FCC_STATE_UNICAST_PENDING) {
+    fcc_session_set_state(fcc, FCC_STATE_UNICAST_ACTIVE, "First unicast packet received");
+    logger(LOG_INFO, "FCC: Unicast stream started successfully");
+  }
+
+  /* Forward RTP payload to client (with reordering) */
+  int processed_bytes = stream_process_rtp_payload(ctx, buf_ref);
+  if (processed_bytes > 0) {
+    ctx->total_bytes_sent += (uint64_t)processed_bytes;
+  }
+
+  /* Check if we should terminate FCC based on reorder's delivered sequence.
+   * base_seq - 1 is the last sequence number successfully delivered.
+   * Only check when reorder is in active phase (phase == 2). */
+  if (fcc->fcc_term_sent && ctx->reorder.phase == 2 && fcc->state != FCC_STATE_MCAST_ACTIVE) {
+    uint16_t last_delivered = ctx->reorder.base_seq - 1;
+    if ((int16_t)(last_delivered - (fcc->fcc_term_seqn - 1)) >= 0) {
+      logger(LOG_INFO, "FCC: Switching to multicast stream (reached termination sequence)");
+      fcc_session_set_state(fcc, FCC_STATE_MCAST_ACTIVE, "Reached termination sequence");
+    }
+  }
+
+  return 0;
+}
+
+/*
+ * Internal helper: Send FCC termination packet to server
+ */
+static int fcc_send_term_packet(fcc_session_t *fcc, service_t *service, uint16_t seqn, const char *reason) {
+  if (fcc->fcc_sock < 0 || !fcc->fcc_server) {
+    logger(LOG_DEBUG, "FCC: Cannot send termination - missing socket/server");
+    return -1;
+  }
+
+  /* Send different termination packet based on FCC type */
+  if (fcc->type == FCC_TYPE_HUAWEI) {
+    return fcc_huawei_send_term_packet(fcc, service, seqn, reason);
+  } else {
+    return fcc_telecom_send_term_packet(fcc, service, seqn, reason);
+  }
+}
+
+/*
+ * FCC Protocol Stage 5: Send termination message to server (normal flow)
+ */
+static int fcc_send_termination_message(stream_context_t *ctx, uint16_t mcast_seqn) {
+  fcc_session_t *fcc = &ctx->fcc;
+
+  if (!fcc->fcc_term_sent) {
+    fcc->fcc_term_seqn = mcast_seqn;
+    if (fcc_send_term_packet(fcc, ctx->service, fcc->fcc_term_seqn + 2, "normal flow") == 0) {
+      fcc->fcc_term_sent = 1;
+      logger(LOG_DEBUG, "FCC: Normal termination message sent, term_seqn=%u (+2)", mcast_seqn);
+    } else {
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+/*
+ * FCC Protocol Stage 6: Handle multicast data during transition period
+ */
+int fcc_handle_mcast_transition(stream_context_t *ctx, buffer_ref_t *buf_ref) {
+  fcc_session_t *fcc = &ctx->fcc;
+  int payloadlength;
+  uint8_t *payload;
+  uint16_t seqn = 0;
+  int is_rtp;
+  uint8_t *data_ptr = (uint8_t *)buf_ref->data + buf_ref->data_offset;
+
+  is_rtp = rtp_get_payload(data_ptr, buf_ref->data_size, &payload, &payloadlength, &seqn);
+  if (unlikely(is_rtp < 0)) {
+    return 0; /* Malformed packet, already logged */
+  }
+
+  /* Send termination message if not sent yet */
+  if (!fcc->fcc_term_sent && fcc_send_termination_message(ctx, seqn) < 0) {
+    return -1;
+  }
+
+  /* Keep original receive buffer alive for deferred zero-copy send */
+  buffer_ref_get(buf_ref);
+
+  buf_ref->send_next = NULL;
+
+  /* Add to pending list */
+  if (fcc->pending_list_tail) {
+    fcc->pending_list_tail->send_next = buf_ref;
+  } else {
+    fcc->pending_list_head = buf_ref;
+  }
+  fcc->pending_list_tail = buf_ref;
+
+  return 0;
+}
+
+/*
+ * FCC Protocol Stage 8: Handle multicast data in active state
+ */
+int fcc_handle_mcast_active(stream_context_t *ctx, buffer_ref_t *buf_ref) {
+  fcc_session_t *fcc = &ctx->fcc;
+
+  /* Flush pending buffer chain first if available - TRUE ZERO-COPY */
+  if (unlikely(fcc->pending_list_head != NULL)) {
+    buffer_ref_t *node = fcc->pending_list_head;
+    uint64_t flushed_bytes = 0;
+
+    while (node) {
+      /* Queue each buffer for zero-copy send */
+      buffer_ref_t *next = node->send_next;
+      int processed_bytes = stream_process_rtp_payload(ctx, node);
+      if (likely(processed_bytes > 0)) {
+        ctx->total_bytes_sent += (uint64_t)processed_bytes;
+        flushed_bytes += (uint64_t)processed_bytes;
+      }
+      buffer_ref_put(node);
+      node = next;
+    }
+
+    /* All buffers flushed successfully */
+    fcc->pending_list_head = NULL;
+    fcc->pending_list_tail = NULL;
+
+    logger(LOG_DEBUG, "FCC: Flushed pending buffer chain, total_flushed_bytes=%" PRIu64, flushed_bytes);
+  }
+
+  /* Forward multicast data to client (true zero-copy) or capture I-frame
+   * (snapshot) */
+  int processed_bytes = stream_process_rtp_payload(ctx, buf_ref);
+  if (likely(processed_bytes > 0)) {
+    ctx->total_bytes_sent += (uint64_t)processed_bytes;
+  }
+
+  return 0;
+}

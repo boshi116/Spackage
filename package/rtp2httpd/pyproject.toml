@@ -1,0 +1,32 @@
+[project]
+name = "rtp2httpd"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "scapy>=2.7.0",
+    "pytest>=9.0.2",
+    "pytest-xdist>=3.8.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.6",
+    "basedpyright>=1.38.2",
+    "clang-format>=22.1.1",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.basedpyright]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+testpaths = ["e2e"]
+markers = [
+    "multicast: requires multicast on loopback",
+    "rtsp: requires mock RTSP server",
+    "http_proxy: requires mock HTTP upstream",
+    "slow: tests that take longer",
+]
