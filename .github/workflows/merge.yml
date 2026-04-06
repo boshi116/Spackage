@@ -59,7 +59,7 @@ jobs:
           {
             git_clone https://github.com/riverscn/openwrt-iptvhelper openwrt-iptvhelper
             git_clone https://github.com/kongfl888/luci-app-timedreboot luci-app-timedreboot
-            git_clone https://github.com/destan19/OpenAppFilter.git OpenAppFilter
+            git_clone https://github.com/destan19/OpenAppFilter OpenAppFilter
           } &
 
           {
@@ -133,7 +133,6 @@ jobs:
             }
             rm -rf jell_tmp
           } &
-          # ====================== clashoo 全套插件 + 依赖 ======================
           {
             echo "🔽 下载 openwrt-clashoo 全套"
             git clone --depth 1 https://github.com/kenzok8/openwrt-clashoo clashoo_tmp
@@ -142,7 +141,7 @@ jobs:
             }
             rm -rf clashoo_tmp
           } &
-          # ====================================================================
+          
           wait
           echo "✅ 所有插件下载完成"
 
@@ -151,7 +150,6 @@ jobs:
 
       - name: 提交并推送更新 + 写入 README.md
         run: |
-          # 确保 README 存在
           touch README.md
           
           git add -A
@@ -167,7 +165,6 @@ jobs:
             UPDATE_TIME=$(date '+%Y-%m-%d %H:%M:%S')
             UPDATE_PLUGINS=$(echo "$CHANGES" | awk '{print $2}' | grep '^opd/' | cut -d'/' -f2 | sort -u | head -15)
 
-            # 安全写入 README
             {
               echo "## 📦 最近自动更新"
               echo "- 更新时间：$UPDATE_TIME"
@@ -181,7 +178,7 @@ jobs:
 
             git add README.md
             git commit -m "📦 自动更新 $UPDATE_TIME"
-            git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
           else
             echo "ℹ️ 无文件变更"
             exit 0
