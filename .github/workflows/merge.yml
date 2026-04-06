@@ -120,16 +120,12 @@ jobs:
               mv -f jell_tmp/luci-app-control-timewol opd/
               mv -f jell_tmp/luci-app-control-webrestriction opd/
               mv -f jell_tmp/luci-app-control-weburl opd/
-              mv -f jell_tmp/luci-app-xunlei opd/
               mv -f jell_tmp/unishare opd/
               mv -f jell_tmp/luci-app-unishare opd/
               mv -f jell_tmp/filebrowser opd/
               mv -f jell_tmp/luci-app-filebrowser opd/
               mv -f jell_tmp/upx opd/
               mv -f jell_tmp/upx-static opd/
-              mv -f jell_tmp/luci-lib-taskd opd/
-              mv -f jell_tmp/luci-lib-xterm opd/
-              mv -f jell_tmp/taskd opd/
               mv -f jell_tmp/luci-app-rtbwmon opd/
             }
             rm -rf jell_tmp
