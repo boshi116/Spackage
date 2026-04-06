@@ -1,0 +1,68 @@
+name: 自动识别仓库插件 编译IPK 发布Releases
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出当前仓库代码
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+          fetch-depth: 0
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential libncurses5-dev git gawk gettext \
+          flex bison quilt libssl-dev zlib1g-dev libelf-dev
+
+      - name: 下载 OpenWrt SDK 环境
+        run: |
+          git clone https://github.com/openwrt/openwrt openwrt
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: 自动复制当前仓库所有 luci-app 插件
+        run: |
+          shopt -s dotglob nullglob
+          for dir in ../plugin/*; do
+            if [[ -d "$dir" && "$(basename "$dir")" == luci-app-* ]]; then
+              cp -r "$dir" ./package/
+              echo "✅ 已添加插件：$(basename "$dir")"
+            fi
+          done
+
+      - name: 自动编译所有插件
+        run: |
+          cd openwrt
+          make defconfig
+          for plugin in ./package/luci-app-*; do
+            name=$(basename "$plugin")
+            make package/$name/compile V=s -j$(nproc)
+            echo "✅ 已编译：$name"
+          done
+
+      - name: 自动收集所有 IPK
+        run: |
+          mkdir -p output
+          find openwrt/bin/packages/ -name "*.ipk" | grep -E "luci-app-|luci-i18n-" >> ipk-list
+          cat ipk-list | xargs -I {} cp {} output/
+          ls -lh output/
+
+      - name: 发布到 Releases
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: output/*.ipk
