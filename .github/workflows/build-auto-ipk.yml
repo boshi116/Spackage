@@ -1,4 +1,4 @@
-name: 自动识别仓库插件 编译IPK 发布Releases
+name: 自动编译插件IPK并发布到Releases
 
 on:
   push:
@@ -10,59 +10,48 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 检出当前仓库代码
+      - name: 检出仓库代码
         uses: actions/checkout@v4
         with:
           path: plugin
-          fetch-depth: 0
 
-      - name: 安装编译依赖
+      - name: 安装依赖
         run: |
           sudo apt update
-          sudo apt install -y build-essential libncurses5-dev git gawk gettext flex bison libssl-dev zlib1g-dev
+          sudo apt install -y build-essential libncurses5-dev git gawk gettext flex bison libssl-dev
 
       - name: 下载 OpenWrt SDK
         run: |
           git clone https://github.com/openwrt/openwrt openwrt
           cd openwrt
           ./scripts/feeds update luci packages
-          ./scripts/feeds install -a
+          ./scripts/feeds install luci-base luci-lib-ipkg
 
-      - name: 自动添加仓库内所有 luci-app 插件
+      - name: 复制插件到 package
         run: |
-          shopt -s nullglob
-          for plugin_dir in ../plugin/luci-app-*; do
-            if [ -d "$plugin_dir" ]; then
-              cp -r "$plugin_dir" openwrt/package/
-              echo "✅ 添加插件：$(basename $plugin_dir)"
-            fi
-          done
+          cp -r plugin/luci-app-* openwrt/package/
 
       - name: 编译所有插件
         run: |
           cd openwrt
           make defconfig
-          
-          shopt -s nullglob
-          for plugin in package/luci-app-*; do
-            name=$(basename $plugin)
-            echo "🔨 正在编译：$name"
+          for dir in package/luci-app-*; do
+            name=$(basename $dir)
             make package/$name/compile V=s -j$(nproc)
           done
 
-      - name: 收集所有 IPK
+      - name: 强制搜索所有IPK（关键修复）
         run: |
           mkdir -p output
-          find openwrt/bin/packages/ -name "luci-app-*.ipk" -o -name "luci-i18n-*.ipk" | xargs -I {} cp {} output/
+          find openwrt -name "*.ipk" >> all-ipk.txt
+          cat all-ipk.txt
+          cp $(cat all-ipk.txt) output/
           ls output
 
-      - name: 发布到 Releases
+      - name: 发布到 Releases（强制上传）
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
           files: output/*.ipk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
