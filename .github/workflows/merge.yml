@@ -130,9 +130,11 @@ jobs:
               mv -f jell_tmp/luci-lib-taskd opd/
               mv -f jell_tmp/luci-lib-xterm opd/
               mv -f jell_tmp/taskd opd/
+              mv -f jell_tmp/luci-app-rtbwmon opd/
             }
             rm -rf jell_tmp
           } &
+
           {
             echo "🔽 下载 openwrt-clashoo 全套"
             git clone --depth 1 https://github.com/kenzok8/openwrt-clashoo clashoo_tmp
@@ -141,7 +143,7 @@ jobs:
             }
             rm -rf clashoo_tmp
           } &
-          
+
           wait
           echo "✅ 所有插件下载完成"
 
