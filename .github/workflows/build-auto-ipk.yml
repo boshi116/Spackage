@@ -19,42 +19,42 @@ jobs:
       - name: 安装编译依赖
         run: |
           sudo apt update
-          sudo apt install -y build-essential libncurses5-dev git gawk gettext \
-          flex bison quilt libssl-dev zlib1g-dev libelf-dev
+          sudo apt install -y build-essential libncurses5-dev git gawk gettext flex bison libssl-dev zlib1g-dev
 
-      - name: 下载 OpenWrt SDK 环境
+      - name: 下载 OpenWrt SDK
         run: |
           git clone https://github.com/openwrt/openwrt openwrt
           cd openwrt
-          ./scripts/feeds update -a
+          ./scripts/feeds update luci packages
           ./scripts/feeds install -a
 
-      - name: 自动复制当前仓库所有 luci-app 插件
+      - name: 自动添加仓库内所有 luci-app 插件
         run: |
-          shopt -s dotglob nullglob
-          for dir in ../plugin/*; do
-            if [[ -d "$dir" && "$(basename "$dir")" == luci-app-* ]]; then
-              cp -r "$dir" ./package/
-              echo "✅ 已添加插件：$(basename "$dir")"
+          shopt -s nullglob
+          for plugin_dir in ../plugin/luci-app-*; do
+            if [ -d "$plugin_dir" ]; then
+              cp -r "$plugin_dir" openwrt/package/
+              echo "✅ 添加插件：$(basename $plugin_dir)"
             fi
           done
 
-      - name: 自动编译所有插件
+      - name: 编译所有插件
         run: |
           cd openwrt
           make defconfig
-          for plugin in ./package/luci-app-*; do
-            name=$(basename "$plugin")
+          
+          shopt -s nullglob
+          for plugin in package/luci-app-*; do
+            name=$(basename $plugin)
+            echo "🔨 正在编译：$name"
             make package/$name/compile V=s -j$(nproc)
-            echo "✅ 已编译：$name"
           done
 
-      - name: 自动收集所有 IPK
+      - name: 收集所有 IPK
         run: |
           mkdir -p output
-          find openwrt/bin/packages/ -name "*.ipk" | grep -E "luci-app-|luci-i18n-" >> ipk-list
-          cat ipk-list | xargs -I {} cp {} output/
-          ls -lh output/
+          find openwrt/bin/packages/ -name "luci-app-*.ipk" -o -name "luci-i18n-*.ipk" | xargs -I {} cp {} output/
+          ls output
 
       - name: 发布到 Releases
         uses: softprops/action-gh-release@v2
