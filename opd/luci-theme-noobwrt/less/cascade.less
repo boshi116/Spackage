@@ -1,12 +1,12 @@
-// out: ../htdocs/luci-static/argon/css/cascade.css, compress: false , sourceMap: false
+// out: ../htdocs/luci-static/noobwrt/css/cascade.css, compress: false , sourceMap: false
 /**
- *  Argon is a clean HTML5 theme for LuCI. It is based on luci-theme-material and Argon Template
+ *  NoobWrt is a clean HTML5 theme for LuCI. It is based on luci-theme-material and NoobWrt Template
  *
- *  luci-theme-argon
+ *  luci-theme-noobwrt
  *      Copyright 2025 Jerrykuku <jerrykuku@qq.com>
  *
  *  Have a bug? Please create an issue here on GitHub!
- *      https://github.com/jerrykuku/luci-theme-argon/issues
+ *      https://github.com/jerrykuku/luci-theme-noobwrt/issues
  *
  *  luci-theme-material:
  *      Copyright 2015 Lutty Yang <lutty@wcan.in>
@@ -38,7 +38,7 @@
   --white: #fff;
   --gray: #8898aa;
   --gray-dark: #32325d;
-  --light: #ced4da;
+  --light: #adb5bd;
   --lighter: #e9ecef;
 
   --success: #2dce89;
@@ -46,10 +46,8 @@
   --warning: #fb6340;
   --danger: #f5365c;
 
-  --light: #adb5bd;
   --dark: #212529;
   --default: #172b4d;
-  --white: #fff;
   --darker: black;
   --background-color: #f4f5f7;
   --login-form-bg-color: rgba(244, 245, 247, 0.8);
@@ -57,7 +55,7 @@
   --blur-opacity: 0.5;
   --blur-radius-dark: 10px;
   --blur-opacity-dark: 0.5;
-  --font-family-sans-serif: "Google Sans", "Microsoft Yahei", "WenQuanYi Micro Hei", "sans-serif", "Helvetica Neue", "Helvetica", "Hiragino Sans GB";
+  --font-family-sans-serif: "Red Hat Display", "Microsoft Yahei", "WenQuanYi Micro Hei", "sans-serif", "Helvetica Neue", "Helvetica", "Hiragino Sans GB";
   --dropdown-arrow-icon: url("data:image/svg+xml;charset=utf-8;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJjdXJyZW50Q29sb3IiIGQ9Ik01LjI5MyA5LjI5M2ExIDEgMCAwIDEgMS40MTQgMEwxMiAxNC41ODZsNS4yOTMtNS4yOTNhMSAxIDAgMSAxIDEuNDE0IDEuNDE0bC02IDZhMSAxIDAgMCAxLTEuNDE0IDBsLTYtNmExIDEgMCAwIDEgMC0xLjQxNCIvPjwvc3ZnPg==");
 }
 
@@ -1595,6 +1593,11 @@ body:not(.Interfaces) .cbi-rowstyle-2:first-child {
 }
 
 /* progressbar */
+@keyframes progress-stripes {
+  0%   { background-position: 1rem 0; }
+  100% { background-position: 0 0; }
+}
+
 .cbi-progressbar {
   position: relative;
   display: flex;
@@ -1610,8 +1613,20 @@ body:not(.Interfaces) .cbi-rowstyle-2:first-child {
     position: absolute;
     height: 100%;
     background-color: var(--primary);
+    background-image: linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.2) 25%,
+      transparent 25%,
+      transparent 50%,
+      rgba(255, 255, 255, 0.2) 50%,
+      rgba(255, 255, 255, 0.2) 75%,
+      transparent 75%,
+      transparent
+    );
+    background-size: 1rem 1rem;
     border-radius: 0.5rem;
     transition: width 0.3s;
+    animation: progress-stripes 0.75s linear infinite;
   }
 
   &::after {
@@ -1925,7 +1940,7 @@ td>.ifacebadge,
 
 #syslog {
   font-size: small;
-  font-family: 'Google Sans';
+  font-family: 'Red Hat Display';
   line-height: 1.25;
   overflow-y: hidden;
   width: 100%;
@@ -2494,21 +2509,10 @@ pre.command-output {
 }
 
 
-.alert-message.spinning,
-.modal.alert-message.spinning {
-  position: relative;
-
-  &::before {
-    height: 16px;
-    width: 16px;
-    position: absolute;
-    top: 2rem;
-    left: 0.5rem;
-  }
-}
-
 /* page fix */
 @import url("page-fix.less");
 
 /* responsive */
 @import url("responsive.less");
+
+
