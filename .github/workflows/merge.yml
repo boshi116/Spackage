@@ -99,8 +99,9 @@ jobs:
             git_clone https://github.com/jerrykuku/luci-theme-argon luci-theme-argon
             git_clone https://github.com/gaoyaxuan/luci-app-pushbot luci-app-pushbot
             git_clone https://github.com/nooblk-98/luci-app-netstat luci-app-netstat
-            # 新增 noobwrt 主题
             git_clone https://github.com/nooblk-98/luci-theme-noobwrt luci-theme-noobwrt
+            # 新增 Tiny FileManager
+            git_clone https://github.com/muink/luci-app-tinyfilemanager luci-app-tinyfilemanager
           } &
 
           {
