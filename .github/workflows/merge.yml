@@ -100,8 +100,9 @@ jobs:
             git_clone https://github.com/gaoyaxuan/luci-app-pushbot luci-app-pushbot
             git_clone https://github.com/nooblk-98/luci-app-netstat luci-app-netstat
             git_clone https://github.com/nooblk-98/luci-theme-noobwrt luci-theme-noobwrt
-            # 新增 Tiny FileManager
             git_clone https://github.com/muink/luci-app-tinyfilemanager luci-app-tinyfilemanager
+            # 新增 AdBlock Fast 广告拦截
+            git_clone https://github.com/mossdef-org/luci-app-adblock-fast luci-app-adblock-fast
           } &
 
           {
