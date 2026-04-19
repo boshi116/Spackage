@@ -1,49 +1,68 @@
 #!/bin/sh
-# NetWiz 全自动一键安装脚本 (支持多平台识别)
 
-echo "========================================="
-echo "   正在开始安装 NetWiz 网络向导..."
-echo "========================================="
+echo "🚀 开始极速安装/升级 NetWiz 网络设置向导..."
 
-# 你的 GitHub 仓库名
-REPO="huchd0/luci-app-netwiz"
-
-# 🔍 魔法步骤：偷看系统的“身份证”
-OS_NAME="OpenWrt 类系统"
-if [ -f /etc/os-release ]; then
-    # 提取 NAME 字段 (例如 "ImmortalWrt" 或 "iStoreOS")
-    DETECTED_NAME=$(awk -F '"' '/^NAME=/{print $2}' /etc/os-release)
-    [ -n "$DETECTED_NAME" ] && OS_NAME="$DETECTED_NAME"
-fi
-
-# 智能判断包管理器
+# ---------------------------------------------------------
+# 💡 1. 判定包管理器并强制卸载旧版 (斩断卡死根源)
+# ---------------------------------------------------------
+echo "🧹 正在清理旧版本与系统残留..."
 if command -v apk >/dev/null 2>&1; then
-    echo "[环境检测] 成功！当前系统: ${OS_NAME} (采用全新 apk 架构)"
-    echo "📥 正在拉取最新版 .apk 安装包..."
-    wget -qO /tmp/luci-app-netwiz.apk "https://github.com/${REPO}/releases/download/latest/luci-app-netwiz.apk"
-    
-    echo "📦 正在执行免检安装..."
-    apk add --allow-untrusted /tmp/luci-app-netwiz.apk
-
+    PKG_TYPE="apk"
+    apk del luci-app-netwiz >/dev/null 2>&1
 elif command -v opkg >/dev/null 2>&1; then
-    echo "[环境检测] 成功！当前系统: ${OS_NAME} (采用经典 opkg 架构)"
-    echo "📥 正在拉取最新版 .ipk 安装包..."
-    wget -qO /tmp/luci-app-netwiz.ipk "https://github.com/${REPO}/releases/download/latest/luci-app-netwiz.ipk"
-    
-    echo "📦 正在执行常规安装..."
-    opkg install /tmp/luci-app-netwiz.ipk
-
+    PKG_TYPE="ipk"
+    opkg remove luci-app-netwiz --force-remove >/dev/null 2>&1
 else
-    echo "❌ 错误: 未知系统环境，找不到 apk 或 opkg 命令！"
+    echo "❌ 找不到支持的软件包管理器 (未找到 apk 或 opkg)！"
     exit 1
 fi
 
-# 安装成功的收尾工作
-echo "🧹 正在清理系统界面缓存..."
-rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
-/etc/init.d/rpcd restart
+# ---------------------------------------------------------
+# 💡 2. 使用“无版本号”的固定链接下载
+# ---------------------------------------------------------
+echo "⬇️ 正在从云端下载最新版本 (${PKG_TYPE})..."
 
-echo "========================================="
-echo " 🎉 NetWiz 已成功安装在你的 ${OS_NAME} 上！"
-echo " 👉 请刷新浏览器界面查看。"
-echo "========================================="
+# GitHub 官方固定链接 (永远指向最新正式版，无需版本号)
+URL_DIRECT="https://github.com/huchd0/luci-app-netwiz/releases/latest/download/luci-app-netwiz.${PKG_TYPE}"
+# 国内加速代理链接
+URL_PROXY="https://ghproxy.net/${URL_DIRECT}"
+
+echo "尝试使用官方节点下载..."
+# -T 15 代表超时 15 秒就放弃，防止死锁卡住
+wget -qO "/tmp/luci-app-netwiz.${PKG_TYPE}" --no-check-certificate -T 15 "$URL_DIRECT"
+
+# 如果官方节点下载失败，或者下载下来的文件是空的 (0kb)
+if [ "$?" -ne 0 ] || [ ! -s "/tmp/luci-app-netwiz.${PKG_TYPE}" ]; then
+    echo "⚠️ 官方节点连接失败，自动切换至加速节点..."
+    wget -qO "/tmp/luci-app-netwiz.${PKG_TYPE}" --no-check-certificate -T 15 "$URL_PROXY"
+fi
+
+# 最终核验下载结果
+if [ ! -s "/tmp/luci-app-netwiz.${PKG_TYPE}" ]; then
+    echo "❌ 下载彻底失败！"
+    echo "💡 提示 1: 请检查路由器的网络连通性。"
+    echo "💡 提示 2: 请确认你在 GitHub 发布时，【没有】勾选 Pre-release (预发布)！"
+    rm -f "/tmp/luci-app-netwiz.${PKG_TYPE}"
+    exit 1
+fi
+
+# ---------------------------------------------------------
+# 💡 3. 强制部署新版本
+# ---------------------------------------------------------
+echo "⚙️ 正在部署新版本..."
+if [ "$PKG_TYPE" = "apk" ]; then
+    # APK 模式：允许未信任证书，并强制覆写现有文件
+    apk add --allow-untrusted --force-overwrite "/tmp/luci-app-netwiz.apk"
+else
+    # IPK 模式：强制重新安装，强制覆写
+    opkg install "/tmp/luci-app-netwiz.ipk" --force-reinstall --force-overwrite
+fi
+
+# ---------------------------------------------------------
+# 💡 4. 清理缓存，确保前端 UI 立刻刷新
+# ---------------------------------------------------------
+echo "♻️ 正在重建 LuCI 缓存..."
+rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* /tmp/luci-app-netwiz.*
+
+echo "✅ NetWiz 更新与部署完成！"
+exit 0
