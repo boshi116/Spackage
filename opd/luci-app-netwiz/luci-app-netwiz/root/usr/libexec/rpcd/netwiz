@@ -18,21 +18,27 @@ case "$1" in
                 # 如果发现 mode 是更新指令，直接拦截执行热更新！
                 if [ "$mode" = "prepare_update" ]; then
                     echo '{"result":0}'
-                    # 每次开始下载前，先把可能残留的坏文件清理干净
                     rm -f /tmp/netwiz_update.*
                     cat << 'EOF' > /tmp/nw_dl.sh
 #!/bin/sh
 if command -v apk >/dev/null 2>&1; then PKG="apk"; else PKG="ipk"; fi
 URL="https://github.com/huchd0/luci-app-netwiz/releases/latest/download/luci-app-netwiz.${PKG}"
 
-# 加入 --tries=3 允许断线重试 3 次，缩短超时时间避免死等
-wget -qO "/tmp/netwiz_update.${PKG}" --no-check-certificate --timeout=15 --tries=3 "$URL"
+# 原生 Shell ，兼容所有 OpenWrt
+for i in 1 2 3; do
+    wget -qO "/tmp/netwiz_update.${PKG}" --no-check-certificate --timeout=15 "$URL"
+    
+    # 如果下载成功且文件有内容，打上 ready 标记并跳出循环
+    if [ "$?" -eq 0 ] && [ -s "/tmp/netwiz_update.${PKG}" ]; then
+        touch /tmp/netwiz_update.ready
+        break
+    fi
+    # 如果失败，等 2 秒再重试
+    sleep 2
+done
 
-# 💡 优化 3 (绝杀)：不仅检查是否下载了，要用 tar 测试压缩包是否完整未损坏！
-if [ "$?" -eq 0 ] && [ -s "/tmp/netwiz_update.${PKG}" ] && tar -tzf "/tmp/netwiz_update.${PKG}" >/dev/null 2>&1; then
-    touch /tmp/netwiz_update.ready
-else
-    # 如果下载失败或包损坏，立刻把坏文件删掉，防止误触发安装
+# 3 次都失败了，清理残余坏文件
+if [ ! -f /tmp/netwiz_update.ready ]; then
     rm -f "/tmp/netwiz_update.${PKG}"
 fi
 rm -f /tmp/nw_dl.sh
@@ -67,7 +73,7 @@ EOF
                     exit 0
                 fi
 
-                # 以下是正常的网络设置逻辑
+                # 正常的网络设置逻辑
                 cleanup_lan_for_wan_modes() {
                     uci delete network.lan.gateway 2>/dev/null
                     uci delete network.lan.dns 2>/dev/null
@@ -79,6 +85,7 @@ EOF
                     uci set network.wan.proto='dhcp'
                     uci commit network
                     uci commit dhcp
+                    
                 elif [ "$mode" = "wan_static" ]; then
                     cleanup_lan_for_wan_modes
                     uci set network.wan.proto='static'
@@ -87,6 +94,7 @@ EOF
                     uci set network.wan.netmask="$arg3"
                     uci commit network
                     uci commit dhcp
+                    
                 elif [ "$mode" = "pppoe" ]; then
                     cleanup_lan_for_wan_modes
                     uci set network.wan.proto='pppoe'
@@ -94,10 +102,12 @@ EOF
                     uci set network.wan.password="$arg2"
                     uci commit network
                     uci commit dhcp
+                    
                 elif [ "$mode" = "lan" ]; then
                     uci set network.lan.proto='static'
                     uci set network.lan.ipaddr="$arg1"
                     uci set network.lan.netmask="$arg3"
+                    
                     if [ -n "$arg2" ]; then
                         uci set network.lan.gateway="$arg2"
                     else
@@ -111,6 +121,7 @@ EOF
                         uci set dhcp.lan.ignore='0'
                         uci delete network.lan.dns 2>/dev/null
                     fi
+                    
                     uci commit network
                     uci commit dhcp
                 fi
