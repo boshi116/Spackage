@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2026 huchd0 <https://github.com/huchd0/luci-app-netwiz>
+ * Licensed under the GNU General Public License v3.0
+ */
 'use strict';
 'require view';
 'require dom';
@@ -47,10 +51,8 @@ return view.extend({
             '.nw-card-title { font-size: 20px; margin: 0 0 10px 0; color: #ffffff; font-weight: 600; }',
             '.nw-card span { font-size: 15px; color: #ffffff; line-height: 1.5; opacity: 0.9; }',
             
-            /* 💡 修改：必须加上 position: relative; 以便内部的返回箭头绝对定位 */
             '.nw-form-area, .nw-confirm-board { position: relative; max-width: 460px; margin: 0 auto; text-align: left; padding: 40px; border-radius: 16px; background-color: rgba(255, 255, 255, 0.88); box-shadow: 0 10px 30px rgba(0,0,0,0.06); }',
             
-            /* 🚀 新增：左上角返回箭头的 CSS 样式 */
             '.nw-top-back { position: absolute; top: 20px; left: 20px; width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; color: #64748b; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; z-index: 10; }',
             '.nw-top-back:hover { background: #e2e8f0; color: #0f172a; transform: translateX(-3px); box-shadow: 2px 2px 8px rgba(0,0,0,0.05); }',
             '.nw-top-back svg { width: 20px; height: 20px; }',
@@ -157,7 +159,7 @@ return view.extend({
             '           <label class="nw-switch"><input type="checkbox" id="lan-bypass-toggle"><span class="nw-slider"></span></label>',
             '        </div>',
             '        <div id="lan-bypass-warning" style="display:none; background: #fef2f2; color: #ef4444; padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 15px; border: 1px solid #fecaca; line-height: 1.7; letter-spacing: 1px; font-weight: bolder;">',
-            '           <b style="font-size: 16px;">旁路由模式开启：</b><br>1、DHCP 将会关闭，设备无法从本机获取 IP。<br>2、网关必须填写上级主路由 IP。<br>3、本机 IP 如有变更，请确保访问端与修改后 IP 处于同一网段，否则将<b style="font-size: 16px; color: #059669;">无法访问本路由器</b>！',
+            '           <b style="font-size: 16px;">旁路由模式开启：</b><br>1、DHCP 将会关闭，设备无法从本机获取 IP，<b style="font-size: 16px; color: #059669;">设备需要手动设置静态IP或上级路由分配IP</b>。<br>2、网关必须填写上级主路由 IP。<br>3、本机 IP 如有变更，请确保访问端与修改后 IP 处于同一网段，否则将<b style="font-size: 16px; color: #059669;">无法访问本路由器</b>！',
             '        </div>',
             '        <div id="lan-main-warning" style="background: #f0fdf4; color: #059669; padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 15px; border: 1px solid #bbf7d0; line-height: 1.7; letter-spacing: 1px; font-weight: bolder;">',
             '           <b style="font-size: 16px;">主路由模式开启：</b><br>1、DHCP 将会开启，本机负责分配 IP。<br>2、主路由网关通常留空。<br>3、本机 IP 如有变更，请确保访问端与修改后 IP 处于同一网段，否则将<b style="font-size: 16px; color: #dc2626;">无法访问本路由器</b>！',
@@ -217,8 +219,67 @@ return view.extend({
 
         function doUpdateCheck() {
             var badge = container.querySelector('#nw-update-badge');
+            var now = Date.now();
+            var cacheKey = 'nw_last_update_check';
+            var cacheExpiry = 6 * 60 * 60 * 1000; // 6 小时冷却时间
 
-            fetch('https://api.github.com/repos/huchd0/luci-app-netwiz/releases?t=' + Date.now(), { cache: 'no-store' })
+            // 1. 读取本地缓存记录
+            var cached = JSON.parse(localStorage.getItem(cacheKey) || '{}');
+
+            // 2. 显示逻辑封装为独立函数
+            var showReadyBadge = function(latestVer, rawText) {
+                var cleanText = rawText.split('---')[0].replace(/### ✨ 最新版发布/g, '').trim();
+                if (!cleanText) cleanText = '常规稳定性更新与优化。';
+
+                badge.className = 'nw-badge-new';
+                badge.innerText = '发现新版本 ' + latestVer;
+                badge.style.display = 'inline-block';
+
+                var newBadge = badge.cloneNode(true);
+                badge.parentNode.replaceChild(newBadge, badge);
+                badge = newBadge;
+
+                badge.addEventListener('click', function() {
+                    var msgHtml = '<b>✨ 极速更新，更新完后需要重新登陆路由器！</b><br><br><b>更新亮点：</b><div style="text-align:left; font-size:13px; background:#f1f5f9; padding:10px; margin-top:10px; border-radius:6px; max-height:150px; overflow-y:auto; border:1px solid #cbd5e1;">' + cleanText.replace(/\n/g, '<br>') + '</div>';
+
+                    openModal({
+                        title: '升级准备就绪 (' + latestVer + ')',
+                        msg: msgHtml,
+                        okText: '立即更新',
+                        cancelText: '暂不更新',
+                        onOk: function() {
+                            openModal({
+                                title: '⚙️ 正在极速安装',
+                                msg: '正在部署本地更新包，请稍候...<br><br><span style="font-size:13px; color:#666;">安装非常快，系统即将自动刷新...</span>', 
+                                spin: true 
+                            });
+
+                            var forceReload = function() {
+                                var currentUrl = window.location.href.split('?')[0];
+                                window.location.href = currentUrl + '?t=' + new Date().getTime();
+                            };
+
+                            callNetSetup('do_install').then(function() {
+                                setTimeout(forceReload, 12000);
+                            }).catch(function() {
+                                setTimeout(forceReload, 12000);
+                            });
+                        }
+                    });
+                });
+            };
+
+            // 3.判断是否在冷却期内
+            if (cached.time && (now - cached.time < cacheExpiry) && cached.version) {
+                // 如果缓存中记录的版本确实比当前新，直接显示气泡
+                if (compareVersions(cached.version, CURRENT_VERSION) > 0) {
+                    showReadyBadge(cached.version, cached.body || '');
+                }
+                return; // 拦截 fetch 请求，直接退出
+            }
+
+            // 4. 缓存过期或无缓存真正发起请求
+            fetch('https://api.github.com/repos/huchd0/luci-app-netwiz/releases?t=' + now, { cache: 'no-store' })
                 .then(function(res) {
                     if (!res.ok) throw new Error('API Failed: ' + res.status);
                     return res.json();
@@ -226,56 +287,22 @@ return view.extend({
                 .then(function(data) {
                     if (data && data.length > 0) {
                         var latestVer = data[0].tag_name;
+                        var rawText = data[0].body || '';
+
+                        // 更新本地缓存
+                        localStorage.setItem(cacheKey, JSON.stringify({
+                            time: now,
+                            version: latestVer,
+                            body: rawText
+                        }));
 
                         if (latestVer && compareVersions(latestVer, CURRENT_VERSION) > 0) {
-                            var rawText = data[0].body || '';
-                            var cleanText = rawText.split('---')[0].replace(/### ✨ 最新版发布/g, '').trim();
-                            if (!cleanText) cleanText = '常规稳定性更新与优化。';
-
-                            var showReadyBadge = function() {
-                                badge.className = 'nw-badge-new';
-                                badge.innerText = '发现新版本 ' + latestVer;
-                                badge.style.display = 'inline-block';
-
-                                var newBadge = badge.cloneNode(true);
-                                badge.parentNode.replaceChild(newBadge, badge);
-                                badge = newBadge;
-
-                                badge.addEventListener('click', function() {
-                                    var msgHtml = '<b>✨ 极速更新，更新完后需要重新登陆路由器！</b><br><br><b>更新亮点：</b><div style="text-align:left; font-size:13px; background:#f1f5f9; padding:10px; margin-top:10px; border-radius:6px; max-height:150px; overflow-y:auto; border:1px solid #cbd5e1;">' + cleanText.replace(/\n/g, '<br>') + '</div>';
-
-                                    openModal({
-                                        title: '升级准备就绪 (' + latestVer + ')',
-                                        msg: msgHtml,
-                                        okText: '立即更新',
-                                        cancelText: '暂不更新',
-                                        onOk: function() {
-                                            openModal({
-                                                title: '⚙️ 正在极速安装',
-                                                msg: '正在部署本地更新包，请稍候...<br><br><span style="font-size:13px; color:#666;">安装非常快，系统即将自动刷新...</span>', 
-                                                spin: true 
-                                            });
-
-                                            var forceReload = function() {
-                                                var currentUrl = window.location.href.split('?')[0];
-                                                window.location.href = currentUrl + '?t=' + new Date().getTime();
-                                            };
-
-                                            callNetSetup('do_install').then(function() {
-                                                setTimeout(forceReload, 12000);
-                                            }).catch(function() {
-                                                setTimeout(forceReload, 12000);
-                                            });
-                                        }
-                                    });
-                                });
-                            };
-
-                            callNetSetup('check_update').then(function(res) {
+                            // 🚀 核心逻辑：呼叫 RPC 时，附带 latestVer 给后端做双向校验
+                            callNetSetup('check_update', latestVer).then(function(res) {
                                 if (res === 1) {
-                                    showReadyBadge();
+                                    showReadyBadge(latestVer, rawText);
                                 } else {
-                                    callNetSetup('prepare_update');
+                                    callNetSetup('prepare_update', latestVer);
                                     var pollCount = 0;
                                     var pollStatus = setInterval(function() {
                                         pollCount++;
@@ -283,10 +310,10 @@ return view.extend({
                                             clearInterval(pollStatus);
                                             return;
                                         }
-                                        callNetSetup('check_update').then(function(r) {
+                                        callNetSetup('check_update', latestVer).then(function(r) {
                                             if (r === 1) {
                                                 clearInterval(pollStatus);
-                                                showReadyBadge();
+                                                showReadyBadge(latestVer, rawText);
                                             }
                                         }).catch(function(){});
                                     }, 4000);
@@ -624,13 +651,25 @@ return view.extend({
             
             var handleSuccess = function() {
                 var currentHost = window.location.hostname;
+                var cleanUrl = window.location.href.split('?')[0];
+                var ts = new Date().getTime();
                 
                 if (selectedMode === 'lan' && arg1 && arg1 !== currentHost) {
-                    openModal({ title: '配置已生效', msg: '检测到本机 IP 已变更。<br>即将为您跳转至新管理地址：<br><b>' + arg1 + '</b>', spin: true });
-                    setTimeout(function() { window.location.href = 'http://' + arg1; }, 15000);
+                    // 改了 IP，要去新地址登录
+                    openModal({ 
+                        title: '配置已生效', 
+                        msg: '由于 IP 已变更为 <b style="color:#3b82f6;">' + arg1 + '</b>，<br>系统将在 15 秒后尝试跳转到新地址。<br><br><small>注：跳转后需重新登录。</small>', 
+                        spin: true 
+                    });
+                    setTimeout(function() { window.location.href = 'http://' + arg1 + '?v=' + ts; }, 15000);
                 } else {
-                    openModal({ title: '正在应用配置', msg: '底层网络正在重置，请稍候...<br><br><span style="font-size: 14px; color: #555;">(系统将在 15 秒后自动刷新并展示最新状态)</span>', spin: true });
-                    setTimeout(function() { location.reload(); }, 15000); 
+                    // 没改 IP，只是重启网络
+                    openModal({ 
+                        title: '正在应用配置', 
+                        msg: '底层网络正在重置，请稍候...<br><br><span style="font-size: 14px; color: #555;">(若 15 秒后未自动返回，请手动刷新页面)</span>', 
+                        spin: true 
+                    });
+                    setTimeout(function() { window.location.href = cleanUrl + '?v=' + ts; }, 15000); 
                 }
             };
             

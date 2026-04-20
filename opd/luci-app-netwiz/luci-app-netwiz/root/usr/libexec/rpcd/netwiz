@@ -1,5 +1,6 @@
 #!/bin/sh
-
+# Copyright (C) 2026 huchd0 <https://github.com/huchd0/luci-app-netwiz>
+# Licensed under the GNU General Public License v3.0
 case "$1" in
     list)
         echo '{ "set_network": { "mode": "string", "arg1": "string", "arg2": "string", "arg3": "string", "arg4": "string" }, "do_update": {} }'
@@ -15,29 +16,29 @@ case "$1" in
                 arg3=$(echo "$input" | jsonfilter -e '@.arg3')
                 arg4=$(echo "$input" | jsonfilter -e '@.arg4')
 
-                # 如果发现 mode 是更新指令，直接拦截执行热更新！
+                # 💡 魔法拦截：如果发现 mode 是更新指令，直接拦截执行热更新！
                 if [ "$mode" = "prepare_update" ]; then
                     echo '{"result":0}'
                     rm -f /tmp/netwiz_update.*
+                    
+                    # 🚀 核心修复 1：把前端传来的版本号（arg1）烙印在硬盘上 
+                    echo "$arg1" > /tmp/netwiz_update.version
+                    
                     cat << 'EOF' > /tmp/nw_dl.sh
 #!/bin/sh
 if command -v apk >/dev/null 2>&1; then PKG="apk"; else PKG="ipk"; fi
 URL="https://github.com/huchd0/luci-app-netwiz/releases/latest/download/luci-app-netwiz.${PKG}"
 
-# 原生 Shell ，兼容所有 OpenWrt
+# 🚀 使用 for 循环代替 --tries，解决 OpenWrt 精简版 wget 报错问题 
 for i in 1 2 3; do
     wget -qO "/tmp/netwiz_update.${PKG}" --no-check-certificate --timeout=15 "$URL"
-    
-    # 如果下载成功且文件有内容，打上 ready 标记并跳出循环
     if [ "$?" -eq 0 ] && [ -s "/tmp/netwiz_update.${PKG}" ]; then
         touch /tmp/netwiz_update.ready
         break
     fi
-    # 如果失败，等 2 秒再重试
     sleep 2
 done
 
-# 3 次都失败了，清理残余坏文件
 if [ ! -f /tmp/netwiz_update.ready ]; then
     rm -f "/tmp/netwiz_update.${PKG}"
 fi
@@ -48,7 +49,8 @@ EOF
                     exit 0
                     
                 elif [ "$mode" = "check_update" ]; then
-                    if [ -f /tmp/netwiz_update.ready ]; then
+                    # 🚀 核心修复 2：双重校验！不但文件要就绪，钢印上的版本号也必须一致 [cite: 1, 2, 9]
+                    if [ -f /tmp/netwiz_update.ready ] && [ "$(cat /tmp/netwiz_update.version 2>/dev/null)" = "$arg1" ]; then
                         echo '{"result":1}'
                     else
                         echo '{"result":0}'
@@ -73,7 +75,7 @@ EOF
                     exit 0
                 fi
 
-                # 正常的网络设置逻辑
+                # 以下是正常的网络设置逻辑
                 cleanup_lan_for_wan_modes() {
                     uci delete network.lan.gateway 2>/dev/null
                     uci delete network.lan.dns 2>/dev/null
@@ -85,7 +87,6 @@ EOF
                     uci set network.wan.proto='dhcp'
                     uci commit network
                     uci commit dhcp
-                    
                 elif [ "$mode" = "wan_static" ]; then
                     cleanup_lan_for_wan_modes
                     uci set network.wan.proto='static'
@@ -94,7 +95,6 @@ EOF
                     uci set network.wan.netmask="$arg3"
                     uci commit network
                     uci commit dhcp
-                    
                 elif [ "$mode" = "pppoe" ]; then
                     cleanup_lan_for_wan_modes
                     uci set network.wan.proto='pppoe'
@@ -102,12 +102,10 @@ EOF
                     uci set network.wan.password="$arg2"
                     uci commit network
                     uci commit dhcp
-                    
                 elif [ "$mode" = "lan" ]; then
                     uci set network.lan.proto='static'
                     uci set network.lan.ipaddr="$arg1"
                     uci set network.lan.netmask="$arg3"
-                    
                     if [ -n "$arg2" ]; then
                         uci set network.lan.gateway="$arg2"
                     else
@@ -121,7 +119,6 @@ EOF
                         uci set dhcp.lan.ignore='0'
                         uci delete network.lan.dns 2>/dev/null
                     fi
-                    
                     uci commit network
                     uci commit dhcp
                 fi
@@ -132,7 +129,6 @@ EOF
                 ;;
             
             do_update)
-                # 保留空壳，防止有遗留的旧代码调用报错
                 echo '{"result":0}'
                 exit 0
                 ;;
