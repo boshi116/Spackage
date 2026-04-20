@@ -52,9 +52,11 @@ else
     opkg install "/tmp/luci-app-netwiz.ipk" --force-reinstall --force-overwrite
 fi
 
-# 💡 4. 清理缓存，确保前端 UI 立刻刷新
-echo "♻️ 正在重建 LuCI 缓存..."
-rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* /tmp/luci-app-netwiz.*
+# 4. 清理缓存并提醒前端需要刷新才可以显示新菜单
+echo "♻️ 正在重建 LuCI 缓存并重载权限服务..."
+rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* /tmp/luci-app-netwiz.* 2>/dev/null
+/etc/init.d/rpcd reload 2>/dev/null
 
-echo "✅ NetWiz 更新与部署完成！"
+echo -e "\n✅ NetWiz 更新与部署完成！"
+echo -e "👉 请返回浏览器，按下键盘的 【Ctrl + F5】 (或 Shift+F5) 强制刷新网页，即可看到新菜单。"
 exit 0
