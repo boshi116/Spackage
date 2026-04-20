@@ -132,6 +132,7 @@ jobs:
               mv -f jell_tmp/filebrowser opd/
               mv -f jell_tmp/luci-app-filebrowser opd/
               mv -f jell_tmp/luci-app-rtbwmon opd/
+              mv -f jell_tmp/luci-app-kodexplorer opd/
             }
             rm -rf jell_tmp
           } &
