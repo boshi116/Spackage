@@ -1,0 +1,4 @@
+config tvgate
+	option enabled 0
+	option proxy 'https://hk.gh-proxy.com/'
+	option download_url ''
