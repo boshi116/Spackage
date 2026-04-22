@@ -69,7 +69,7 @@ jobs:
           {
             git_clone https://github.com/sirpdboy/luci-app-timecontrol luci-app-timecontrol
             git_clone https://github.com/sirpdboy/luci-app-advancedplus luci-app-advancedplus
-            git_clone https://github.com/sirpdboy/luci-app-lucky luci-app-lucky
+           #git_clone https://github.com/sirpdboy/luci-app-lucky luci-app-lucky
             git_clone https://github.com/sirpdboy/luci-app-partexp luci-app-partexp
             git_clone https://github.com/sirpdboy/netspeedtest netspeedtest
             git_clone https://github.com/sirpdboy/luci-app-watchdog luci-app-watchdog
@@ -121,9 +121,9 @@ jobs:
               mv -f jell_tmp/luci-app-ipsec-server opd/
               mv -f jell_tmp/luci-app-pptpd opd/
               mv -f jell_tmp/webdav2 opd/
-              mv -f jell_tmp/luci-app-msd_lite opd/
+              #mv -f jell_tmp/luci-app-msd_lite opd/
               mv -f jell_tmp/luci-app-onliner opd/
-              mv -f jell_tmp/msd_lite opd/
+              #mv -f jell_tmp/msd_lite opd/
               mv -f jell_tmp/luci-app-control-timewol opd/
               mv -f jell_tmp/luci-app-control-webrestriction opd/
               mv -f jell_tmp/luci-app-control-weburl opd/
