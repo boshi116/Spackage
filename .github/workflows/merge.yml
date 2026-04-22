@@ -85,6 +85,7 @@ jobs:
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
             git_clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic luci-app-unblockneteasemusic
+            git_clone https://github.com/linkease/nas-packages-luci nas-packages-luci
           } &
 
           {
