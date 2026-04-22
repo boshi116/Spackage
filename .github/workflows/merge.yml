@@ -70,7 +70,7 @@ jobs:
             git_clone https://github.com/sirpdboy/luci-app-timecontrol luci-app-timecontrol
             git_clone https://github.com/sirpdboy/luci-app-advancedplus luci-app-advancedplus
            #git_clone https://github.com/sirpdboy/luci-app-lucky luci-app-lucky
-           #git_clone https://github.com/gdy666/luci-app-lucky  luci-app-lucky
+            git_clone https://github.com/gdy666/luci-app-lucky  luci-app-lucky
             git_clone https://github.com/sirpdboy/luci-app-partexp luci-app-partexp
             git_clone https://github.com/sirpdboy/netspeedtest netspeedtest
             git_clone https://github.com/sirpdboy/luci-app-watchdog luci-app-watchdog
