@@ -122,9 +122,9 @@ jobs:
               mv -f jell_tmp/luci-app-ipsec-server opd/
               mv -f jell_tmp/luci-app-pptpd opd/
               mv -f jell_tmp/webdav2 opd/
-              #mv -f jell_tmp/luci-app-msd_lite opd/
+              mv -f jell_tmp/luci-app-msd_lite opd/
               mv -f jell_tmp/luci-app-onliner opd/
-              #mv -f jell_tmp/msd_lite opd/
+              mv -f jell_tmp/msd_lite opd/
               mv -f jell_tmp/luci-app-control-timewol opd/
               mv -f jell_tmp/luci-app-control-webrestriction opd/
               mv -f jell_tmp/luci-app-control-weburl opd/
