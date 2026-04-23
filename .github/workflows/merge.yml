@@ -133,8 +133,6 @@ jobs:
               mv -f jell_tmp/luci-app-control-weburl opd/
               mv -f jell_tmp/unishare opd/
               mv -f jell_tmp/luci-app-unishare opd/
-              mv -f jell_tmp/filebrowser opd/
-              mv -f jell_tmp/luci-app-filebrowser opd/
               mv -f jell_tmp/luci-app-rtbwmon opd/
               mv -f jell_tmp/luci-app-kodexplorer opd/
             }
