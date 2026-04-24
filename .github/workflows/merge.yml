@@ -29,9 +29,6 @@ jobs:
           git submodule deinit --all -f 2>/dev/null || true
           git rm --cached OpenAppFilter 2>/dev/null || true
 
-      - name: 安装 svn 用于下载子目录
-        run: sudo apt update && sudo apt install -y subversion
-
       - name: 设置 Git 与时区
         run: |
           git config --global user.name "GitHub Actions"
@@ -54,14 +51,6 @@ jobs:
             git clone --depth 1 "$repo" "opd/$dir"
           }
 
-          # 下载 GitHub 子目录（100% 成功）
-          download_dir() {
-            local url="$1"
-            local target="$2"
-            echo "🔽 下载目录 → opd/$target"
-            svn export "$url" "opd/$target" --quiet
-          }
-
           echo "🚀 开始并行下载所有插件..."
 
           {
@@ -80,7 +69,8 @@ jobs:
           {
             git_clone https://github.com/sirpdboy/luci-app-timecontrol luci-app-timecontrol
             git_clone https://github.com/sirpdboy/luci-app-advancedplus luci-app-advancedplus
-            git_clone https://github.com/sirpdboy/luci-app-lucky luci-app-lucky
+           #git_clone https://github.com/sirpdboy/luci-app-lucky luci-app-lucky
+            git_clone https://github.com/gdy666/luci-app-lucky  luci-app-lucky
             git_clone https://github.com/sirpdboy/luci-app-partexp luci-app-partexp
             git_clone https://github.com/sirpdboy/netspeedtest netspeedtest
             git_clone https://github.com/sirpdboy/luci-app-watchdog luci-app-watchdog
@@ -95,6 +85,10 @@ jobs:
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
             git_clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic luci-app-unblockneteasemusic
+            git clone --depth 1 https://github.com/gaoderby/luci-app-kms tmp_kms
+            cp -r tmp_kms/luci/applications/luci-app-vlmcsd opd/
+            cp -r tmp_kms/package/network/vlmcsd opd/
+            rm -rf tmp_kms
           } &
 
           {
@@ -112,7 +106,6 @@ jobs:
             git_clone https://github.com/nooblk-98/luci-app-netstat luci-app-netstat
             git_clone https://github.com/nooblk-98/luci-theme-noobwrt luci-theme-noobwrt
             git_clone https://github.com/muink/luci-app-tinyfilemanager luci-app-tinyfilemanager
-            git_clone https://github.com/mossdef-org/luci-app-adblock-fast luci-app-adblock-fast
           } &
 
           {
@@ -123,10 +116,9 @@ jobs:
             git_clone https://github.com/Openwrt-Passwall/openwrt-passwall openwrt-passwall
             git_clone https://github.com/timsaya/luci-app-bandix luci-app-bandix
             git_clone https://github.com/timsaya/openwrt-bandix openwrt-bandix
-
-            # ==================== KMS 激活插件（修复版，100%成功）====================
-            download_dir https://github.com/gaoderby/luci-app-kms/trunk/luci/applications/luci-app-vlmcsd luci-app-vlmcsd
-            download_dir https://github.com/gaoderby/luci-app-kms/trunk/package/network/vlmcsd vlmcsd
+            git_clone  https://github.com/huchd0/luci-app-netwiz luci-app-netwiz
+            git_clone  https://github.com/tpxcer/luci-app-minigate luci-app-minigate
+            git_clone  https://github.com/MayflyDestiny/luci-app-mosdns-panel luci-app-mosdns-panel
           } &
 
           {
@@ -145,6 +137,7 @@ jobs:
               mv -f jell_tmp/unishare opd/
               mv -f jell_tmp/luci-app-unishare opd/
               mv -f jell_tmp/luci-app-rtbwmon opd/
+              mv -f jell_tmp/luci-app-kodexplorer opd/
             }
             rm -rf jell_tmp
           } &
