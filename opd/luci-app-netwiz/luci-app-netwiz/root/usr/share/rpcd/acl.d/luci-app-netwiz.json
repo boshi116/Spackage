@@ -1,0 +1,15 @@
+{
+    "luci-app-netwiz": {
+        "description": "Grant access to netwiz",
+        "read": {
+            "ubus": {
+                "netwiz": [ "*" ]
+            }
+        },
+        "write": {
+            "ubus": {
+                "netwiz": [ "*" ]
+            }
+        }
+    }
+}

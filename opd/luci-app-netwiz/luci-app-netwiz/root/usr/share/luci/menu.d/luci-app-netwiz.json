@@ -1,0 +1,13 @@
+{
+	"admin/system/netwiz": {
+		"title": "Network Wizard",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "netwiz"
+		},
+		"depends": {
+			"acl": [ "luci-app-netwiz" ]
+		}
+	}
+}
