@@ -50,7 +50,7 @@ case "$1" in
                                 exit 0
                             fi
 
-                            if netstat -tn 2>/dev/null | awk '{print $4, $6}' | grep -E ':(80|443) ESTABLISHED' >/dev/null; then
+                            if netstat -tn 2>/dev/null | awk '{print $4, $6}' | grep -E "^${arg1}:(80|443) ESTABLISHED" >/dev/null; then
                                 logger -t Netwiz "Web access detected on new IP. Auto-confirming rollback."
                                 rm -f /tmp/netwiz_pending_confirm /tmp/network.netwiz_bak /tmp/dhcp.netwiz_bak
                                 exit 0
