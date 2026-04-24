@@ -85,6 +85,8 @@ jobs:
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
             git_clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic luci-app-unblockneteasemusic
+            git_clone_subdir https://github.com/gaoderby/luci-app-kms luci/applications/luci-app-vlmcsd luci-app-vlmcsd
+            git_clone_subdir https://github.com/gaoderby/luci-app-kms package/network/vlmcsd vlmcs
           } &
 
           {
