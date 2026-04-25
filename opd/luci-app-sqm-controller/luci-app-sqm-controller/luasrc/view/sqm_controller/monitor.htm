@@ -1,0 +1,900 @@
+﻿<%+header%>
+
+<style>
+.sqm-monitor {
+  --sqm-bg: #f4f7fb;
+  --sqm-card: #ffffff;
+  --sqm-line: #e7edf6;
+  --sqm-text: #18243d;
+  --sqm-muted: #7b879d;
+  --sqm-blue: #2f6df6;
+  --sqm-blue-soft: rgba(47, 109, 246, 0.12);
+  --sqm-green: #18a36b;
+  --sqm-green-soft: rgba(24, 163, 107, 0.12);
+  --sqm-orange: #f59e0b;
+  --sqm-orange-soft: rgba(245, 158, 11, 0.14);
+  --sqm-red: #ef4444;
+  --sqm-red-soft: rgba(239, 68, 68, 0.12);
+  padding: 12px;
+  background:
+    radial-gradient(circle at top right, rgba(47, 109, 246, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(244, 247, 251, 0.9), rgba(244, 247, 251, 1));
+}
+
+.sqm-hero-copy h2 {
+  margin: 0;
+  font-size: 26px;
+  color: var(--sqm-text);
+}
+
+.sqm-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.sqm-toolbar-left,
+.sqm-toolbar-right,
+.sqm-window-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sqm-window-btn {
+  min-width: 76px;
+}
+
+.sqm-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sqm-muted);
+  font-size: 12px;
+}
+
+.sqm-sync {
+  color: var(--sqm-muted);
+  font-size: 12px;
+}
+
+.sqm-section-title {
+  margin: 16px 0 10px;
+  color: var(--sqm-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sqm-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sqm-main-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sqm-card {
+  background: var(--sqm-card);
+  border: 1px solid var(--sqm-line);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+}
+
+.sqm-card-wide {
+  grid-column: span 2;
+}
+
+.sqm-overview-card {
+  min-height: 116px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.sqm-overview-k {
+  font-size: 12px;
+  color: var(--sqm-muted);
+}
+
+.sqm-overview-v {
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--sqm-text);
+  margin-top: 8px;
+}
+
+.sqm-overview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sqm-overview-note {
+  font-size: 12px;
+  color: var(--sqm-muted);
+}
+
+.sqm-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.sqm-card-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--sqm-text);
+}
+
+.sqm-card-head p {
+  margin: 4px 0 0;
+  color: var(--sqm-muted);
+  font-size: 12px;
+}
+
+.sqm-pill-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sqm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #f6f8fc;
+  color: var(--sqm-text);
+  border: 1px solid var(--sqm-line);
+}
+
+.sqm-pill.blue {
+  color: var(--sqm-blue);
+  background: var(--sqm-blue-soft);
+  border-color: transparent;
+}
+
+.sqm-pill.green {
+  color: var(--sqm-green);
+  background: var(--sqm-green-soft);
+  border-color: transparent;
+}
+
+.sqm-pill.orange {
+  color: var(--sqm-orange);
+  background: var(--sqm-orange-soft);
+  border-color: transparent;
+}
+
+.sqm-pill.red {
+  color: var(--sqm-red);
+  background: var(--sqm-red-soft);
+  border-color: transparent;
+}
+
+.sqm-canvas {
+  width: 100%;
+  height: 220px;
+  border: 1px solid var(--sqm-line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(246, 248, 252, 0.8), rgba(255, 255, 255, 0.95));
+}
+
+.sqm-pre {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--sqm-line);
+  border-radius: 14px;
+  background: #f9fbfe;
+  padding: 12px;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sqm-speedtest-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.sqm-speedtest-help {
+  color: var(--sqm-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1400px) {
+  .sqm-overview-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .sqm-overview-grid,
+  .sqm-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sqm-card-wide {
+    grid-column: span 1;
+  }
+
+}
+</style>
+
+<div class="cbi-map sqm-monitor">
+  <div class="sqm-hero-copy">
+    <h2 name="content">SQM 实时监控</h2>
+  </div>
+
+  <div class="sqm-toolbar">
+    <div class="sqm-toolbar-left">
+      <div class="sqm-window-switch">
+        <button type="button" class="cbi-button sqm-window-btn" id="btn-1m" onclick="setWindow('1m')">1 分钟</button>
+        <button type="button" class="cbi-button cbi-button-apply sqm-window-btn" id="btn-5m" onclick="setWindow('5m')">5 分钟</button>
+        <button type="button" class="cbi-button sqm-window-btn" id="btn-1h" onclick="setWindow('1h')">1 小时</button>
+      </div>
+      <label class="sqm-toggle">
+        <input type="checkbox" id="auto" checked onchange="toggleAuto()">
+        自动刷新
+      </label>
+    </div>
+    <div class="sqm-toolbar-right">
+      <button type="button" class="cbi-button" onclick="loadHistory()">立即刷新</button>
+      <button type="button" class="cbi-button" onclick="exportCsv()">导出 CSV</button>
+      <span class="sqm-sync" id="last-update">最近更新：--</span>
+    </div>
+  </div>
+
+  <div class="sqm-section-title">总览卡片</div>
+  <div class="sqm-overview-grid">
+    <div class="sqm-card sqm-overview-card">
+      <div>
+        <div class="sqm-overview-k">当前总带宽</div>
+        <div class="sqm-overview-v" id="overview-bandwidth">--</div>
+      </div>
+      <div class="sqm-overview-meta">
+        <span class="sqm-pill blue" id="overview-bandwidth-state">采样中</span>
+        <span class="sqm-overview-note" id="overview-bandwidth-note">最近 5 分钟</span>
+      </div>
+    </div>
+    <div class="sqm-card sqm-overview-card">
+      <div>
+        <div class="sqm-overview-k">当前延迟</div>
+        <div class="sqm-overview-v" id="overview-latency">--</div>
+      </div>
+      <div class="sqm-overview-meta">
+        <span class="sqm-pill green" id="overview-latency-state">健康</span>
+        <span class="sqm-overview-note" id="overview-latency-note">Ping 采样</span>
+      </div>
+    </div>
+    <div class="sqm-card sqm-overview-card">
+      <div>
+        <div class="sqm-overview-k">当前丢包</div>
+        <div class="sqm-overview-v" id="overview-loss">--</div>
+      </div>
+      <div class="sqm-overview-meta">
+        <span class="sqm-pill green" id="overview-loss-state">稳定</span>
+        <span class="sqm-overview-note" id="overview-loss-note">4 次探测</span>
+      </div>
+    </div>
+    <div class="sqm-card sqm-overview-card">
+      <div>
+        <div class="sqm-overview-k">CPU 负载</div>
+        <div class="sqm-overview-v" id="overview-cpu">--</div>
+      </div>
+      <div class="sqm-overview-meta">
+        <span class="sqm-pill blue" id="overview-cpu-state">等待样本</span>
+        <span class="sqm-overview-note" id="overview-cpu-note">usage / load1</span>
+      </div>
+    </div>
+    <div class="sqm-card sqm-overview-card">
+      <div>
+        <div class="sqm-overview-k">内存占用</div>
+        <div class="sqm-overview-v" id="overview-memory">--</div>
+      </div>
+      <div class="sqm-overview-meta">
+        <span class="sqm-pill blue" id="overview-memory-state">等待样本</span>
+        <span class="sqm-overview-note" id="overview-memory-note">used / total</span>
+      </div>
+    </div>
+    <div class="sqm-card sqm-overview-card">
+      <div>
+        <div class="sqm-overview-k">温度</div>
+        <div class="sqm-overview-v" id="overview-temperature">--</div>
+      </div>
+      <div class="sqm-overview-meta">
+        <span class="sqm-pill orange" id="overview-temperature-state">硬件相关</span>
+        <span class="sqm-overview-note" id="overview-temperature-note">无传感器时显示 N/A</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sqm-section-title">趋势面板</div>
+  <div class="sqm-main-grid">
+    <div class="sqm-card sqm-card-wide">
+      <div class="sqm-card-head">
+        <div>
+          <h3>带宽趋势</h3>
+          <p>根据 WAN 接口累计字节估算的总吞吐速率。</p>
+        </div>
+        <div class="sqm-pill-row">
+          <span class="sqm-pill blue" id="bandwidth-current">当前 --</span>
+          <span class="sqm-pill" id="bandwidth-avg">均值 --</span>
+          <span class="sqm-pill" id="bandwidth-max">峰值 --</span>
+        </div>
+      </div>
+      <canvas id="chart-bandwidth" class="sqm-canvas"></canvas>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-head">
+        <div>
+          <h3>延迟趋势</h3>
+          <p>对外部目标主机的平均 RTT 采样。</p>
+        </div>
+        <div class="sqm-pill-row">
+          <span class="sqm-pill green" id="latency-current">当前 --</span>
+          <span class="sqm-pill" id="latency-avg">均值 --</span>
+          <span class="sqm-pill" id="latency-max">峰值 --</span>
+        </div>
+      </div>
+      <canvas id="chart-latency" class="sqm-canvas"></canvas>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-head">
+        <div>
+          <h3>丢包趋势</h3>
+          <p>4 次 ICMP 探测的丢包比例。</p>
+        </div>
+        <div class="sqm-pill-row">
+          <span class="sqm-pill red" id="loss-current">当前 --</span>
+          <span class="sqm-pill" id="loss-avg">均值 --</span>
+          <span class="sqm-pill" id="loss-max">峰值 --</span>
+        </div>
+      </div>
+      <canvas id="chart-loss" class="sqm-canvas"></canvas>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-head">
+        <div>
+          <h3>CPU 负载趋势</h3>
+          <p>主展示为 CPU 使用率，附带 1 分钟 loadavg。</p>
+        </div>
+        <div class="sqm-pill-row">
+          <span class="sqm-pill blue" id="cpu-current">当前 --</span>
+          <span class="sqm-pill" id="cpu-avg">均值 --</span>
+          <span class="sqm-pill" id="cpu-max">峰值 --</span>
+        </div>
+      </div>
+      <canvas id="chart-cpu" class="sqm-canvas"></canvas>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-head">
+        <div>
+          <h3>内存占用趋势</h3>
+          <p>使用 MemAvailable 估算已用内存。</p>
+        </div>
+        <div class="sqm-pill-row">
+          <span class="sqm-pill green" id="memory-current">当前 --</span>
+          <span class="sqm-pill" id="memory-avg">均值 --</span>
+          <span class="sqm-pill" id="memory-max">峰值 --</span>
+        </div>
+      </div>
+      <canvas id="chart-memory" class="sqm-canvas"></canvas>
+    </div>
+
+    <div class="sqm-card sqm-card-wide">
+      <div class="sqm-card-head">
+        <div>
+          <h3>温度趋势</h3>
+          <p>从 thermal_zone 或 hwmon 读取，设备不支持时显示空值。</p>
+        </div>
+        <div class="sqm-pill-row">
+          <span class="sqm-pill orange" id="temperature-current">当前 --</span>
+          <span class="sqm-pill" id="temperature-avg">均值 --</span>
+          <span class="sqm-pill" id="temperature-max">峰值 --</span>
+        </div>
+      </div>
+      <canvas id="chart-temperature" class="sqm-canvas"></canvas>
+    </div>
+
+    <div class="sqm-card sqm-card-wide">
+      <div class="sqm-card-head">
+        <div>
+          <h3>测速与诊断</h3>
+        </div>
+      </div>
+      <div class="sqm-speedtest-actions">
+        <button type="button" class="cbi-button cbi-button-apply" onclick="runSpeedtest()">执行测速</button>
+        <span class="sqm-speedtest-help">测速会触发一次网络采样，结果仅作为当前环境参考。</span>
+      </div>
+      <pre id="speedtest-result" class="sqm-pre">尚未执行测速。</pre>
+    </div>
+  </div>
+</div>
+
+<script type="text/javascript">
+(function() {
+  var HISTORY_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_monitor_history")%>';
+  var SPEEDTEST_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/speedtest")%>';
+  var currentWindow = '5m';
+  var timer = null;
+  var lastPoints = [];
+
+  function el(id) { return document.getElementById(id); }
+
+  function setWindowButtons() {
+    ['1m', '5m', '1h'].forEach(function(name) {
+      el('btn-' + name).className = 'cbi-button sqm-window-btn' + (name === currentWindow ? ' cbi-button-apply' : '');
+    });
+  }
+
+  function setWindow(windowName) {
+    currentWindow = windowName;
+    setWindowButtons();
+    loadHistory();
+  }
+
+  function toggleAuto() {
+    var enabled = el('auto').checked;
+    if (enabled && !timer) {
+      timer = setInterval(loadHistory, 3000);
+    } else if (!enabled && timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  }
+
+  function formatNumber(value, digits) {
+    if (value === null || value === undefined || value === '' || !isFinite(Number(value))) return '--';
+    return Number(value).toFixed(digits === undefined ? 0 : digits);
+  }
+
+  function formatRate(kbps) {
+    if (kbps === null || kbps === undefined || !isFinite(Number(kbps))) return '--';
+    var value = Number(kbps);
+    if (Math.abs(value) >= 1000) return (value / 1000).toFixed(value >= 10000 ? 1 : 2) + ' Mbps';
+    return value.toFixed(value >= 100 ? 0 : 2) + ' kbps';
+  }
+
+  function formatMs(value) {
+    if (value === null || value === undefined || !isFinite(Number(value))) return '--';
+    return Number(value).toFixed(Number(value) >= 100 ? 0 : 2) + ' ms';
+  }
+
+  function formatPercent(value) {
+    if (value === null || value === undefined || !isFinite(Number(value))) return '--';
+    return Number(value).toFixed(Number(value) >= 10 ? 0 : 2) + ' %';
+  }
+
+  function formatTemp(value) {
+    if (value === null || value === undefined || !isFinite(Number(value))) return 'N/A';
+    return Number(value).toFixed(1) + ' °C';
+  }
+
+  function formatMemoryValue(value) {
+    if (value === null || value === undefined || !isFinite(Number(value))) return '--';
+    return Number(value).toFixed(Number(value) >= 100 ? 0 : 1) + ' MB';
+  }
+
+  function formatMemoryPair(used, total) {
+    if (!isFinite(Number(used)) || !isFinite(Number(total))) return '--';
+    return formatMemoryValue(used) + ' / ' + formatMemoryValue(total);
+  }
+
+  function formatLoadavg(value) {
+    if (value === null || value === undefined || !isFinite(Number(value))) return '--';
+    return Number(value).toFixed(2);
+  }
+
+  function fallback(value, defaultValue) {
+    return value === null || value === undefined ? defaultValue : value;
+  }
+
+  function nowText() {
+    var d = new Date();
+    var t = function(n) { return n < 10 ? '0' + n : '' + n; };
+    return t(d.getHours()) + ':' + t(d.getMinutes()) + ':' + t(d.getSeconds());
+  }
+
+  function numericSeries(points, key) {
+    return points
+      .map(function(item) { return Number(item[key]); })
+      .filter(function(value) { return isFinite(value); });
+  }
+
+  function seriesStats(points, key) {
+    var values = numericSeries(points, key);
+    if (!values.length) return { current: null, avg: null, max: null };
+    var sum = values.reduce(function(acc, item) { return acc + item; }, 0);
+    return {
+      current: values[values.length - 1],
+      avg: sum / values.length,
+      max: Math.max.apply(null, values)
+    };
+  }
+
+  function setText(id, value) {
+    el(id).textContent = value;
+  }
+
+  function setPill(id, color, text) {
+    var node = el(id);
+    node.className = 'sqm-pill ' + color;
+    node.textContent = text;
+  }
+
+  function metricState(type, value) {
+    if (!isFinite(Number(value))) return { color: 'orange', text: '无数据' };
+    value = Number(value);
+
+    if (type === 'bandwidth') return { color: 'blue', text: '采样中' };
+    if (type === 'latency') {
+      if (value < 50) return { color: 'green', text: '健康' };
+      if (value < 100) return { color: 'orange', text: '偏高' };
+      return { color: 'red', text: '拥塞' };
+    }
+    if (type === 'loss') {
+      if (value <= 0) return { color: 'green', text: '稳定' };
+      if (value <= 5) return { color: 'orange', text: '抖动' };
+      return { color: 'red', text: '异常' };
+    }
+    if (type === 'cpu') {
+      if (value < 50) return { color: 'green', text: '宽松' };
+      if (value < 80) return { color: 'orange', text: '繁忙' };
+      return { color: 'red', text: '高压' };
+    }
+    if (type === 'memory') {
+      if (value < 70) return { color: 'green', text: '充足' };
+      if (value < 85) return { color: 'orange', text: '偏高' };
+      return { color: 'red', text: '紧张' };
+    }
+    if (type === 'temperature') {
+      if (value < 60) return { color: 'green', text: '正常' };
+      if (value < 75) return { color: 'orange', text: '偏热' };
+      return { color: 'red', text: '高温' };
+    }
+    return { color: 'blue', text: '采样中' };
+  }
+
+  function tickStep(raw) {
+    if (!isFinite(raw) || raw <= 0) return 1;
+    var exp = Math.floor(Math.log(raw) / Math.LN10);
+    var base = Math.pow(10, exp);
+    var factor = raw / base;
+    if (factor <= 1) return 1 * base;
+    if (factor <= 2) return 2 * base;
+    if (factor <= 5) return 5 * base;
+    return 10 * base;
+  }
+
+  function drawSeries(canvasId, points, options) {
+    var canvas = el(canvasId);
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var width = canvas.clientWidth || 600;
+    var height = canvas.clientHeight || 220;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    var padL = 50, padR = 14, padT = 18, padB = 28;
+    var plotW = width - padL - padR;
+    var plotH = height - padT - padB;
+    var values = points
+      .map(function(item) { return Number(item[options.key]); })
+      .filter(function(value) { return isFinite(value); });
+
+    if (!values.length) {
+      ctx.fillStyle = '#7b879d';
+      ctx.font = '12px sans-serif';
+      ctx.fillText('当前时间窗口内没有可用样本。', padL, padT + 18);
+      return;
+    }
+
+    var minv = options.min !== undefined ? options.min : Math.min.apply(null, values);
+    var maxv = options.max !== undefined ? options.max : Math.max.apply(null, values);
+    if (options.preferZero !== false && minv > 0) minv = 0;
+    if (minv === maxv) maxv = minv + 1;
+    var step = tickStep((maxv - minv) / 4);
+    minv = Math.floor(minv / step) * step;
+    maxv = Math.ceil(maxv / step) * step;
+
+    function xAt(index) {
+      return points.length <= 1 ? padL : padL + (index * plotW / (points.length - 1));
+    }
+
+    function yAt(value) {
+      return padT + (maxv - value) * plotH / (maxv - minv);
+    }
+
+    ctx.strokeStyle = '#e7edf6';
+    ctx.fillStyle = '#7b879d';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (var i = 0; i <= 4; i++) {
+      var y = padT + (plotH * i / 4);
+      var v = maxv - ((maxv - minv) * i / 4);
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(width - padR, y);
+      ctx.stroke();
+      ctx.fillText(options.axisLabel(v), padL - 6, y);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (var j = 0; j <= 4; j++) {
+      var idx = Math.round((points.length - 1) * j / 4);
+      var x = xAt(idx);
+      var ts = Number(points[idx].time || 0) * 1000;
+      var d = new Date(ts);
+      var label = String(d.getHours()).padStart(2, '0') + ':' +
+        String(d.getMinutes()).padStart(2, '0') +
+        (currentWindow === '1h' ? '' : ':' + String(d.getSeconds()).padStart(2, '0'));
+      ctx.fillText(label, x, padT + plotH + 8);
+    }
+
+    ctx.save();
+    var gradient = ctx.createLinearGradient(0, padT, 0, padT + plotH);
+    gradient.addColorStop(0, options.fillTop);
+    gradient.addColorStop(1, options.fillBottom);
+    ctx.beginPath();
+    var started = false;
+    for (var k = 0; k < points.length; k++) {
+      var value = Number(points[k][options.key]);
+      if (!isFinite(value)) continue;
+      var px = xAt(k);
+      var py = yAt(value);
+      if (!started) {
+        ctx.moveTo(px, py);
+        started = true;
+      } else {
+        ctx.lineTo(px, py);
+      }
+    }
+    ctx.lineTo(xAt(points.length - 1), padT + plotH);
+    ctx.lineTo(xAt(0), padT + plotH);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = options.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    started = false;
+    for (var n = 0; n < points.length; n++) {
+      var value2 = Number(points[n][options.key]);
+      if (!isFinite(value2)) {
+        started = false;
+        continue;
+      }
+      var x2 = xAt(n);
+      var y2 = yAt(value2);
+      if (!started) {
+        ctx.moveTo(x2, y2);
+        started = true;
+      } else {
+        ctx.lineTo(x2, y2);
+      }
+    }
+    ctx.stroke();
+  }
+
+  function renderOverview(current) {
+    var bandwidthState = metricState('bandwidth', current.bandwidth_kbps);
+    var latencyState = metricState('latency', current.latency);
+    var lossState = metricState('loss', current.loss);
+    var cpuState = metricState('cpu', current.cpu_usage);
+    var memoryState = metricState('memory', current.memory_usage);
+    var temperatureState = metricState('temperature', current.temperature_c);
+
+    setText('overview-bandwidth', formatRate(current.bandwidth_kbps));
+    setPill('overview-bandwidth-state', bandwidthState.color, bandwidthState.text);
+    setText('overview-bandwidth-note', currentWindow === '1m' ? '最近 1 分钟' : (currentWindow === '1h' ? '最近 1 小时' : '最近 5 分钟'));
+
+    setText('overview-latency', formatMs(current.latency));
+    setPill('overview-latency-state', latencyState.color, latencyState.text);
+
+    setText('overview-loss', formatPercent(current.loss));
+    setPill('overview-loss-state', lossState.color, lossState.text);
+
+    setText('overview-cpu', formatPercent(current.cpu_usage));
+    setPill('overview-cpu-state', cpuState.color, cpuState.text);
+    setText('overview-cpu-note', 'load1 ' + formatLoadavg(current.load1));
+
+    setText('overview-memory', formatPercent(current.memory_usage));
+    setPill('overview-memory-state', memoryState.color, memoryState.text);
+    setText('overview-memory-note', formatMemoryPair(current.memory_used_mb, current.memory_total_mb));
+
+    setText('overview-temperature', formatTemp(current.temperature_c));
+    setPill('overview-temperature-state', temperatureState.color, temperatureState.text);
+  }
+
+  function renderChartStats(prefix, stats, formatter) {
+    setText(prefix + '-current', '当前 ' + formatter(stats.current));
+    setText(prefix + '-avg', '均值 ' + formatter(stats.avg));
+    setText(prefix + '-max', '峰值 ' + formatter(stats.max));
+  }
+
+  function renderCharts(points) {
+    renderChartStats('bandwidth', seriesStats(points, 'bandwidth_kbps'), formatRate);
+    renderChartStats('latency', seriesStats(points, 'latency'), formatMs);
+    renderChartStats('loss', seriesStats(points, 'loss'), formatPercent);
+    renderChartStats('cpu', seriesStats(points, 'cpu_usage'), formatPercent);
+    renderChartStats('memory', seriesStats(points, 'memory_usage'), formatPercent);
+    renderChartStats('temperature', seriesStats(points, 'temperature_c'), formatTemp);
+
+    drawSeries('chart-bandwidth', points, {
+      key: 'bandwidth_kbps',
+      color: '#2f6df6',
+      fillTop: 'rgba(47, 109, 246, 0.18)',
+      fillBottom: 'rgba(47, 109, 246, 0.02)',
+      axisLabel: function(v) { return v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) : v.toFixed(v >= 100 ? 0 : 1); }
+    });
+    drawSeries('chart-latency', points, {
+      key: 'latency',
+      color: '#18a36b',
+      fillTop: 'rgba(24, 163, 107, 0.16)',
+      fillBottom: 'rgba(24, 163, 107, 0.02)',
+      axisLabel: function(v) { return v.toFixed(v >= 100 ? 0 : 1); }
+    });
+    drawSeries('chart-loss', points, {
+      key: 'loss',
+      color: '#ef4444',
+      fillTop: 'rgba(239, 68, 68, 0.16)',
+      fillBottom: 'rgba(239, 68, 68, 0.02)',
+      min: 0,
+      max: 100,
+      axisLabel: function(v) { return v.toFixed(0); }
+    });
+    drawSeries('chart-cpu', points, {
+      key: 'cpu_usage',
+      color: '#2f6df6',
+      fillTop: 'rgba(47, 109, 246, 0.18)',
+      fillBottom: 'rgba(47, 109, 246, 0.02)',
+      min: 0,
+      max: 100,
+      axisLabel: function(v) { return v.toFixed(0); }
+    });
+    drawSeries('chart-memory', points, {
+      key: 'memory_usage',
+      color: '#18a36b',
+      fillTop: 'rgba(24, 163, 107, 0.16)',
+      fillBottom: 'rgba(24, 163, 107, 0.02)',
+      min: 0,
+      max: 100,
+      axisLabel: function(v) { return v.toFixed(0); }
+    });
+    drawSeries('chart-temperature', points, {
+      key: 'temperature_c',
+      color: '#f59e0b',
+      fillTop: 'rgba(245, 158, 11, 0.18)',
+      fillBottom: 'rgba(245, 158, 11, 0.02)',
+      axisLabel: function(v) { return v.toFixed(0); }
+    });
+  }
+
+  function loadHistory() {
+    fetch(HISTORY_URL + '?window=' + encodeURIComponent(currentWindow), { cache: 'no-store' })
+      .then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+      })
+      .then(function(data) {
+        var points = Array.isArray(data.points) ? data.points : [];
+        var current = (data.current && typeof data.current === 'object') ? data.current : {};
+        lastPoints = points;
+        renderOverview(current);
+        renderCharts(points);
+        setText('last-update', '最近更新：' + nowText());
+      })
+      .catch(function(err) {
+        setText('last-update', '刷新失败：' + String(err));
+      });
+  }
+
+  function exportCsv() {
+    if (!lastPoints.length) {
+      alert('当前没有可导出的监控样本。');
+      return;
+    }
+    var lines = [
+      'timestamp,time_iso,bandwidth_kbps,latency_ms,loss_percent,cpu_usage_percent,load1,memory_used_mb,memory_total_mb,memory_usage_percent,temperature_c'
+    ];
+    lastPoints.forEach(function(point) {
+      var ts = Number(point.time || 0);
+      var iso = ts ? new Date(ts * 1000).toISOString() : '';
+      lines.push([
+        ts || '',
+        iso,
+        fallback(point.bandwidth_kbps, ''),
+        fallback(point.latency, ''),
+        fallback(point.loss, ''),
+        fallback(point.cpu_usage, ''),
+        fallback(point.load1, ''),
+        fallback(point.memory_used_mb, ''),
+        fallback(point.memory_total_mb, ''),
+        fallback(point.memory_usage, ''),
+        fallback(point.temperature_c, '')
+      ].join(','));
+    });
+    var blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'sqm-monitor-' + currentWindow + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function runSpeedtest() {
+    var output = el('speedtest-result');
+    output.textContent = '测速执行中，请稍候...';
+    fetch(SPEEDTEST_URL, { cache: 'no-store' })
+      .then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+      })
+      .then(function(data) {
+        if (data.error) {
+          output.textContent = '测速失败：' + data.error + (data.raw ? ('\n\n原始输出：\n' + data.raw) : '');
+          return;
+        }
+        var lines = [];
+        lines.push('测速结果');
+        if (data.backend) lines.push('后端：' + data.backend);
+        lines.push('下载：' + fallback(data.download, '--') + ' kbps');
+        lines.push('上传：' + fallback(data.upload, '--') + ' kbps');
+        if (data.http_code) lines.push('HTTP：' + data.http_code);
+        if (data.time_total) lines.push('总耗时：' + data.time_total + ' s');
+        if (data.source_url) lines.push('来源：' + data.source_url);
+        if (data.runtime && data.runtime.message) lines.push('说明：' + data.runtime.message);
+        output.textContent = lines.join('\n');
+        loadHistory();
+      })
+      .catch(function(err) {
+        output.textContent = '测速请求失败：' + String(err);
+      });
+  }
+
+  window.setWindow = setWindow;
+  window.toggleAuto = toggleAuto;
+  window.exportCsv = exportCsv;
+  window.runSpeedtest = runSpeedtest;
+
+  setWindowButtons();
+  loadHistory();
+  if (!timer) timer = setInterval(loadHistory, 3000);
+})();
+</script>
+
+<%+footer%>

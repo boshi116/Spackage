@@ -1,0 +1,464 @@
+<%+header%>
+
+<style>
+.sqm-wrap { max-width: 1200px; }
+.sqm-topbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:8px 0 12px; }
+.sqm-title { margin:0; font-size:22px; }
+.sqm-note { font-size:12px; color:#666; }
+.sqm-badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; color:#fff; background:#777; }
+.sqm-badge.ok { background:#2e7d32; }
+.sqm-badge.warn { background:#ed6c02; }
+.sqm-badge.bad { background:#d32f2f; }
+.sqm-card { border:1px solid #e5e5e5; border-radius:8px; padding:12px; background:#fff; margin-bottom:12px; }
+.sqm-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+@media (max-width: 900px) { .sqm-grid { grid-template-columns:1fr; } }
+.sqm-k { font-size:12px; color:#666; }
+.sqm-v { font-size:24px; font-weight:600; margin-top:2px; }
+.sqm-sub { font-size:12px; color:#666; margin-top:6px; line-height:1.5; }
+.sqm-err { color:#b3261e; white-space:pre-wrap; }
+.sqm-card-title { font-size:16px; font-weight:600; margin:0 0 10px; }
+.sqm-table { width:100%; border-collapse:collapse; }
+.sqm-table th, .sqm-table td { border-bottom:1px solid #eee; text-align:left; padding:6px; font-size:13px; vertical-align:top; }
+.sqm-table tbody tr.sqm-rule-hit { background:#f6fbf6; }
+.sqm-table tbody tr.sqm-rule-idle { color:#777; }
+.sqm-mini-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+.sqm-preline { white-space:pre-wrap; }
+.sqm-list { margin:0; padding-left:18px; }
+.sqm-list li { margin:4px 0; }
+@media (max-width: 900px) { .sqm-mini-grid { grid-template-columns:1fr; } }
+</style>
+
+<div class="cbi-map sqm-wrap">
+  <h2 class="sqm-title">分类流量统计</h2>
+
+  <div class="sqm-topbar">
+    <span id="status-badge" class="sqm-badge">--</span>
+    <label>设备:
+      <select id="dev-select">
+        <option value="ifb0">ifb0（下载）</option>
+        <option value="iface">接口（上传）</option>
+      </select>
+    </label>
+    <label><input id="auto-refresh" type="checkbox" checked> 自动刷新（3 秒）</label>
+    <button class="cbi-button cbi-button-action" id="btn-refresh">立即刷新</button>
+    <span class="sqm-note">下载方向通常看 `ifb0`，上传方向看接口。</span>
+  </div>
+
+  <div class="sqm-card">
+    <div class="sqm-k">总速率 / 采样间隔</div>
+    <div class="sqm-v"><span id="total-kbps">--</span> kbps</div>
+    <div class="sqm-sub">dt: <span id="dt-val">--</span>s | 设备: <span id="dev-val">--</span> | 时间: <span id="time-val">--</span></div>
+    <div id="error-box" class="sqm-sub sqm-err"></div>
+  </div>
+
+  <div class="sqm-grid">
+    <div class="sqm-card">
+      <div class="sqm-k">其他流量</div>
+      <div class="sqm-v"><span id="kbps-other">--</span> kbps</div>
+      <div class="sqm-sub">占比: <span id="pct-other">--</span>%</div>
+      <div class="sqm-sub">classid: <span id="classid-other">--</span> | bytes: <span id="bytes-other">--</span> | packets: <span id="packets-other">--</span></div>
+    </div>
+    <div class="sqm-card">
+      <div class="sqm-k">游戏流量</div>
+      <div class="sqm-v"><span id="kbps-gaming">--</span> kbps</div>
+      <div class="sqm-sub">占比: <span id="pct-gaming">--</span>%</div>
+      <div class="sqm-sub">classid: <span id="classid-gaming">--</span> | bytes: <span id="bytes-gaming">--</span> | packets: <span id="packets-gaming">--</span></div>
+    </div>
+    <div class="sqm-card">
+      <div class="sqm-k">流媒体</div>
+      <div class="sqm-v"><span id="kbps-streaming">--</span> kbps</div>
+      <div class="sqm-sub">占比: <span id="pct-streaming">--</span>%</div>
+      <div class="sqm-sub">classid: <span id="classid-streaming">--</span> | bytes: <span id="bytes-streaming">--</span> | packets: <span id="packets-streaming">--</span></div>
+    </div>
+    <div class="sqm-card">
+      <div class="sqm-k">批量流量</div>
+      <div class="sqm-v"><span id="kbps-bulk">--</span> kbps</div>
+      <div class="sqm-sub">占比: <span id="pct-bulk">--</span>%</div>
+      <div class="sqm-sub">classid: <span id="classid-bulk">--</span> | bytes: <span id="bytes-bulk">--</span> | packets: <span id="packets-bulk">--</span></div>
+    </div>
+  </div>
+
+  <div class="sqm-card">
+    <div class="sqm-card-title">规则首次命中统计</div>
+    <div class="sqm-note">命中规则自动置顶，空闲规则置底。该表主要反映规则首次命中计数，不等同于整条流量累计字节。</div>
+    <table class="sqm-table">
+      <thead>
+        <tr>
+          <th>规则 ID</th>
+          <th>类别</th>
+          <th>协议</th>
+          <th>dport</th>
+          <th>sport</th>
+          <th>mark</th>
+          <th>classid</th>
+          <th>当前窗口包数</th>
+          <th>当前窗口字节</th>
+          <th>累计包数</th>
+          <th>累计字节</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody id="rules-tbody">
+        <tr><td colspan="12">--</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sqm-card">
+    <div class="sqm-card-title">链路诊断</div>
+    <div class="sqm-mini-grid">
+      <div>
+        <div class="sqm-k">防火墙</div>
+        <div id="pipeline-firewall" class="sqm-sub sqm-preline">--</div>
+      </div>
+      <div>
+        <div class="sqm-k">标记恢复</div>
+        <div id="pipeline-mark-restore" class="sqm-sub sqm-preline">--</div>
+      </div>
+      <div>
+        <div class="sqm-k">TC</div>
+        <div id="pipeline-tc" class="sqm-sub sqm-preline">--</div>
+      </div>
+    </div>
+    <div class="sqm-k">诊断结果</div>
+    <ul id="diagnostics-list" class="sqm-list">
+      <li>--</li>
+    </ul>
+  </div>
+</div>
+
+<script type="text/javascript">
+(function() {
+  var STATS_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_classifier_state")%>';
+  var DEVICE_LABELS = {
+    ifb0: "ifb0（下载）",
+    iface: "接口（上传）"
+  };
+  var CATEGORY_LABELS = {
+    other: "其他流量",
+    gaming: "游戏流量",
+    streaming: "流媒体",
+    bulk: "批量流量"
+  };
+  var STATUS_LABELS = {
+    hit: "命中",
+    idle: "空闲",
+    disabled: "禁用",
+    error: "错误"
+  };
+  var PIPELINE_STATUS_LABELS = {
+    ok: "正常",
+    warn: "告警",
+    fail: "失败"
+  };
+  var DIAG_LEVEL_LABELS = {
+    info: "提示",
+    warn: "告警",
+    error: "错误"
+  };
+  var timer = null;
+
+  function el(id) { return document.getElementById(id); }
+
+  function asNum(value, defaultValue) {
+    var n = Number(value);
+    return isFinite(n) ? n : defaultValue;
+  }
+
+  function fmt(value, digits) {
+    var n = Number(value);
+    if (!isFinite(n)) return "--";
+    return n.toFixed(digits);
+  }
+
+  function tsText(value) {
+    var n = Number(value);
+    if (!isFinite(n) || n <= 0) return "--";
+    try { return new Date(n * 1000).toLocaleString(); } catch (e) { return "--"; }
+  }
+
+  function deviceText(actualDev, selectedDev) {
+    if (typeof actualDev !== "string" || !actualDev) return "--";
+    if (selectedDev === "iface" && actualDev !== "ifb0") {
+      return "接口（" + actualDev + "）";
+    }
+    return DEVICE_LABELS[actualDev] || actualDev;
+  }
+
+  function categoryText(value) {
+    if (typeof value !== "string" || !value) return "--";
+    return CATEGORY_LABELS[value] || value;
+  }
+
+  function statusText(value) {
+    if (typeof value !== "string" || !value) return "--";
+    return STATUS_LABELS[value] || value;
+  }
+
+  function pipelineStatusText(value) {
+    if (typeof value !== "string" || !value) return "--";
+    return PIPELINE_STATUS_LABELS[value] || value;
+  }
+
+  function diagLevelText(value) {
+    if (typeof value !== "string" || !value) return "--";
+    return DIAG_LEVEL_LABELS[value] || value;
+  }
+
+  function boolText(value) {
+    return value ? "是" : "否";
+  }
+
+  function textOrDash(value) {
+    return (value === null || value === undefined || value === "") ? "--" : String(value);
+  }
+
+  function setBadge(kind, text) {
+    var node = el("status-badge");
+    node.className = "sqm-badge " + kind;
+    node.textContent = text;
+  }
+
+  function showError(message) {
+    el("error-box").textContent = message || "";
+  }
+
+  function normalizeClass(data) {
+    if (!data || typeof data !== "object") {
+      return { classid: "--", kbps: 0, pct: 0, bytes: 0, packets: 0 };
+    }
+    return {
+      classid: (typeof data.classid === "string" && data.classid) ? data.classid : "--",
+      kbps: asNum(data.tc_kbps, 0),
+      pct: asNum(data.pct, 0),
+      bytes: asNum(data.tc_bytes, 0),
+      packets: asNum(data.tc_packets, 0)
+    };
+  }
+
+  function updateClass(name, data) {
+    el("kbps-" + name).textContent = fmt(data.kbps, 2);
+    el("pct-" + name).textContent = fmt(data.pct, 2);
+    el("bytes-" + name).textContent = String(Math.max(0, Math.floor(data.bytes)));
+    el("packets-" + name).textContent = String(Math.max(0, Math.floor(data.packets)));
+    el("classid-" + name).textContent = data.classid;
+  }
+
+  function clearDisplay() {
+    ["other", "gaming", "streaming", "bulk"].forEach(function(name) {
+      updateClass(name, normalizeClass(null));
+    });
+    el("total-kbps").textContent = "--";
+    el("dt-val").textContent = "--";
+    el("dev-val").textContent = "--";
+    el("time-val").textContent = "--";
+    el("pipeline-firewall").textContent = "--";
+    el("pipeline-mark-restore").textContent = "--";
+    el("pipeline-tc").textContent = "--";
+    setRulesEmptyRow("--");
+    setDiagnosticsEmptyRow("--");
+  }
+
+  function setRulesEmptyRow(message) {
+    var tb = el("rules-tbody");
+    tb.innerHTML = "";
+    var tr = document.createElement("tr");
+    var td = document.createElement("td");
+    td.colSpan = 12;
+    td.textContent = message || "--";
+    tr.appendChild(td);
+    tb.appendChild(tr);
+  }
+
+  function ruleRank(rule) {
+    var status = (rule && typeof rule.status === "string") ? rule.status : "";
+    if (status === "hit") return 0;
+    if (status === "error") return 1;
+    if (status === "idle") return 3;
+    if (status === "disabled") return 4;
+    return 2;
+  }
+
+  function ruleRowClass(rule) {
+    var status = (rule && typeof rule.status === "string") ? rule.status : "";
+    if (status === "hit") return "sqm-rule-hit";
+    if (status === "idle") return "sqm-rule-idle";
+    return "";
+  }
+
+  function renderRules(rules) {
+    var tb = el("rules-tbody");
+    tb.innerHTML = "";
+    if (!Array.isArray(rules) || !rules.length) {
+      setRulesEmptyRow("暂无规则");
+      return;
+    }
+
+    rules.slice().sort(function(a, b) {
+      var rankDiff = ruleRank(a) - ruleRank(b);
+      if (rankDiff !== 0) return rankDiff;
+      var bytesDiff = asNum(b && b.last_window_bytes, 0) - asNum(a && a.last_window_bytes, 0);
+      if (bytesDiff !== 0) return bytesDiff;
+      var packetsDiff = asNum(b && b.last_window_packets, 0) - asNum(a && a.last_window_packets, 0);
+      if (packetsDiff !== 0) return packetsDiff;
+      var totalBytesDiff = asNum(b && b.counter_bytes, 0) - asNum(a && a.counter_bytes, 0);
+      if (totalBytesDiff !== 0) return totalBytesDiff;
+      return asNum(b && b.priority, 0) - asNum(a && a.priority, 0);
+    }).forEach(function(rule) {
+      rule = (rule && typeof rule === "object") ? rule : {};
+      var tr = document.createElement("tr");
+      var rowClass = ruleRowClass(rule);
+      if (rowClass) tr.className = rowClass;
+
+      [
+        textOrDash(rule.id),
+        categoryText(rule.category),
+        textOrDash(rule.proto),
+        textOrDash(rule.dport),
+        textOrDash(rule.sport),
+        textOrDash(rule.mark),
+        textOrDash(rule.classid),
+        String(Math.max(0, Math.floor(asNum(rule.last_window_packets, 0)))),
+        String(Math.max(0, Math.floor(asNum(rule.last_window_bytes, 0)))),
+        String(Math.max(0, Math.floor(asNum(rule.counter_packets, 0)))),
+        String(Math.max(0, Math.floor(asNum(rule.counter_bytes, 0)))),
+        statusText(rule.status)
+      ].forEach(function(value) {
+        var td = document.createElement("td");
+        td.textContent = value;
+        tr.appendChild(td);
+      });
+
+      tb.appendChild(tr);
+    });
+  }
+
+  function setDiagnosticsEmptyRow(message) {
+    var node = el("diagnostics-list");
+    node.innerHTML = "";
+    var li = document.createElement("li");
+    li.textContent = message || "--";
+    node.appendChild(li);
+  }
+
+  function renderPipeline(pipeline) {
+    var firewall = (pipeline && typeof pipeline.firewall === "object") ? pipeline.firewall : {};
+    var markRestore = (pipeline && typeof pipeline.mark_restore === "object") ? pipeline.mark_restore : {};
+    var tc = (pipeline && typeof pipeline.tc === "object") ? pipeline.tc : {};
+
+    el("pipeline-firewall").textContent = [
+      "状态: " + pipelineStatusText(firewall.status),
+      "backend: " + textOrDash(firewall.backend),
+      "table: " + textOrDash(firewall.table),
+      "chain: " + textOrDash(firewall.chain),
+      "恢复规则: " + boolText(!!firewall.restore_mark_rule)
+    ].join("\n");
+
+    el("pipeline-mark-restore").textContent = [
+      "状态: " + pipelineStatusText(markRestore.status),
+      "method: " + textOrDash(markRestore.method),
+      "ingress redirect: " + boolText(!!markRestore.ingress_redirect),
+      "ifb0 up: " + boolText(!!markRestore.ifb_up)
+    ].join("\n");
+
+    el("pipeline-tc").textContent = [
+      "状态: " + pipelineStatusText(tc.status),
+      "upload root: " + boolText(!!tc.upload_root_ready),
+      "download root: " + boolText(!!tc.download_root_ready),
+      "upload filters: " + boolText(!!tc.upload_filters_ready),
+      "download filters: " + boolText(!!tc.download_filters_ready)
+    ].join("\n");
+  }
+
+  function renderDiagnostics(items) {
+    var node = el("diagnostics-list");
+    node.innerHTML = "";
+    if (!Array.isArray(items) || !items.length) {
+      setDiagnosticsEmptyRow("暂无诊断");
+      return;
+    }
+    items.forEach(function(item) {
+      item = (item && typeof item === "object") ? item : {};
+      var li = document.createElement("li");
+      li.textContent = "[" + diagLevelText(item.level) + "] " + textOrDash(item.code) + " - " + textOrDash(item.message);
+      node.appendChild(li);
+    });
+  }
+
+  function buildQuery(dev) {
+    return STATS_URL + "?dev=" + encodeURIComponent(dev || "ifb0");
+  }
+
+  function loadStats() {
+    var selectedDev = (el("dev-select").value || "ifb0").trim();
+    fetch(buildQuery(selectedDev), { cache: "no-store" })
+      .then(function(resp) {
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        return resp.json();
+      })
+      .then(function(data) {
+        if (!data || typeof data !== "object") throw new Error("invalid json");
+
+        var ok = !!data.success;
+        var cls = (data.categories && typeof data.categories === "object") ? data.categories : {};
+        var rules = Array.isArray(data.rules) ? data.rules : [];
+        var summary = (data.summary && typeof data.summary === "object") ? data.summary : {};
+        var pipeline = (data.pipeline && typeof data.pipeline === "object") ? data.pipeline : {};
+        var diagnostics = Array.isArray(data.diagnostics) ? data.diagnostics : [];
+        var total = asNum(summary.total_kbps, 0);
+        var dt = asNum(data.window_sec, 0);
+        var focusDev = (typeof data.focus_dev === "string" && data.focus_dev) ? data.focus_dev : selectedDev;
+
+        ["other", "gaming", "streaming", "bulk"].forEach(function(name) {
+          updateClass(name, normalizeClass(cls[name]));
+        });
+        el("total-kbps").textContent = fmt(total, 2);
+        el("dt-val").textContent = fmt(dt, 3);
+        el("dev-val").textContent = deviceText(focusDev, selectedDev);
+        el("time-val").textContent = tsText(data.time);
+        renderRules(rules);
+        renderPipeline(pipeline);
+        renderDiagnostics(diagnostics);
+
+        if (!ok) {
+          setBadge("bad", "失败");
+          showError(data.error || data.output || "后端返回 success=false");
+          return;
+        }
+
+        showError("");
+        if (total > 0) {
+          setBadge("ok", "正常");
+        } else {
+          setBadge("warn", "空闲");
+        }
+      })
+      .catch(function(err) {
+        clearDisplay();
+        setBadge("bad", "失败");
+        showError("请求失败: " + (err && err.message ? err.message : String(err)));
+      });
+  }
+
+  function syncTimer() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+    if (el("auto-refresh").checked) {
+      timer = setInterval(loadStats, 3000);
+    }
+  }
+
+  el("btn-refresh").addEventListener("click", loadStats);
+  el("auto-refresh").addEventListener("change", syncTimer);
+  el("dev-select").addEventListener("change", loadStats);
+
+  clearDisplay();
+  setBadge("warn", "空闲");
+  loadStats();
+  syncTimer();
+})();
+</script>
+
+<%+footer%>

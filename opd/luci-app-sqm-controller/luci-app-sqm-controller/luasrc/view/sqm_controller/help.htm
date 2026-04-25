@@ -1,0 +1,766 @@
+<%+header%>
+
+<style>
+:root {
+  --sqm-bg: linear-gradient(180deg, #f7f5ef 0%, #fcfbf8 100%);
+  --sqm-panel: #ffffff;
+  --sqm-panel-alt: #f4efe3;
+  --sqm-text: #1f2933;
+  --sqm-muted: #5f6c76;
+  --sqm-line: #dfd6c3;
+  --sqm-accent: #1f6f5f;
+  --sqm-accent-soft: #dcefe9;
+  --sqm-warn: #9f5a00;
+  --sqm-warn-soft: #fff1d6;
+  --sqm-danger: #9f2d2d;
+  --sqm-danger-soft: #fce6e6;
+  --sqm-shadow: 0 10px 30px rgba(31, 41, 51, 0.08);
+}
+
+html { scroll-behavior: smooth; }
+.sqm-wrap { max-width: 1240px; color: var(--sqm-text); }
+.sqm-hero {
+  background: var(--sqm-bg);
+  border: 1px solid var(--sqm-line);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: var(--sqm-shadow);
+  margin-bottom: 14px;
+}
+.sqm-badges {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:14px;
+}
+.sqm-badge {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  color: var(--sqm-accent);
+  background: var(--sqm-accent-soft);
+}
+.sqm-title { margin:0; font-size:28px; line-height:1.2; }
+.sqm-subtitle { margin:10px 0 0; color: var(--sqm-muted); line-height:1.75; max-width:920px; }
+.sqm-nav {
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap:10px;
+  margin:14px 0 18px;
+}
+.sqm-nav a {
+  display:block;
+  padding:12px 14px;
+  border:1px solid var(--sqm-line);
+  border-radius:12px;
+  background: var(--sqm-panel);
+  color: var(--sqm-text);
+  text-decoration:none;
+  font-weight:600;
+  box-shadow: 0 4px 14px rgba(31, 41, 51, 0.04);
+}
+.sqm-nav a:hover,
+.sqm-nav a:focus {
+  border-color: var(--sqm-accent);
+  color: var(--sqm-accent);
+}
+.sqm-grid {
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:14px;
+  margin-bottom:14px;
+}
+.sqm-overview {
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap:12px;
+}
+.sqm-page-grid {
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap:12px;
+}
+.sqm-callouts {
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap:12px;
+  margin-top:14px;
+}
+.sqm-card,
+.sqm-section {
+  border:1px solid var(--sqm-line);
+  border-radius:16px;
+  background: var(--sqm-panel);
+  padding:18px;
+  box-shadow: 0 8px 24px rgba(31, 41, 51, 0.05);
+}
+.sqm-section { margin-bottom:14px; }
+.sqm-card h3,
+.sqm-card h4,
+.sqm-section h3,
+.sqm-section h4 { margin:0 0 10px; }
+.sqm-card p,
+.sqm-section p,
+.sqm-section li,
+.sqm-card li { line-height:1.75; }
+.sqm-mini {
+  display:inline-block;
+  font-size:12px;
+  letter-spacing:0.04em;
+  text-transform:uppercase;
+  color: var(--sqm-muted);
+  margin-bottom:8px;
+}
+.sqm-muted { color: var(--sqm-muted); }
+.sqm-role {
+  margin:8px 0 0;
+  padding:10px 12px;
+  border-radius:12px;
+  background: #fbfaf7;
+  border:1px solid var(--sqm-line);
+  font-size:13px;
+  color: var(--sqm-muted);
+}
+.sqm-page-card {
+  border:1px solid var(--sqm-line);
+  border-radius:14px;
+  background: linear-gradient(180deg, #fff 0%, #fbfaf7 100%);
+  padding:14px;
+}
+.sqm-page-card strong {
+  display:block;
+  margin-bottom:6px;
+  font-size:16px;
+}
+.sqm-step-list {
+  counter-reset: sqm-step;
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:12px;
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+.sqm-step-list li {
+  position:relative;
+  padding:16px 16px 16px 58px;
+  border:1px solid var(--sqm-line);
+  border-radius:14px;
+  background: var(--sqm-panel-alt);
+}
+.sqm-step-list li:before {
+  counter-increment: sqm-step;
+  content: counter(sqm-step);
+  position:absolute;
+  left:16px;
+  top:16px;
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  background: var(--sqm-accent);
+  color:#fff;
+  text-align:center;
+  line-height:28px;
+  font-weight:700;
+}
+.sqm-callout {
+  border-radius:14px;
+  padding:14px;
+  border:1px solid var(--sqm-line);
+}
+.sqm-callout h4 { margin:0 0 8px; }
+.sqm-callout.tip { background: var(--sqm-accent-soft); border-color:#b9dfd4; }
+.sqm-callout.warn { background: var(--sqm-warn-soft); border-color:#f1d59a; }
+.sqm-callout.trouble { background: var(--sqm-danger-soft); border-color:#efb8b8; }
+.sqm-kv {
+  width:100%;
+  border-collapse: collapse;
+}
+.sqm-kv th,
+.sqm-kv td {
+  padding:10px 12px;
+  border-bottom:1px solid var(--sqm-line);
+  text-align:left;
+  vertical-align:top;
+}
+.sqm-kv th {
+  width:220px;
+  color: var(--sqm-muted);
+  font-weight:600;
+}
+.sqm-pill-list {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:10px 0 0;
+}
+.sqm-pill {
+  display:inline-block;
+  padding:5px 10px;
+  border-radius:999px;
+  border:1px solid var(--sqm-line);
+  background:#fbfaf7;
+  font-size:12px;
+}
+.sqm-code {
+  margin:0;
+  padding:14px;
+  border-radius:14px;
+  background:#182026;
+  color:#edf2f7;
+  overflow:auto;
+  line-height:1.6;
+}
+.sqm-note {
+  margin-top:10px;
+  color: var(--sqm-muted);
+  font-size:12px;
+}
+.sqm-accordion {
+  display:grid;
+  gap:10px;
+}
+.sqm-qa {
+  border:1px solid var(--sqm-line);
+  border-radius:14px;
+  overflow:hidden;
+  background:#fff;
+}
+.sqm-qa button {
+  width:100%;
+  text-align:left;
+  border:0;
+  background:#fbfaf7;
+  color:var(--sqm-text);
+  padding:14px 16px;
+  font-size:15px;
+  font-weight:700;
+  cursor:pointer;
+}
+.sqm-qa button span {
+  float:right;
+  color: var(--sqm-muted);
+}
+.sqm-qa-body {
+  display:none;
+  padding:0 16px 16px;
+}
+.sqm-qa.is-open .sqm-qa-body { display:block; }
+.sqm-qa.is-open button span { transform: rotate(45deg); display:inline-block; }
+.sqm-footer {
+  margin-top:14px;
+  text-align:center;
+  color: var(--sqm-muted);
+  font-size:12px;
+}
+.sqm-footer a {
+  color: var(--sqm-accent);
+  text-decoration:none;
+}
+.sqm-backtop {
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  width:42px;
+  height:42px;
+  border-radius:50%;
+  border:1px solid var(--sqm-line);
+  background:#fff;
+  color:var(--sqm-accent);
+  box-shadow: var(--sqm-shadow);
+  cursor:pointer;
+  display:none;
+}
+.sqm-backtop.show { display:block; }
+
+@media (max-width: 1100px) {
+  .sqm-overview,
+  .sqm-page-grid,
+  .sqm-nav,
+  .sqm-callouts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .sqm-grid,
+  .sqm-step-list { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .sqm-overview,
+  .sqm-page-grid,
+  .sqm-nav,
+  .sqm-callouts { grid-template-columns: 1fr; }
+  .sqm-hero,
+  .sqm-card,
+  .sqm-section { padding:16px; }
+  .sqm-title { font-size:24px; }
+  .sqm-kv th,
+  .sqm-kv td { display:block; width:auto; }
+}
+</style>
+
+<div class="cbi-map sqm-wrap" id="top">
+  <section class="sqm-hero">
+    <div class="sqm-badges">
+      <span class="sqm-badge">SQM Controller</span>
+      <span class="sqm-badge">LuCI 帮助文档</span>
+      <span class="sqm-badge">已同步到策略中心</span>
+    </div>
+    <h2 class="sqm-title">SQM 控制器运维手册</h2>
+  </section>
+
+  <nav class="sqm-nav">
+    <a href="#overview">系统概览</a>
+    <a href="#pages">页面导览</a>
+    <a href="#quickstart">快速上手</a>
+    <a href="#classifier">分类规则</a>
+    <a href="#policy">策略中心</a>
+    <a href="#paths">关键路径</a>
+    <a href="#commands">常用命令</a>
+    <a href="#troubleshooting">排障说明</a>
+  </nav>
+
+  <section id="overview" class="sqm-section">
+    <h3>系统概览</h3>
+    <p class="sqm-muted">
+      当前系统由 SQM 队列控制、下载重定向到 <code>ifb0</code>、防火墙分类打标、tc 按 mark 分流、策略中心和日志导出组成。
+      下载方向依赖 <code>ingress -&gt; ifb0</code>，上传方向直接在 WAN 接口整形。
+    </p>
+    <div class="sqm-overview">
+      <div class="sqm-card">
+        <span class="sqm-mini">01</span>
+        <h4>基础整形</h4>
+        <p>根据 <code>basic_config</code> 里的接口、上传/下载带宽和队列算法生成 HTB + fq_codel/cake。</p>
+        <div class="sqm-role">作用：提供上传/下载方向的基础队列控制。</div>
+      </div>
+      <div class="sqm-card">
+        <span class="sqm-mini">02</span>
+        <h4>下载重定向</h4>
+        <p>把 WAN ingress 流量重定向到 <code>ifb0</code>，让下载方向也能被 tc 分类和整形。</p>
+        <div class="sqm-role">备注：没有 <code>ifb0</code> 或 ingress redirect，下载分类不会成立。</div>
+      </div>
+      <div class="sqm-card">
+        <span class="sqm-mini">03</span>
+        <h4>分类打标</h4>
+        <p>当前版本主要依赖 <code>classification</code> 和 <code>class_rule</code>，通过端口规则写入 mark，再映射到类。</p>
+        <div class="sqm-role">备注：这是“端口级粗分类”，不是厂商级应用识别。</div>
+      </div>
+      <div class="sqm-card">
+        <span class="sqm-mini">04</span>
+        <h4>策略中心</h4>
+        <p>负责执行策略、读取状态快照、预览最近记录并导出 JSON/CSV。</p>
+        <div class="sqm-role">作用：把“策略引擎”和“策略报告”统一成一个入口。</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pages" class="sqm-section">
+    <h3>页面导览</h3>
+    <div class="sqm-page-grid">
+      <div class="sqm-page-card">
+        <strong>基础设置</strong>
+        <p>配置接口、带宽、队列算法、启停状态。</p>
+        <div class="sqm-role">作用：这是最核心的运行配置页。</div>
+      </div>
+      <div class="sqm-page-card">
+        <strong>配置向导</strong>
+        <p>按步骤写入基础配置并立即应用。</p>
+        <div class="sqm-role">备注：适合首次部署或现场演示。</div>
+      </div>
+      <div class="sqm-page-card">
+        <strong>状态监控</strong>
+        <p>查看 service、qdisc、ECN 等当前状态。</p>
+        <div class="sqm-role">作用：判断 SQM 是否真的挂上了。</div>
+      </div>
+      <div class="sqm-page-card">
+        <strong>实时监控</strong>
+        <p>查看带宽、延迟、丢包等实时监控结果。</p>
+        <div class="sqm-role">备注：偏运行态观察，不负责分类细节。</div>
+      </div>
+      <div class="sqm-page-card">
+        <strong>分类流量统计</strong>
+        <p>查看 <code>other / gaming / streaming / bulk</code> 四类流量，支持切换下载/上传视角。</p>
+        <div class="sqm-role">作用：同时看 tc 类速率、规则首次命中统计和链路诊断。</div>
+      </div>
+      <div class="sqm-page-card">
+        <strong>场景模板</strong>
+        <p>提供一组预设模板，快速写入基础整形参数。</p>
+        <div class="sqm-role">备注：更适合快速切换演示场景。</div>
+      </div>
+      <div class="sqm-page-card">
+        <strong>策略中心</strong>
+        <p>执行一次策略、读取状态快照、预览最近记录、导出报告。</p>
+        <div class="sqm-role">备注：旧“策略报告”入口已并入此页，旧地址仅保留兼容跳转。</div>
+      </div>
+      <div class="sqm-page-card">
+        <strong>系统日志</strong>
+        <p>查看后端日志、下载日志、清空日志、轮转日志。</p>
+        <div class="sqm-role">作用：定位失败原因的第一入口。</div>
+      </div>
+      <div class="sqm-page-card">
+        <strong>帮助文档</strong>
+        <p>说明当前实现、配置顺序、命令和排障方式。</p>
+        <div class="sqm-role">备注：文档内容只描述当前代码已实现的能力。</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="quickstart" class="sqm-section">
+    <h3>快速上手</h3>
+    <ol class="sqm-step-list">
+      <li>
+        <strong>先确认 WAN 接口和带宽</strong>
+        在“基础设置”或“配置向导”里填好实际 WAN 接口、上传/下载带宽和队列算法。
+        <div class="sqm-role">作用：没有正确接口和带宽，后面的所有分类与策略都不可信。</div>
+      </li>
+      <li>
+        <strong>启用服务并检查 qdisc</strong>
+        启用后先去“状态监控”确认 <code>1:</code> 和 <code>2:</code> root qdisc 是否存在。
+        <div class="sqm-role">备注：看页面不如直接看 qdisc，排错更快。</div>
+      </li>
+      <li>
+        <strong>应用分类器并检查 ifb0</strong>
+        应用分类器后确认 <code>ifb0</code> 上有下载类和下载 filters。
+        <div class="sqm-role">作用：下载分类成立的前提是 <code>ifb0</code>、redirect 和 fw filter 全部就位。</div>
+      </li>
+      <li>
+        <strong>查看分类流量统计</strong>
+        下载方向看 <code>ifb0</code>，上传方向看“接口”。规则命中表是首次命中统计，不是整条流量累计统计。
+        <div class="sqm-role">备注：现代业务大量走 443，不可能只靠端口做到精确厂商识别。</div>
+      </li>
+      <li>
+        <strong>进入策略中心</strong>
+        先点“执行一次策略”，再看当前模式、判定原因、动作数量和最近记录预览。
+        <div class="sqm-role">作用：验证策略逻辑和导出能力是否正常。</div>
+      </li>
+      <li>
+        <strong>最后再看日志</strong>
+        失败时先看日志，再决定是配置问题、环境问题还是规则覆盖率不足。
+        <div class="sqm-role">备注：日志比页面告警更接近真实故障点。</div>
+      </li>
+    </ol>
+
+    <div class="sqm-callouts">
+      <div class="sqm-callout tip">
+        <h4>建议</h4>
+        <p>首次调试时先用一条明确的 HTTP 或 HTTPS 受控流量验证分类链路，不要直接混杂浏览器流量。</p>
+      </div>
+      <div class="sqm-callout warn">
+        <h4>注意</h4>
+        <p>当前默认规则属于端口级保守覆盖。国内视频和音乐业务主要仍由 <code>tcp/udp 443</code> 规则承接。</p>
+      </div>
+      <div class="sqm-callout trouble">
+        <h4>排障思路</h4>
+        <p>先确认链路是否通，再讨论规则是否覆盖。如果链路没通，继续加规则没有意义。</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="sqm-grid">
+    <section id="classifier" class="sqm-section">
+      <h3>分类规则</h3>
+      <p class="sqm-muted">
+        当前版本的分类器以 <code>proto + dport + sport</code> 为主，先在防火墙侧打 mark，再由 tc 把 mark 映射到类。
+      </p>
+      <table class="sqm-kv">
+        <tr>
+          <th>other</th>
+          <td>默认类，所有未命中的流量都会落到这里。</td>
+        </tr>
+        <tr>
+          <th>gaming</th>
+          <td>面向低延迟业务，当前默认规则主要覆盖部分常见游戏 UDP 端口。</td>
+        </tr>
+        <tr>
+          <th>streaming</th>
+          <td>面向流媒体业务，当前默认规则覆盖 443、1935、554、8554、1755 等保守媒体端口。</td>
+        </tr>
+        <tr>
+          <th>bulk</th>
+          <td>面向批量下载和传输，当前默认规则覆盖 80、BT 常见端口段、51413 等。</td>
+        </tr>
+      </table>
+      <div class="sqm-role">作用：通过 mark 把不同业务导入不同 tc 类。</div>
+      <div class="sqm-note">
+        备注：规则命中统计页面显示的是“规则首次命中”，因为后续同连接的流量主要依赖 conntrack mark 继承，不会持续累加到分类规则计数器。
+      </div>
+      <div class="sqm-pill-list">
+        <span class="sqm-pill">gaming: 3478, 3659, 3074, 3479-3480, 27000-27200</span>
+        <span class="sqm-pill">streaming: 443, 1935, 554, 8554, 1755</span>
+        <span class="sqm-pill">bulk: 80, 6881-6999, 51413</span>
+      </div>
+    </section>
+
+    <section id="policy" class="sqm-section">
+      <h3>策略中心</h3>
+      <p class="sqm-muted">
+        策略中心已经合并了旧“策略引擎”和“策略报告”。当前页同时承载策略执行、状态快照、最近记录预览和 JSON/CSV 导出。
+      </p>
+      <table class="sqm-kv">
+        <tr>
+          <th>执行一次策略</th>
+          <td>调用 <code>policy_once</code>，立即运行一次策略判断并返回结果。</td>
+        </tr>
+        <tr>
+          <th>状态快照</th>
+          <td>读取 <code>/tmp/sqm_policy_state.json</code>，展示当前模式和最近调整时间。</td>
+        </tr>
+        <tr>
+          <th>最近记录预览</th>
+          <td>读取报告导出接口中的最近记录，方便快速判断策略是否真正生效。</td>
+        </tr>
+        <tr>
+          <th>导出 JSON/CSV</th>
+          <td>把策略记录导出为结构化数据，方便留档、分析或答辩展示。</td>
+        </tr>
+      </table>
+      <div class="sqm-role">作用：把策略执行和策略记录合并成一个统一入口。</div>
+      <div class="sqm-note">备注：旧 <code>/report</code> 路由仍兼容，但会直接落到策略中心。</div>
+    </section>
+  </div>
+
+  <section id="paths" class="sqm-section">
+    <h3>关键路径</h3>
+    <table class="sqm-kv">
+      <tr>
+        <th><code>/etc/config/sqm_controller</code></th>
+        <td>主配置文件，包含基础配置、分类规则和策略配置。</td>
+      </tr>
+      <tr>
+        <th><code>/usr/lib/sqm-controller/main.py</code></th>
+        <td>主 CLI 入口，LuCI 绝大多数按钮最终都会调用它。</td>
+      </tr>
+      <tr>
+        <th><code>/var/log/sqm_controller.log</code></th>
+        <td>运行日志，排查 enable、classifier、policy 失败时优先查看。</td>
+      </tr>
+      <tr>
+        <th><code>/var/log/sqm_policy.jsonl</code></th>
+        <td>策略记录日志，导出报告和预览最近记录都依赖它。</td>
+      </tr>
+      <tr>
+        <th><code>/tmp/sqm_policy_state.json</code></th>
+        <td>策略当前状态快照，策略中心会直接读取。</td>
+      </tr>
+      <tr>
+        <th><code>/tmp/sqm_classifier_rule_state.json</code></th>
+        <td>分类规则窗口状态缓存，用于计算首次命中的窗口增量。</td>
+      </tr>
+    </table>
+    <div class="sqm-role">作用：快速定位配置、日志、快照和临时状态文件。</div>
+  </section>
+
+  <section id="commands" class="sqm-section">
+    <h3>常用命令</h3>
+    <p class="sqm-muted">
+      下面这些命令覆盖配置检查、运行状态、分类链路、策略中心和日志排查。每条命令都标明“作用”和“备注”，方便直接照着执行。
+    </p>
+
+    <h4>基础运行</h4>
+    <table class="sqm-kv">
+      <tr>
+        <th><code>/etc/init.d/sqm-controller start</code></th>
+        <td>作用：启动 SQM 服务并应用当前整形配置。<br>备注：统一服务启动入口，Web、CLI 和开机自启都应走这条路径。</td>
+      </tr>
+      <tr>
+        <th><code>/etc/init.d/sqm-controller stop</code></th>
+        <td>作用：停止 SQM 服务并清理当前 tc 规则。<br>备注：统一服务停止入口，同时会处理策略定时任务清理。</td>
+      </tr>
+      <tr>
+        <th><code>/etc/init.d/sqm-controller restart</code></th>
+        <td>作用：重启 SQM 服务并重新应用当前配置。<br>备注：修改带宽、队列算法或分类规则后优先使用这一条。</td>
+      </tr>
+      <tr>
+        <th><code>python3 /usr/lib/sqm-controller/main.py --status-json</code></th>
+        <td>作用：查看当前 service、qdisc 和 ECN 状态。<br>备注：这是 LuCI 状态页底层使用的状态接口之一。</td>
+      </tr>
+      <tr>
+        <th><code>uci show sqm_controller</code></th>
+        <td>作用：查看当前 UCI 配置是否已经写入。<br>备注：确认配置保存成功，比只看前端输入框更可靠。</td>
+      </tr>
+    </table>
+
+    <h4>分类器与统计</h4>
+    <table class="sqm-kv">
+      <tr>
+        <th><code>python3 /usr/lib/sqm-controller/main.py --apply-classifier</code></th>
+        <td>作用：重新生成防火墙分类规则和 tc 分类映射。<br>备注：每次修改 <code>classification</code> 或 <code>class_rule</code> 后都应执行一次。</td>
+      </tr>
+      <tr>
+        <th><code>python3 /usr/lib/sqm-controller/main.py --clear-classifier</code></th>
+        <td>作用：清理分类器相关的防火墙规则和 tc 过滤器。<br>备注：分类链路异常时，可先清再重新应用。</td>
+      </tr>
+      <tr>
+        <th><code>python3 /usr/lib/sqm-controller/main.py --get-class-stats --dev ifb0</code></th>
+        <td>作用：查看下载方向的基础分类统计。<br>备注：只关注下载方向时，先看它是否有类速率变化。</td>
+      </tr>
+      <tr>
+        <th><code>python3 /usr/lib/sqm-controller/main.py --get-classifier-state --dev ifb0</code></th>
+        <td>作用：查看下载方向完整聚合状态。<br>备注：包含 summary、categories、rules、pipeline 和 diagnostics。</td>
+      </tr>
+      <tr>
+        <th><code>python3 /usr/lib/sqm-controller/main.py --get-classifier-state --dev iface</code></th>
+        <td>作用：查看上传方向完整聚合状态。<br>备注：页面里的“接口（上传）”就是这个视角。</td>
+      </tr>
+    </table>
+
+    <h4>tc / ifb0 / nft 排查</h4>
+    <table class="sqm-kv">
+      <tr>
+        <th><code>tc qdisc show dev eth1</code></th>
+        <td>作用：检查上传方向 root qdisc 是否已挂上。<br>备注：正常应能看到 <code>1:</code> root。</td>
+      </tr>
+      <tr>
+        <th><code>tc qdisc show dev ifb0</code></th>
+        <td>作用：检查下载方向 qdisc 是否已挂到 <code>ifb0</code>。<br>备注：正常应能看到 <code>2:</code> root。</td>
+      </tr>
+      <tr>
+        <th><code>tc class show dev ifb0</code></th>
+        <td>作用：查看下载类是否已经创建。<br>备注：应能看到 <code>2:20 / 2:21 / 2:22 / 2:23</code>。</td>
+      </tr>
+      <tr>
+        <th><code>tc filter show dev eth1 parent ffff:</code></th>
+        <td>作用：检查 ingress redirect 和 mark restore 链路。<br>备注：当前环境正常应出现 <code>connmark</code> 和 <code>mirred redirect dev ifb0</code>。</td>
+      </tr>
+      <tr>
+        <th><code>tc filter show dev ifb0 parent 2:</code></th>
+        <td>作用：检查下载方向 fw filter 是否映射到类。<br>备注：正常应看到 <code>2:21 / 2:22 / 2:23</code> 对应的 filter。</td>
+      </tr>
+      <tr>
+        <th><code>nft list chain inet sqm_fw sqm_classify</code></th>
+        <td>作用：查看当前 nft 分类规则和命中计数。<br>备注：这是判断规则是否实际命中的核心命令。</td>
+      </tr>
+    </table>
+
+    <h4>策略中心</h4>
+    <table class="sqm-kv">
+      <tr>
+        <th><code>python3 /usr/lib/sqm-controller/main.py --policy-once</code></th>
+        <td>作用：立即执行一次策略判断。<br>备注：调试策略逻辑时最常用，不必等周期调度。</td>
+      </tr>
+      <tr>
+        <th><code>python3 /usr/lib/sqm-controller/main.py --export-report --format json</code></th>
+        <td>作用：导出策略记录 JSON。<br>备注：适合做结构化分析或在浏览器中直接查看。</td>
+      </tr>
+      <tr>
+        <th><code>python3 /usr/lib/sqm-controller/main.py --export-report --format csv</code></th>
+        <td>作用：导出策略记录 CSV。<br>备注：适合导入表格工具或答辩材料。</td>
+      </tr>
+      <tr>
+        <th><code>cat /tmp/sqm_policy_state.json</code></th>
+        <td>作用：查看当前策略状态快照。<br>备注：策略中心页面读取的就是这个状态文件。</td>
+      </tr>
+      <tr>
+        <th><code>tail -n 20 /var/log/sqm_policy.jsonl</code></th>
+        <td>作用：查看最近策略记录。<br>备注：比页面预览更原始，适合确认导出内容是否正常。</td>
+      </tr>
+    </table>
+
+    <h4>日志与界面</h4>
+    <table class="sqm-kv">
+      <tr>
+        <th><code>tail -n 100 /var/log/sqm_controller.log</code></th>
+        <td>作用：查看应用日志的最近 100 行。<br>备注：排查后端异常时优先看它。</td>
+      </tr>
+      <tr>
+        <th><code>logread | grep -i sqm</code></th>
+        <td>作用：从系统日志中筛 SQM 相关消息。<br>备注：适合快速确认服务是否报错或重启。</td>
+      </tr>
+      <tr>
+        <th><code>logread | grep -E 'classifier|policy|ifb0|connmark'</code></th>
+        <td>作用：聚焦分类器、策略和下载链路相关日志。<br>备注：链路问题一般都能在这里看到关键词。</td>
+      </tr>
+      <tr>
+        <th><code>/etc/init.d/uhttpd restart</code></th>
+        <td>作用：重启 LuCI Web 服务。<br>备注：页面改动或缓存异常时再用，不是优先排障手段。</td>
+      </tr>
+    </table>
+  </section>
+
+  <section id="troubleshooting" class="sqm-section">
+    <h3>排障说明</h3>
+    <div class="sqm-accordion">
+      <div class="sqm-qa">
+        <button type="button">为什么页面只有 other 在涨？<span>+</span></button>
+        <div class="sqm-qa-body">
+          <p>先区分是链路没通，还是规则没覆盖。若 <code>pipeline</code> 里 firewall / mark_restore / tc 都是正常，那通常是规则覆盖率不足，大量流量没命中现有规则。</p>
+          <div class="sqm-role">排障重点：先看 <code>nft list chain</code> 和 <code>tc -s class show dev ifb0</code>。</div>
+        </div>
+      </div>
+      <div class="sqm-qa">
+        <button type="button">为什么规则命中表的字节很小？<span>+</span></button>
+        <div class="sqm-qa-body">
+          <p>因为当前表格统计的是“规则首次命中”。同连接后续流量大多继承 conntrack mark，不会继续累加到分类规则计数器。</p>
+          <div class="sqm-role">备注：真正的持续吞吐看 tc 类统计，不要只盯规则表。</div>
+        </div>
+      </div>
+      <div class="sqm-qa">
+        <button type="button">为什么国内视频/音乐大多都归到 streaming 443？<span>+</span></button>
+        <div class="sqm-qa-body">
+          <p>因为当前实现主要是端口规则，现代国内视频和音乐业务大多跑在 HTTPS / QUIC 443 上。当前版本只能做保守覆盖，做不到按厂商精确识别。</p>
+          <div class="sqm-role">作用：这是当前实现边界，不是配置写错。</div>
+        </div>
+      </div>
+      <div class="sqm-qa">
+        <button type="button">为什么策略中心和旧报告页现在是同一个页面？<span>+</span></button>
+        <div class="sqm-qa-body">
+          <p>因为当前功能规模下，策略执行、状态快照、预览和导出分成两个页面没有必要。现在统一到“策略中心”，旧 <code>/report</code> 路由只保留兼容跳转。</p>
+          <div class="sqm-role">备注：这样更简洁，也更符合当前项目体量。</div>
+        </div>
+      </div>
+      <div class="sqm-qa">
+        <button type="button">为什么重装 ipk 后配置没变？<span>+</span></button>
+        <div class="sqm-qa-body">
+          <p><code>/etc/config/sqm_controller</code> 已被声明为 conffile。升级时 opkg 会保留设备上的现有配置，不会自动覆盖。</p>
+          <div class="sqm-role">排障重点：默认配置更新后，需要手工同步到路由器现有配置。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sqm-section">
+    <h3>联系与备注</h3>
+    <p>欢迎在GitHub上提交issues</p>
+    <div class="sqm-role">联系方式：<a href="https://github.com/Natduki" target="_blank" rel="noopener noreferrer">https://github.com/Natduki</a></div>
+  </section>
+
+
+</div>
+
+<button type="button" id="btn-backtop" class="sqm-backtop" title="返回顶部">↑</button>
+
+<script type="text/javascript">
+(function() {
+  var backtop = document.getElementById("btn-backtop");
+  var items = document.querySelectorAll(".sqm-qa");
+
+  Array.prototype.forEach.call(items, function(item) {
+    var button = item.querySelector("button");
+    if (!button) return;
+    button.addEventListener("click", function() {
+      item.classList.toggle("is-open");
+    });
+  });
+
+  function syncBacktop() {
+    if (!backtop) return;
+    if ((window.scrollY || document.documentElement.scrollTop || 0) > 240) {
+      backtop.classList.add("show");
+    } else {
+      backtop.classList.remove("show");
+    }
+  }
+
+  if (backtop) {
+    backtop.addEventListener("click", function() {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  window.addEventListener("scroll", syncBacktop);
+  syncBacktop();
+})();
+</script>
+
+<%+footer%>

@@ -1,0 +1,522 @@
+<%+header%>
+<%
+local sys = require "luci.sys"
+local uci = require "luci.model.uci".cursor()
+local iface_cur = uci:get("sqm_controller", "basic_config", "interface") or "eth0"
+local download_cur = uci:get("sqm_controller", "basic_config", "download_speed") or "100000"
+local upload_cur = uci:get("sqm_controller", "basic_config", "upload_speed") or "10000"
+local algo_cur = uci:get("sqm_controller", "basic_config", "queue_algorithm") or "fq_codel"
+local enabled_cur = uci:get("sqm_controller", "basic_config", "enabled") or "0"
+
+local devs = sys.net.devices() or {}
+table.sort(devs)
+%>
+
+<style>
+.sqm-wizard-shell { max-width: 1180px; }
+.sqm-hero {
+  border: 1px solid #d9e6f2;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f7fbff 0%, #ffffff 60%, #fff7ed 100%);
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+.sqm-hero h2 { margin: 0 0 8px; font-size: 24px; color: #1f2a44; }
+.sqm-hero p { margin: 0; color: #5f6b7a; line-height: 1.7; }
+.sqm-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+.sqm-step {
+  border: 1px solid #dfe7ef;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  color: #5f6b7a;
+}
+.sqm-step.active { border-color: #6aa8ff; background: #edf6ff; color: #1f4e91; }
+.sqm-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  margin-right: 8px;
+  background: #eef2f7;
+  color: #455468;
+  font-weight: 700;
+}
+.sqm-step.active .sqm-step-num { background: #2c75ff; color: #fff; }
+.sqm-step-title { font-weight: 700; }
+.sqm-card {
+  border: 1px solid #e1e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(31, 41, 55, .04);
+}
+.sqm-card h3 { margin: 0 0 10px; color: #1f2a44; font-size: 20px; }
+.sqm-desc { margin: 0 0 14px; color: #65758b; line-height: 1.7; }
+.sqm-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 14px; }
+.sqm-form-row { margin-bottom: 12px; }
+.sqm-form-row label { display: block; margin-bottom: 6px; font-weight: 700; color: #25324a; }
+.sqm-form-row input[type="number"],
+.sqm-form-row select {
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+}
+.sqm-help {
+  border-left: 4px solid #2c75ff;
+  border-radius: 10px;
+  background: #f4f8ff;
+  padding: 12px 14px;
+  color: #4a5a70;
+  line-height: 1.75;
+}
+.sqm-help strong { color: #1f4e91; }
+.sqm-warning {
+  border-left-color: #e8943a;
+  background: #fff7ed;
+}
+.sqm-warning strong { color: #a85f12; }
+.sqm-tip-list { margin: 8px 0 0 18px; padding: 0; }
+.sqm-tip-list li { margin: 4px 0; }
+.sqm-calc {
+  border: 1px solid #ead7bc;
+  border-radius: 12px;
+  background: #fffaf4;
+  padding: 12px;
+}
+.sqm-calc-title { font-weight: 700; color: #8a4b10; margin-bottom: 8px; }
+.sqm-calc-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.sqm-calc-grid label { font-size: 12px; margin-bottom: 4px; }
+.sqm-mini { color: #7a8797; font-size: 12px; line-height: 1.6; margin-top: 6px; }
+.sqm-algo-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+.sqm-algo-card {
+  border: 1px solid #dfe7ef;
+  border-radius: 12px;
+  padding: 10px;
+  background: #fbfdff;
+  cursor: pointer;
+}
+.sqm-algo-card.active { border-color: #2c75ff; background: #edf6ff; }
+.sqm-algo-card strong { color: #25324a; }
+.sqm-algo-card p { margin: 6px 0 0; color: #65758b; line-height: 1.55; }
+.sqm-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.sqm-summary {
+  min-height: 150px;
+  border: 1px solid #dfe7ef;
+  border-radius: 12px;
+  padding: 12px;
+  white-space: pre-wrap;
+  background: #f8fafc;
+  color: #25324a;
+}
+.sqm-result {
+  min-height: 150px;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid #dfe7ef;
+  border-radius: 12px;
+  padding: 12px;
+  white-space: pre-wrap;
+  font-family: Consolas, Monaco, monospace;
+  background: #0f172a;
+  color: #dbeafe;
+}
+.sqm-checklist { display: grid; gap: 8px; margin-top: 8px; }
+.sqm-checkitem { border: 1px solid #dfe7ef; border-radius: 10px; padding: 10px; background: #fbfdff; }
+@media (max-width: 820px) {
+  .sqm-steps, .sqm-grid, .sqm-calc-grid, .sqm-algo-options { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="cbi-map sqm-wizard-shell">
+  <div class="sqm-hero">
+    <h2 name="content">SQM 三步配置向导</h2>
+    <p>
+      本向导面向普通用户，把接口、带宽、算法和启停动作拆成三步完成。
+      如果不确定参数，建议先关闭 SQM 做 2-3 次测速，再把测速结果按 85%-95% 写入带宽限制。
+    </p>
+  </div>
+
+  <div class="sqm-steps">
+    <div id="step-pill-1" class="sqm-step active"><span class="sqm-step-num">1</span><span class="sqm-step-title">选择 WAN 接口</span></div>
+    <div id="step-pill-2" class="sqm-step"><span class="sqm-step-num">2</span><span class="sqm-step-title">填写带宽与算法</span></div>
+    <div id="step-pill-3" class="sqm-step"><span class="sqm-step-num">3</span><span class="sqm-step-title">确认并应用</span></div>
+  </div>
+
+  <div id="step-1" class="sqm-card">
+    <h3>步骤 1：选择需要整形的 WAN 接口</h3>
+    <p class="sqm-desc">
+      这里要选择连接光猫、5G CPE 或上级路由的外网接口。SQM 需要控制出口队列，
+      如果选错接口，页面可能显示已启用，但实际延迟优化效果会不明显。
+    </p>
+    <div class="sqm-grid">
+      <div>
+        <div class="sqm-form-row">
+          <label for="iface">网络接口</label>
+          <select id="iface" onchange="updateInterfaceHint()">
+            <% for _, d in ipairs(devs) do %>
+              <% if d ~= "lo" then %>
+                <option value="<%=d%>" <%=d == iface_cur and 'selected="selected"' or ""%>><%=d%></option>
+              <% end %>
+            <% end %>
+          </select>
+          <div id="iface-hint" class="sqm-mini"></div>
+        </div>
+      </div>
+      <div class="sqm-help">
+        <strong>怎么判断 WAN 接口？</strong>
+        <ul class="sqm-tip-list">
+          <li>软路由常见 WAN 接口可能是 <code>eth1</code>、<code>pppoe-wan</code> 或实际接上游网络的网口。</li>
+          <li>一般不要选择 <code>br-lan</code>，它通常是内网桥接口。</li>
+          <li>不要选择 <code>ifb0</code>，它是系统用于下行整形的虚拟接口。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="step-2" class="sqm-card" style="display:none;">
+    <h3>步骤 2：填写带宽与队列算法</h3>
+    <p class="sqm-desc">
+      SQM 的核心不是把带宽填满，而是故意把整形速率设置得略低于真实链路速度，
+      让排队发生在路由器可控的位置，从而降低延迟和抖动。
+    </p>
+
+    <div class="sqm-grid">
+      <div>
+        <div class="sqm-form-row">
+          <label for="download">下载带宽 (kbit/s)</label>
+          <input type="number" id="download" min="1" value="<%=download_cur%>" oninput="updateBandwidthHint()">
+          <div class="sqm-mini">例：测速下载 100 Mbps，按 90% 填写就是 90000 kbit/s。</div>
+        </div>
+        <div class="sqm-form-row">
+          <label for="upload">上传带宽 (kbit/s)</label>
+          <input type="number" id="upload" min="1" value="<%=upload_cur%>" oninput="updateBandwidthHint()">
+          <div class="sqm-mini">上传更容易影响游戏、会议和语音，建议认真填写实测上传值。</div>
+        </div>
+
+        <div class="sqm-calc">
+          <div class="sqm-calc-title">按测速结果自动换算</div>
+          <div class="sqm-calc-grid">
+            <div>
+              <label for="measured-download">实测下载 (Mbps)</label>
+              <input type="number" id="measured-download" min="0" step="0.01" placeholder="例如 100">
+            </div>
+            <div>
+              <label for="measured-upload">实测上传 (Mbps)</label>
+              <input type="number" id="measured-upload" min="0" step="0.01" placeholder="例如 30">
+            </div>
+            <div>
+              <label for="bandwidth-ratio">填写比例</label>
+              <select id="bandwidth-ratio">
+                <option value="95">95%：更接近满速</option>
+                <option value="90" selected="selected">90%：推荐起点</option>
+                <option value="85">85%：优先低延迟</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:10px;">
+            <button class="cbi-button" type="button" onclick="calcBandwidth()">按测速结果填入带宽</button>
+          </div>
+          <div class="sqm-mini">
+            建议：先用 90% 作为起点；如果满载时延迟仍高，降到 85%-90%；如果速度损失过大，再提高到 90%-95%。
+          </div>
+        </div>
+
+        <div class="sqm-form-row" style="margin-top:14px;">
+          <label for="algorithm">队列算法</label>
+          <select id="algorithm" onchange="syncAlgorithmCards()">
+            <option value="fq_codel" <%=algo_cur == "fq_codel" and 'selected="selected"' or ""%>>fq_codel</option>
+            <option value="cake" <%=algo_cur == "cake" and 'selected="selected"' or ""%>>cake</option>
+          </select>
+          <div class="sqm-algo-options">
+            <div id="algo-card-fq_codel" class="sqm-algo-card" onclick="chooseAlgorithm('fq_codel')">
+              <strong>fq_codel：推荐默认</strong>
+              <p>资源占用较低，低延迟表现稳定，适合大多数软路由和普通家庭网络。</p>
+            </div>
+            <div id="algo-card-cake" class="sqm-algo-card" onclick="chooseAlgorithm('cake')">
+              <strong>CAKE：更完整但更吃资源</strong>
+              <p>整合整形与公平性处理，部分场景吞吐更好，但 CPU 占用可能略高。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sqm-help">
+          <strong>带宽应该填多少？</strong>
+          <ul class="sqm-tip-list">
+            <li>不要直接填写运营商套餐值，优先填写“实际测速结果”的 85%-95%。</li>
+            <li>普通家庭用户推荐从 90% 开始，例如 100 Mbps 填 90000 kbit/s。</li>
+            <li>如果你更看重游戏和会议稳定性，可以填 85%-90%。</li>
+            <li>如果你更看重下载速度，可以尝试 90%-95%，但满载延迟可能上升。</li>
+          </ul>
+        </div>
+        <div id="bandwidth-hint" class="sqm-help sqm-warning" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="step-3" class="sqm-card" style="display:none;">
+    <h3>步骤 3：确认配置并应用</h3>
+    <p class="sqm-desc">
+      应用配置会写入 UCI，并启动或停止 SQM 服务。启用时会重新下发 TC 队列和相关规则；
+      停用时会停止服务并清理规则。
+    </p>
+
+    <div class="sqm-grid">
+      <div>
+        <div class="sqm-checklist">
+          <label class="sqm-checkitem">
+            <input type="radio" name="enabled_mode" value="1" <%=enabled_cur == "1" and 'checked="checked"' or ""%> onchange="renderSummary()">
+            启用并应用配置
+            <div class="sqm-mini">适合完成接口、带宽和算法设置后立即开始优化。</div>
+          </label>
+          <label class="sqm-checkitem">
+            <input type="radio" name="enabled_mode" value="0" <%=enabled_cur ~= "1" and 'checked="checked"' or ""%> onchange="renderSummary()">
+            停用并清理规则
+            <div class="sqm-mini">适合排查网络问题，或需要临时恢复为无 SQM 状态。</div>
+          </label>
+        </div>
+      </div>
+      <div>
+        <div class="sqm-help">
+          <strong>应用前请确认</strong>
+          <ul class="sqm-tip-list">
+            <li>接口是连接上游网络的 WAN 接口。</li>
+            <li>带宽值是测速结果折算后的 kbit/s，不是 Mbps。</li>
+            <li>新手优先使用 fq_codel，确认稳定后再尝试 CAKE。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <pre id="summary" class="sqm-summary" style="margin-top:12px;"></pre>
+  </div>
+
+  <div class="sqm-card">
+    <div class="sqm-actions">
+      <button id="btn-prev" class="cbi-button" type="button" onclick="prevStep()" disabled>上一步</button>
+      <button id="btn-next" class="cbi-button cbi-button-apply" type="button" onclick="nextStep()">下一步</button>
+      <button id="btn-apply" class="cbi-button cbi-button-apply" type="button" onclick="applyWizard()" style="display:none;">确认并应用</button>
+    </div>
+  </div>
+
+  <div class="sqm-card">
+    <h3>执行结果</h3>
+    <pre id="result" class="sqm-result">尚未执行。请按上方步骤完成配置后点击“确认并应用”。</pre>
+  </div>
+</div>
+
+<script>
+let currentStep = 1;
+
+function selectedEnabled() {
+  const el = document.querySelector('input[name="enabled_mode"]:checked');
+  return el ? el.value : '1';
+}
+
+function formatKbit(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '--';
+  if (n >= 1000) return n + ' kbit/s（约 ' + (n / 1000).toFixed(2) + ' Mbps）';
+  return n + ' kbit/s';
+}
+
+function updateInterfaceHint() {
+  const iface = document.getElementById('iface').value;
+  const hint = document.getElementById('iface-hint');
+  if (!hint) return;
+  if (/^br-lan$/.test(iface)) {
+    hint.textContent = '提示：br-lan 通常是内网桥接口，除非你的网络结构特殊，否则不建议作为 WAN 接口。';
+  } else if (/^ifb/.test(iface)) {
+    hint.textContent = '提示：ifb 是系统用于下行整形的虚拟接口，不建议在这里选择。';
+  } else {
+    hint.textContent = '当前选择：' + iface + '。请确认它是连接上游网络的接口。';
+  }
+}
+
+function updateBandwidthHint() {
+  const d = Number(document.getElementById('download').value);
+  const u = Number(document.getElementById('upload').value);
+  const hint = document.getElementById('bandwidth-hint');
+  if (!hint) return;
+  const lines = [];
+  lines.push('<strong>当前填写值</strong>');
+  lines.push('下载：' + formatKbit(d));
+  lines.push('上传：' + formatKbit(u));
+  if (Number.isFinite(d) && Number.isFinite(u) && d > 0 && u > 0) {
+    if (u > d) {
+      lines.push('注意：上传值大于下载值，请确认是否填反。');
+    }
+    if (d < 1000 || u < 1000) {
+      lines.push('注意：当前带宽低于 1 Mbps，可能是单位填错。Mbps 需要乘以 1000 后再填写。');
+    }
+  } else {
+    lines.push('请填写正整数，单位为 kbit/s。');
+  }
+  hint.innerHTML = lines.join('<br>');
+}
+
+function calcBandwidth() {
+  const md = Number(document.getElementById('measured-download').value);
+  const mu = Number(document.getElementById('measured-upload').value);
+  const ratio = Number(document.getElementById('bandwidth-ratio').value);
+  if (!Number.isFinite(ratio) || ratio <= 0) {
+    alert('请选择有效的填写比例');
+    return;
+  }
+  if (Number.isFinite(md) && md > 0) {
+    document.getElementById('download').value = Math.max(1, Math.round(md * 1000 * ratio / 100));
+  }
+  if (Number.isFinite(mu) && mu > 0) {
+    document.getElementById('upload').value = Math.max(1, Math.round(mu * 1000 * ratio / 100));
+  }
+  if ((!Number.isFinite(md) || md <= 0) && (!Number.isFinite(mu) || mu <= 0)) {
+    alert('请至少填写一个测速结果');
+    return;
+  }
+  updateBandwidthHint();
+}
+
+function chooseAlgorithm(value) {
+  document.getElementById('algorithm').value = value;
+  syncAlgorithmCards();
+}
+
+function syncAlgorithmCards() {
+  const value = document.getElementById('algorithm').value;
+  document.getElementById('algo-card-fq_codel').className = 'sqm-algo-card' + (value === 'fq_codel' ? ' active' : '');
+  document.getElementById('algo-card-cake').className = 'sqm-algo-card' + (value === 'cake' ? ' active' : '');
+}
+
+function renderSummary() {
+  const iface = document.getElementById('iface').value;
+  const download = document.getElementById('download').value;
+  const upload = document.getElementById('upload').value;
+  const algorithm = document.getElementById('algorithm').value;
+  const enabled = selectedEnabled();
+  const lines = [];
+  lines.push('即将应用以下配置：');
+  lines.push('');
+  lines.push('WAN 接口：' + iface);
+  lines.push('下载带宽：' + formatKbit(download));
+  lines.push('上传带宽：' + formatKbit(upload));
+  lines.push('队列算法：' + algorithm + (algorithm === 'fq_codel' ? '（推荐默认）' : '（资源占用可能略高）'));
+  lines.push('执行动作：' + (enabled === '1' ? '启用 SQM 并应用配置' : '停用 SQM 并清理规则'));
+  lines.push('');
+  lines.push('确认无误后点击“确认并应用”。');
+  document.getElementById('summary').textContent = lines.join('\n');
+}
+
+function setStep(step) {
+  currentStep = step;
+  document.getElementById('step-1').style.display = step === 1 ? '' : 'none';
+  document.getElementById('step-2').style.display = step === 2 ? '' : 'none';
+  document.getElementById('step-3').style.display = step === 3 ? '' : 'none';
+
+  document.getElementById('step-pill-1').className = 'sqm-step' + (step === 1 ? ' active' : '');
+  document.getElementById('step-pill-2').className = 'sqm-step' + (step === 2 ? ' active' : '');
+  document.getElementById('step-pill-3').className = 'sqm-step' + (step === 3 ? ' active' : '');
+
+  document.getElementById('btn-prev').disabled = step === 1;
+  document.getElementById('btn-next').style.display = step === 3 ? 'none' : '';
+  document.getElementById('btn-apply').style.display = step === 3 ? '' : 'none';
+
+  if (step === 1) updateInterfaceHint();
+  if (step === 2) {
+    syncAlgorithmCards();
+    updateBandwidthHint();
+  }
+  if (step === 3) renderSummary();
+}
+
+function validateStep(step) {
+  if (step === 1) {
+    const iface = document.getElementById('iface').value;
+    if (!iface) {
+      alert('请选择网络接口');
+      return false;
+    }
+    if (/^ifb/.test(iface)) {
+      return confirm('当前选择的是 ifb 虚拟接口，通常不应作为 WAN 接口。确定继续吗？');
+    }
+  }
+  if (step === 2) {
+    const d = Number(document.getElementById('download').value);
+    const u = Number(document.getElementById('upload').value);
+    if (!Number.isFinite(d) || d <= 0) { alert('下载带宽必须是正整数，单位为 kbit/s'); return false; }
+    if (!Number.isFinite(u) || u <= 0) { alert('上传带宽必须是正整数，单位为 kbit/s'); return false; }
+    if (d < 1000 || u < 1000) {
+      if (!confirm('当前填写的带宽低于 1 Mbps，请确认单位是否为 kbit/s。确定继续吗？')) return false;
+    }
+  }
+  return true;
+}
+
+function nextStep() {
+  if (!validateStep(currentStep)) return;
+  setStep(Math.min(3, currentStep + 1));
+}
+
+function prevStep() {
+  setStep(Math.max(1, currentStep - 1));
+}
+
+function applyWizard() {
+  if (!validateStep(1)) return;
+  if (!validateStep(2)) return;
+
+  const fd = new URLSearchParams();
+  fd.append('iface', document.getElementById('iface').value);
+  fd.append('download', document.getElementById('download').value);
+  fd.append('upload', document.getElementById('upload').value);
+  fd.append('algorithm', document.getElementById('algorithm').value);
+  fd.append('enabled', selectedEnabled());
+
+  const out = document.getElementById('result');
+  out.textContent = '正在应用配置，请稍候...';
+
+  fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/wizard_apply")%>', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: fd.toString()
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      const lines = [];
+      lines.push(d.success ? '应用成功' : '应用失败');
+      if (d.error) lines.push('错误信息：' + d.error);
+      if (typeof d.runtime_code !== 'undefined') lines.push('运行返回码：' + d.runtime_code);
+      if (d.config) {
+        lines.push('');
+        lines.push('已提交配置：');
+        lines.push('接口：' + d.config.iface);
+        lines.push('下载：' + formatKbit(d.config.download));
+        lines.push('上传：' + formatKbit(d.config.upload));
+        lines.push('算法：' + d.config.algorithm);
+        lines.push('状态：' + (d.config.enabled ? '启用' : '停用'));
+      }
+      if (d.output) {
+        lines.push('');
+        lines.push('后端输出：');
+        lines.push(String(d.output));
+      }
+      out.textContent = lines.join('\n');
+    })
+    .catch(function(err) {
+      out.textContent = '请求失败：' + String(err);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  setStep(1);
+  syncAlgorithmCards();
+  updateInterfaceHint();
+  updateBandwidthHint();
+});
+</script>
+
+<%+footer%>

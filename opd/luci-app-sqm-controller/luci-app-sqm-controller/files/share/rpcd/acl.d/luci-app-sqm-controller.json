@@ -1,0 +1,23 @@
+{
+  "luci-app-sqm-controller": {
+    "description": "Grant access to SQM Controller",
+    "read": {
+      "file": {
+        "/etc/config/sqm_controller": ["read"],
+        "/var/log/sqm_controller.log": ["read"]
+      },
+      "uci": ["sqm_controller"]
+    },
+    "write": {
+      "file": {
+        "/etc/config/sqm_controller": ["write"],
+        "/etc/init.d/sqm-controller": ["execute"],
+        "/var/log/sqm_controller.log": ["write"]
+      },
+      "uci": ["sqm_controller"],
+      "ubus": {
+        "service": ["*"]
+      }
+    }
+  }
+}

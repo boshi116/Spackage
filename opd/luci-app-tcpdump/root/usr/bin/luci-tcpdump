@@ -1,0 +1,282 @@
+#!/bin/sh
+
+set -eu
+
+STATE_DIR="/var/run/luci-tcpdump"
+CAPTURE_DIR="/tmp/luci-tcpdump"
+PID_FILE="/var/run/luci-tcpdump.pid"
+LOG_FILE="/tmp/luci-tcpdump.log"
+META_FILE="/tmp/luci-tcpdump.meta"
+
+find_tcpdump() {
+	if [ -x /usr/sbin/tcpdump ]; then
+		echo /usr/sbin/tcpdump
+		return 0
+	fi
+
+	if [ -x /usr/bin/tcpdump ]; then
+		echo /usr/bin/tcpdump
+		return 0
+	fi
+
+	return 1
+}
+
+emit() {
+	printf 'success=%s\n' "$1"
+	printf 'message=%s\n' "$2"
+}
+
+read_meta_value() {
+	key="$1"
+
+	if [ ! -r "$META_FILE" ]; then
+		return 1
+	fi
+
+	sed -n "s/^${key}=//p" "$META_FILE" | head -n 1
+}
+
+current_capture_file() {
+	read_meta_value file_path || true
+}
+
+sanitize_component() {
+	printf '%s' "$1" | tr -cs 'A-Za-z0-9._-' '_' | sed 's/^_\+//; s/_\+$//' | cut -c 1-32
+}
+
+capture_filename() {
+	timestamp="$(date +%Y%m%d-%H%M%S)"
+	host="$(cat /proc/sys/kernel/hostname 2>/dev/null || echo openwrt)"
+	iface="$1"
+	filter="$2"
+	filter_label="$(sanitize_component "$filter")"
+
+	host="$(sanitize_component "$host")"
+	iface="$(sanitize_component "$iface")"
+
+	[ -n "$host" ] || host="openwrt"
+	[ -n "$iface" ] || iface="any"
+	[ -n "$filter_label" ] || filter_label="all"
+
+	printf '%s_%s_%s_%s.pcap\n' "$timestamp" "$host" "$iface" "$filter_label"
+}
+
+pid_matches_capture() {
+	pid="$1"
+	cmdline_file="/proc/$pid/cmdline"
+	capture_file="${2:-}"
+
+	if [ ! -r "$cmdline_file" ]; then
+		return 1
+	fi
+
+	cmdline="$(tr '\000' ' ' < "$cmdline_file" 2>/dev/null || true)"
+	if [ -n "$capture_file" ]; then
+		case "$cmdline" in
+			*tcpdump*"$capture_file"*)
+				return 0
+				;;
+		esac
+	fi
+
+	case "$cmdline" in
+		*tcpdump*"$CAPTURE_DIR/"*.pcap*)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+find_capture_pids() {
+	capture_file="${1:-$(current_capture_file)}"
+	for proc_dir in /proc/[0-9]*; do
+		pid="${proc_dir#/proc/}"
+		if pid_matches_capture "$pid" "$capture_file"; then
+			printf '%s\n' "$pid"
+		fi
+	done
+}
+
+running_pid() {
+	capture_file="$(current_capture_file)"
+
+	if [ ! -s "$PID_FILE" ]; then
+		pid="$(find_capture_pids "$capture_file" | head -n 1)"
+		if [ -n "$pid" ]; then
+			echo "$pid" > "$PID_FILE"
+			printf '%s\n' "$pid"
+			return 0
+		fi
+		return 1
+	fi
+
+	pid="$(cat "$PID_FILE")"
+	if kill -0 "$pid" >/dev/null 2>&1 && pid_matches_capture "$pid" "$capture_file"; then
+		printf '%s\n' "$pid"
+		return 0
+	fi
+
+	rm -f "$PID_FILE"
+	pid="$(find_capture_pids "$capture_file" | head -n 1)"
+	if [ -n "$pid" ]; then
+		echo "$pid" > "$PID_FILE"
+		printf '%s\n' "$pid"
+		return 0
+	fi
+
+	return 1
+}
+
+start_process() {
+	if command -v setsid >/dev/null 2>&1; then
+		setsid "$@" </dev/null >"$LOG_FILE" 2>&1 &
+	else
+		"$@" </dev/null >"$LOG_FILE" 2>&1 &
+	fi
+
+	printf '%s\n' "$!"
+}
+
+start_capture() {
+	iface="$1"
+	filter="$2"
+	packet_count="$3"
+	snaplen="$4"
+	promiscuous="$5"
+	tcpdump_bin="$(find_tcpdump || true)"
+	file_name="$(capture_filename "$iface" "$filter")"
+	pcap_file="$CAPTURE_DIR/$file_name"
+
+	if [ "$iface" = "any" ]; then
+		promiscuous="0"
+	fi
+
+	if [ -z "$tcpdump_bin" ]; then
+		emit 0 "tcpdump binary not found"
+		return 0
+	fi
+
+	if running_pid >/dev/null; then
+		emit 0 "capture is already running"
+		return 0
+	fi
+
+	mkdir -p "$STATE_DIR" "$CAPTURE_DIR"
+	rm -f "$PID_FILE" "$LOG_FILE" "$META_FILE"
+
+	set -- "$tcpdump_bin" -i "$iface" -U -n -w "$pcap_file"
+
+	if [ "$snaplen" -gt 0 ]; then
+		set -- "$@" -s "$snaplen"
+	fi
+
+	if [ "$packet_count" -gt 0 ]; then
+		set -- "$@" -c "$packet_count"
+	fi
+
+	if [ "$promiscuous" = "0" ]; then
+		set -- "$@" -p
+	fi
+
+	if [ -n "$filter" ]; then
+		set -- "$@" "$filter"
+	fi
+
+	pid="$(start_process "$@")"
+	echo "$pid" > "$PID_FILE"
+	{
+		printf 'interface=%s\n' "$iface"
+		printf 'filter=%s\n' "$filter"
+		printf 'packet_count=%s\n' "$packet_count"
+		printf 'snaplen=%s\n' "$snaplen"
+		printf 'promiscuous=%s\n' "$promiscuous"
+		printf 'file_name=%s\n' "$file_name"
+		printf 'file_path=%s\n' "$pcap_file"
+		printf 'started_at=%s\n' "$(date +%s)"
+	} > "$META_FILE"
+
+	sleep 1
+	if kill -0 "$pid" >/dev/null 2>&1; then
+		emit 1 "capture started"
+		return 0
+	fi
+
+	rm -f "$PID_FILE"
+	message="failed to start capture"
+	if [ -s "$LOG_FILE" ]; then
+		message="$(tail -n 1 "$LOG_FILE")"
+	fi
+	if [ -z "$message" ]; then
+		message="failed to start capture"
+	fi
+	emit 0 "$message"
+}
+
+stop_capture() {
+	capture_file="$(current_capture_file)"
+	pids="$(find_capture_pids "$capture_file")"
+	if [ -z "$pids" ]; then
+		pid="$(running_pid || true)"
+		pids="$pid"
+	fi
+
+	if [ -z "$pids" ]; then
+		emit 1 "capture is not running"
+		return 0
+	fi
+
+	for pid in $pids; do
+		kill "$pid" >/dev/null 2>&1 || true
+	done
+
+	count=0
+	while [ -n "$(find_capture_pids "$capture_file")" ]; do
+		count=$((count + 1))
+		if [ "$count" -ge 5 ]; then
+			for pid in $(find_capture_pids "$capture_file"); do
+				kill -9 "$pid" >/dev/null 2>&1 || true
+			done
+			break
+		fi
+		sleep 1
+	done
+
+	remaining_pids="$(find_capture_pids "$capture_file")"
+	if [ -n "$remaining_pids" ]; then
+		echo "$(printf '%s\n' "$remaining_pids" | head -n 1)" > "$PID_FILE"
+		emit 0 "failed to stop capture"
+		return 0
+	fi
+
+	rm -f "$PID_FILE"
+	emit 1 "capture stopped"
+}
+
+status_capture() {
+	pid="$(running_pid || true)"
+	printf 'success=1\n'
+	printf 'running=%s\n' "$( [ -n "$pid" ] && echo 1 || echo 0 )"
+	printf 'pid=%s\n' "$pid"
+	printf 'file_name=%s\n' "$(read_meta_value file_name || true)"
+	printf 'file_path=%s\n' "$(current_capture_file)"
+}
+
+action="${1:-}"
+
+case "$action" in
+	start)
+		start_capture "${2:-any}" "${3:-}" "${4:-0}" "${5:-0}" "${6:-1}"
+		;;
+	stop)
+		stop_capture
+		;;
+	status)
+		status_capture
+		;;
+	*)
+		emit 0 "usage: luci-tcpdump start <iface> <filter> <packet_count> <snaplen> <promiscuous> | stop | status"
+		;;
+esac

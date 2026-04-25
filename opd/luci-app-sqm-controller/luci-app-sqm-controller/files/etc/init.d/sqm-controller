@@ -1,0 +1,196 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10 
+# This script executes actions synchronously and does not register a procd instance.
+# Keep procd disabled to avoid "ubus call service delete ... Not found" during upgrade.
+USE_PROCD=0
+
+CONFIG="sqm_controller"
+PYTHON="/usr/bin/python3"
+APP="/usr/lib/sqm-controller/main.py"
+CRON_FILE="/etc/crontabs/root"
+CRON_TAG="sqm-controller-policy"
+CRON_MARK="# $CRON_TAG"
+POLICY_CMD="/usr/bin/python3 /usr/lib/sqm-controller/main.py --policy-once"
+
+set_enabled_state() {
+    local value
+    value="$1"
+    uci -q set sqm_controller.basic_config.enabled="$value"
+    uci -q commit sqm_controller
+}
+
+reload_cron_service() {
+    local svc
+    for svc in cron crond; do
+        if [ -x "/etc/init.d/$svc" ]; then
+            "/etc/init.d/$svc" reload >/dev/null 2>&1 || \
+            "/etc/init.d/$svc" restart >/dev/null 2>&1 || \
+            echo "warn: failed to reload/restart $svc"
+            return 0
+        fi
+    done
+}
+
+normalize_legacy_class_rules() {
+    local bulk_dport bulk_proto bulk_category bulk_src bulk_sport streaming_443_dport
+
+    bulk_dport="$(uci -q get sqm_controller.bulk_tcp.dport 2>/dev/null)"
+    bulk_proto="$(uci -q get sqm_controller.bulk_tcp.proto 2>/dev/null)"
+    bulk_category="$(uci -q get sqm_controller.bulk_tcp.category 2>/dev/null)"
+    bulk_src="$(uci -q get sqm_controller.bulk_tcp.src_ip 2>/dev/null)"
+    bulk_sport="$(uci -q get sqm_controller.bulk_tcp.sport 2>/dev/null)"
+    streaming_443_dport="$(uci -q get sqm_controller.streaming_tcp_443.dport 2>/dev/null)"
+
+    if [ "$bulk_dport" = "80,443" ] && \
+       [ "$bulk_proto" = "tcp" ] && \
+       [ "$bulk_category" = "bulk" ] && \
+       [ -z "$bulk_src" ] && \
+       [ -z "$bulk_sport" ] && \
+       [ "$streaming_443_dport" = "443" ]; then
+        uci -q set sqm_controller.bulk_tcp.dport='80'
+        uci -q commit sqm_controller
+        echo "migrated legacy bulk_tcp rule: dport 80,443 -> 80"
+    fi
+}
+
+remove_policy_cron() {
+    local tmp
+    tmp="${CRON_FILE}.tmp.$$"
+
+    if [ ! -f "$CRON_FILE" ]; then
+        : > "$CRON_FILE" 2>/dev/null || {
+            echo "warn: failed to create $CRON_FILE"
+            return 1
+        }
+    fi
+
+    if ! grep -Fv "$CRON_MARK" "$CRON_FILE" > "$tmp" 2>/dev/null; then
+        : > "$tmp"
+    fi
+
+    if ! mv "$tmp" "$CRON_FILE" 2>/dev/null; then
+        rm -f "$tmp"
+        echo "warn: failed to update $CRON_FILE"
+        return 1
+    fi
+
+    reload_cron_service
+    return 0
+}
+
+sync_policy_cron() {
+    local enabled expr line tmp expr_clean
+
+    enabled="$(uci -q get sqm_controller.policy.enabled 2>/dev/null)"
+    if [ "$enabled" != "1" ]; then
+        remove_policy_cron
+        return $?
+    fi
+
+    expr="$(uci -q get sqm_controller.policy.cron_expression 2>/dev/null)"
+    [ -n "$expr" ] || expr="$(uci -q get sqm_controller.policy.cron 2>/dev/null)"
+    [ -n "$expr" ] || expr="$(uci -q get sqm_controller.policy.schedule 2>/dev/null)"
+    [ -n "$expr" ] || expr="*/1 * * * *"
+
+    expr_clean="$(printf '%s' "$expr" | tr -d '\r\n')"
+    if [ "$expr" != "$expr_clean" ]; then
+        echo "warn: invalid policy cron expression (contains newline)"
+        return 1
+    fi
+    expr="$(printf '%s' "$expr_clean" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    [ -n "$expr" ] || expr="*/1 * * * *"
+
+    line="$expr $POLICY_CMD $CRON_MARK"
+    tmp="${CRON_FILE}.tmp.$$"
+
+    if [ ! -f "$CRON_FILE" ]; then
+        : > "$CRON_FILE" 2>/dev/null || {
+            echo "warn: failed to create $CRON_FILE"
+            return 1
+        }
+    fi
+
+    if ! grep -Fv "$CRON_MARK" "$CRON_FILE" > "$tmp" 2>/dev/null; then
+        : > "$tmp"
+    fi
+    echo "$line" >> "$tmp" 2>/dev/null || {
+        rm -f "$tmp"
+        echo "warn: failed to append policy cron"
+        return 1
+    }
+
+    if ! mv "$tmp" "$CRON_FILE" 2>/dev/null; then
+        rm -f "$tmp"
+        echo "warn: failed to update $CRON_FILE"
+        return 1
+    fi
+
+    reload_cron_service
+    return 0
+}
+
+sync_policy_cron_service() {
+    sync_policy_cron
+}
+
+extra_command "sync_policy_cron_service" "Synchronize policy cron job"
+
+start_service() {
+    normalize_legacy_class_rules
+    config_load "$CONFIG"
+
+    local autostart enable_out enable_rc
+    config_get autostart advanced_config autostart "0"
+
+    if [ "$autostart" != "1" ]; then
+        echo "autostart disabled, manual start continues"
+    fi
+
+    echo "Starting SQM Controller..."
+    enable_out="$($PYTHON $APP --enable 2>&1)"
+    enable_rc=$?
+    if [ $enable_rc -ne 0 ]; then
+        remove_policy_cron >/dev/null 2>&1 || true
+        [ -n "$enable_out" ] && echo "$enable_out"
+        return $enable_rc
+    fi
+
+    if ! set_enabled_state '1'; then
+        echo "warn: failed to persist enabled=1"
+        "$PYTHON" "$APP" --disable >/dev/null 2>&1 || true
+        remove_policy_cron >/dev/null 2>&1 || true
+        [ -n "$enable_out" ] && echo "$enable_out"
+        return 1
+    fi
+
+    [ -n "$enable_out" ] && echo "$enable_out"
+    sync_policy_cron || echo "warn: failed to sync policy cron"
+    return 0
+}
+
+stop_service() {
+    local disable_out rc
+    echo "Stopping SQM Controller..."
+    disable_out="$($PYTHON $APP --disable 2>&1)"
+    rc=$?
+    [ -n "$disable_out" ] && echo "$disable_out"
+    if [ $rc -ne 0 ]; then
+        return $rc
+    fi
+
+    if ! set_enabled_state '0'; then
+        echo "warn: failed to persist enabled=0"
+        return 1
+    fi
+
+    remove_policy_cron || echo "warn: failed to remove policy cron"
+    return 0
+}
+
+restart() {
+    stop_service || return $?
+    sleep 1
+    start_service
+}

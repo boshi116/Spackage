@@ -1,0 +1,121 @@
+<%+header%>
+
+<div class="cbi-map">
+  <h2 name="content"><%:场景模板与配置备份%></h2>
+
+  <div class="cbi-section">
+    <h3>场景模板快速切换</h3>
+    <div class="cbi-value-field">
+      <button class="cbi-button" onclick="applyTemplate('game')">游戏模式</button>
+      <button class="cbi-button" onclick="applyTemplate('meeting')">会议模式</button>
+      <button class="cbi-button" onclick="applyTemplate('normal')">普通模式</button>
+      <button class="cbi-button" onclick="applyTemplate('download')">下载模式</button>
+    </div>
+    <pre id="template-result" style="margin-top:10px;max-height:260px;overflow:auto;border:1px solid #ddd;padding:10px;"></pre>
+  </div>
+
+  <div class="cbi-section">
+    <h3>配置备份 / 恢复</h3>
+    <div class="cbi-value-field">
+      <button class="cbi-button" onclick="downloadBackup()">导出当前配置</button>
+    </div>
+
+    <div class="cbi-value-field" style="margin-top:10px;">
+      <input type="file" id="backup-file" />
+      <label style="margin-left:10px;">
+        <input type="checkbox" id="apply-now" checked />
+        导入后立即应用
+      </label>
+      <button class="cbi-button cbi-button-apply" onclick="restoreBackup()">导入并恢复</button>
+    </div>
+
+    <pre id="restore-result" style="margin-top:10px;max-height:260px;overflow:auto;border:1px solid #ddd;padding:10px;"></pre>
+  </div>
+</div>
+
+<script>
+function safeVal(v) {
+  if (v === undefined || v === null) return '-';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
+function formatChanges(changes) {
+  if (!changes || Object.keys(changes).length === 0) return '无配置变更';
+  return Object.keys(changes).sort().map(function(key) {
+    var item = changes[key] || {};
+    return key + ': ' + safeVal(item.from) + ' -> ' + safeVal(item.to);
+  }).join('\n');
+}
+
+function applyTemplate(name) {
+  var out = document.getElementById('template-result');
+  out.textContent = '正在应用模板: ' + name + ' ...';
+  fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/apply_template")%>?name=' + encodeURIComponent(name))
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var lines = [];
+      lines.push('success: ' + (d.success ? 'true' : 'false'));
+      if (d.error) lines.push('error: ' + d.error);
+      if (d.runtime) {
+        lines.push('runtime.applied: ' + safeVal(d.runtime.applied));
+        lines.push('runtime.restart_success: ' + safeVal(d.runtime.restart_success));
+        lines.push('runtime.message: ' + safeVal(d.runtime.message));
+      }
+      lines.push('changes:');
+      lines.push(formatChanges(d.changes));
+      out.textContent = lines.join('\n');
+    })
+    .catch(function(err) {
+      out.textContent = '请求失败: ' + String(err);
+    });
+}
+
+function downloadBackup() {
+  window.location = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/backup_config")%>';
+}
+
+function restoreBackup() {
+  var fileEl = document.getElementById('backup-file');
+  var outEl = document.getElementById('restore-result');
+  if (!fileEl.files || !fileEl.files.length) {
+    outEl.textContent = '请先选择备份文件';
+    return;
+  }
+
+  var fd = new FormData();
+  fd.append('backup_file', fileEl.files[0]);
+  fd.append('apply_now', document.getElementById('apply-now').checked ? '1' : '0');
+  outEl.textContent = '正在校验并恢复配置...';
+
+  fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/restore_config")%>', {
+    method: 'POST',
+    body: fd
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var lines = [];
+      lines.push('success: ' + (d.success ? 'true' : 'false'));
+      if (d.error) lines.push('error: ' + d.error);
+      if (d.backup_path) lines.push('backup_path: ' + d.backup_path);
+      if (d.validation) {
+        lines.push('validation.valid: ' + safeVal(d.validation.valid));
+        if (d.validation.errors && d.validation.errors.length) lines.push('validation.errors: ' + d.validation.errors.join('; '));
+        if (d.validation.warnings && d.validation.warnings.length) lines.push('validation.warnings: ' + d.validation.warnings.join('; '));
+      }
+      if (d.runtime) {
+        lines.push('runtime.applied: ' + safeVal(d.runtime.applied));
+        lines.push('runtime.restart_success: ' + safeVal(d.runtime.restart_success));
+        lines.push('runtime.message: ' + safeVal(d.runtime.message));
+      }
+      lines.push('changes:');
+      lines.push(formatChanges(d.changes));
+      outEl.textContent = lines.join('\n');
+    })
+    .catch(function(err) {
+      outEl.textContent = '请求失败: ' + String(err);
+    });
+}
+</script>
+
+<%+footer%>

@@ -1,0 +1,134 @@
+<%+header%>
+
+<style>
+.sqm-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0 12px; }
+.sqm-card { border:1px solid #e5e5e5; border-radius:8px; padding:12px; margin-bottom:12px; background:#fff; }
+.sqm-log { height:420px; overflow:auto; border:1px solid #2a2a2a; border-radius:8px; background:#0f1115; color:#d6dde6; padding:10px; white-space:pre-wrap; font-family:monospace; font-size:12px; }
+.sqm-pre { max-height:420px; overflow:auto; border:1px solid #2a2a2a; border-radius:8px; background:#0f1115; color:#cfe7ff; padding:10px; white-space:pre-wrap; font-family:monospace; font-size:12px; }
+.sqm-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width: 900px){ .sqm-grid{ grid-template-columns:1fr; } }
+</style>
+
+<div class="cbi-map">
+  <h2 name="content"><%:SQM流量控制器 - 系统日志%></h2>
+
+  <div class="sqm-toolbar">
+    <button class="cbi-button" onclick="loadLogs()"><%:刷新日志%></button>
+    <button class="cbi-button cbi-button-reset" onclick="clearLogs()"><%:清空日志%></button>
+    <button class="cbi-button cbi-button-apply" onclick="downloadLog()"><%:下载日志%></button>
+    <button class="cbi-button" onclick="rotateLogs()"><%:轮转日志%></button>
+    <button class="cbi-button" onclick="runSelfCheck()"><%:运行自检%></button>
+    <label><input type="checkbox" id="auto" checked onchange="toggleAuto()"> 自动刷新</label>
+    <label><input type="checkbox" id="tail" checked onchange="loadLogs()"> 仅显示最后200行</label>
+    <span id="last" style="opacity:.75">最后刷新: --</span>
+  </div>
+
+  <div class="sqm-grid">
+    <div class="sqm-card">
+      <h3>日志内容</h3>
+      <div id="log" class="sqm-log"></div>
+    </div>
+
+    <div class="sqm-card">
+      <h3>自检结果</h3>
+      <pre id="self-check" class="sqm-pre"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+let timer = null;
+
+function nowText() {
+  const d = new Date();
+  const t = n => (n < 10 ? '0' + n : '' + n);
+  return t(d.getHours()) + ':' + t(d.getMinutes()) + ':' + t(d.getSeconds());
+}
+
+function toggleAuto() {
+  const enabled = document.getElementById('auto').checked;
+  if (enabled && !timer) timer = setInterval(loadLogs, 3000);
+  if (!enabled && timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+}
+
+function loadLogs() {
+  fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_logs")%>')
+    .then(r => r.json())
+    .then(d => {
+      let content = (d && typeof d.content === 'string') ? d.content : '';
+      if (document.getElementById('tail').checked) {
+        const lines = content.split('\n');
+        content = lines.slice(-200).join('\n');
+      }
+      const el = document.getElementById('log');
+      el.textContent = content || '无日志';
+      el.scrollTop = el.scrollHeight;
+      document.getElementById('last').innerText = '最后刷新: ' + nowText();
+    })
+    .catch(err => {
+      document.getElementById('log').textContent = '读取失败: ' + String(err);
+      document.getElementById('last').innerText = '最后刷新: ' + nowText();
+    });
+}
+
+function clearLogs() {
+  fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/clear_logs")%>')
+    .then(r => r.json())
+    .then(() => loadLogs())
+    .catch(err => {
+      document.getElementById('log').textContent = '清空失败: ' + String(err);
+    });
+}
+
+function downloadLog() {
+  window.location = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/download_log")%>';
+}
+
+function rotateLogs() {
+  fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/rotate_logs")%>')
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) {
+        alert('轮转失败: ' + (d.error || d.output || 'unknown error'));
+      }
+      loadLogs();
+    })
+    .catch(err => {
+      alert('轮转失败: ' + String(err));
+    });
+}
+
+function runSelfCheck() {
+  const el = document.getElementById('self-check');
+  el.textContent = '自检中...';
+  fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/self_check")%>')
+    .then(r => r.json())
+    .then(d => {
+      if (d && d.checks) {
+        const lines = [];
+        lines.push('success: ' + String(!!d.success));
+        lines.push('interface: ' + (d.interface || '-'));
+        lines.push('');
+        d.checks.forEach(item => {
+          lines.push('[' + (item.ok ? 'OK' : 'FAIL') + '] ' + item.name + ' - ' + (item.detail || ''));
+        });
+        el.textContent = lines.join('\n');
+      } else {
+        el.textContent = JSON.stringify(d, null, 2);
+      }
+    })
+    .catch(err => {
+      el.textContent = '自检失败: ' + String(err);
+    });
+}
+
+window.onload = function() {
+  loadLogs();
+  if (!timer) timer = setInterval(loadLogs, 3000);
+};
+</script>
+
+<%+footer%>

@@ -1,0 +1,439 @@
+<%
+local uci = require("luci.model.uci").cursor()
+local function policy_value(key, default)
+  local value = uci:get("sqm_controller", "policy", key)
+  if value == nil or value == "" then
+    return default
+  end
+  return value
+end
+
+local policy_enabled = policy_value("enabled", "1")
+local policy_mode = policy_value("mode", "auto")
+local latency_high_ms = policy_value("latency_high_ms", "80")
+local loss_high_pct = policy_value("loss_high_pct", "2")
+local bulk_cap_pct = policy_value("bulk_cap_pct", "60")
+local gaming_floor_pct = policy_value("gaming_floor_pct", "15")
+local streaming_floor_pct = policy_value("streaming_floor_pct", "25")
+local cooldown_min = policy_value("cooldown_min", "2")
+local cron_expr = policy_value("cron_expression", "*/1 * * * *")
+%>
+<%+header%>
+
+<style>
+.sqm-wrap { max-width: 1200px; }
+.sqm-topbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:8px 0 12px; }
+.sqm-title { margin:0; font-size:22px; }
+.sqm-note { color:#666; font-size:12px; line-height:1.6; }
+.sqm-badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; color:#fff; background:#777; }
+.sqm-badge.ok { background:#2e7d32; }
+.sqm-badge.warn { background:#ed6c02; }
+.sqm-badge.bad { background:#d32f2f; }
+.sqm-card { border:1px solid #e5e5e5; border-radius:8px; padding:12px; background:#fff; margin-bottom:12px; }
+.sqm-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.sqm-grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+@media (max-width: 900px) {
+  .sqm-grid, .sqm-grid-3 { grid-template-columns:1fr; }
+}
+.sqm-k { font-size:12px; color:#666; }
+.sqm-v { font-size:16px; font-weight:600; margin-top:2px; word-break:break-all; }
+.sqm-pre {
+  border:1px solid #e5e5e5;
+  border-radius:8px;
+  background:#fafafa;
+  padding:10px;
+  max-height:360px;
+  overflow:auto;
+  margin:0;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.sqm-table { width:100%; border-collapse:collapse; }
+.sqm-table th, .sqm-table td { border-bottom:1px solid #eee; text-align:left; padding:6px; font-size:13px; vertical-align:top; }
+.sqm-list { margin:8px 0 0; padding-left:18px; }
+.sqm-list li { margin:4px 0; }
+</style>
+
+<div class="cbi-map sqm-wrap">
+  <h2 class="sqm-title">策略中心</h2>
+
+  <div class="sqm-topbar">
+    <span id="status-badge" class="sqm-badge">--</span>
+    <button id="btn-run-once" class="cbi-button cbi-button-apply">执行一次策略</button>
+    <button id="btn-refresh" class="cbi-button">刷新快照</button>
+    <button id="btn-preview" class="cbi-button">预览最近记录</button>
+    <button id="btn-csv" class="cbi-button">导出 CSV</button>
+    <button id="btn-json" class="cbi-button">导出 JSON</button>
+    <span id="hint-text" class="sqm-note"></span>
+  </div>
+
+  <div class="sqm-grid">
+    <div class="sqm-card">
+      <div class="sqm-k">策略模式</div>
+      <div id="val-mode" class="sqm-v">--</div>
+      <div class="sqm-k">判定原因</div>
+      <div id="val-reason" class="sqm-v">--</div>
+      <div class="sqm-k">是否发生调整</div>
+      <div id="val-changed" class="sqm-v">--</div>
+      <div class="sqm-k">动作数量</div>
+      <div id="val-actions" class="sqm-v">--</div>
+      <div class="sqm-k">上次调整时间</div>
+      <div id="val-last-change" class="sqm-v">--</div>
+    </div>
+    <div class="sqm-card">
+      <div class="sqm-k">最近一次返回</div>
+      <pre id="result-pre" class="sqm-pre">--</pre>
+    </div>
+  </div>
+
+  <div class="sqm-card">
+    <div class="sqm-grid-3">
+      <div>
+        <div class="sqm-k">当前配置</div>
+        <div class="sqm-v"><%=policy_enabled == "1" and "已启用" or "已禁用"%> / <%=policy_mode%></div>
+        <div class="sqm-note">策略引擎当前只会动态调整下载侧分类队列 `2:21 / 2:22 / 2:23`。</div>
+      </div>
+      <div>
+        <div class="sqm-k">拥塞阈值</div>
+        <div class="sqm-v">时延 <%=latency_high_ms%> ms / 丢包 <%=loss_high_pct%>%</div>
+        <div class="sqm-note">自动模式先看时延和丢包，再看游戏、流媒体、批量流量占比。</div>
+      </div>
+      <div>
+        <div class="sqm-k">调度参数</div>
+        <div class="sqm-v">冷却 <%=cooldown_min%> 分钟 / Cron <%=cron_expr%></div>
+        <div class="sqm-note">游戏保底 <%=gaming_floor_pct%>% ，流媒体保底 <%=streaming_floor_pct%>% ，批量上限 <%=bulk_cap_pct%>% 。</div>
+      </div>
+    </div>
+    <ul class="sqm-list">
+      <li><strong>自动</strong>：根据拥塞和分类流量占比，在均衡、游戏、流媒体、批量之间自动切换。</li>
+      <li><strong>均衡</strong>：不明显偏向任一类别，适合普通上网场景。</li>
+      <li><strong>游戏优先 / 流媒体优先 / 批量优先</strong>：固定偏向对应类别，适合手动演示或特定业务时段。</li>
+    </ul>
+  </div>
+
+  <div class="sqm-card">
+    <div class="sqm-grid-3">
+      <div>
+        <div class="sqm-k">预览状态</div>
+        <div id="preview-badge" class="sqm-badge warn">--</div>
+      </div>
+      <div>
+        <div class="sqm-k">预览条数</div>
+        <div id="preview-count" class="sqm-v">--</div>
+      </div>
+      <div>
+        <div class="sqm-k">预览消息</div>
+        <div id="preview-msg" class="sqm-v">点击“预览最近记录”加载数据</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sqm-card">
+    <table class="sqm-table">
+      <thead>
+        <tr>
+          <th>时间</th>
+          <th>策略模式</th>
+          <th>判定原因</th>
+          <th>是否调整</th>
+        </tr>
+      </thead>
+      <tbody id="preview-tbody">
+        <tr><td colspan="4">--</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sqm-card">
+    <div class="sqm-k">原始预览</div>
+    <pre id="raw-pre" class="sqm-pre">--</pre>
+  </div>
+</div>
+
+<script type="text/javascript">
+(function() {
+  var POLICY_ONCE_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/policy_once")%>';
+  var STATE_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_policy_state")%>';
+  var EXPORT_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/export_report")%>';
+  var MODE_LABELS = {
+    auto: '自动',
+    balanced: '均衡',
+    gaming: '游戏优先',
+    streaming: '流媒体优先',
+    bulk: '批量优先',
+    other: '默认',
+    disabled: '已禁用'
+  };
+  var REASON_LABELS = {
+    'severe congestion': '严重拥塞',
+    'congestion detected': '检测到拥塞',
+    'streaming dominant': '流媒体占比更高',
+    'gaming dominant': '游戏流量占比更高',
+    'bulk dominant': '批量流量占比更高',
+    'normal balanced state': '当前更适合均衡模式',
+    'policy disabled': '策略已禁用',
+    'no state yet': '暂无状态'
+  };
+  var lastSnapshot = null;
+
+  function el(id) { return document.getElementById(id); }
+
+  function setBadge(kind, text) {
+    var node = el('status-badge');
+    node.className = 'sqm-badge ' + kind;
+    node.textContent = text;
+  }
+
+  function setPreviewBadge(kind, text) {
+    var node = el('preview-badge');
+    node.className = 'sqm-badge ' + kind;
+    node.textContent = text;
+  }
+
+  function toText(value) {
+    if (value === null || value === undefined || value === '') return '--';
+    if (typeof value === 'object') {
+      try { return JSON.stringify(value); } catch (e) { return '--'; }
+    }
+    return String(value);
+  }
+
+  function displayMode(value) {
+    var text = toText(value);
+    return MODE_LABELS[text] || text;
+  }
+
+  function displayReason(value) {
+    var text = toText(value);
+    if (REASON_LABELS[text]) return REASON_LABELS[text];
+    if (text.indexOf('manual mode=') === 0) {
+      return '手动模式：' + displayMode(text.slice('manual mode='.length));
+    }
+    if (text.indexOf('cooldown active:') === 0) {
+      return '冷却期：' + text.slice('cooldown active:'.length).trim();
+    }
+    return text;
+  }
+
+  function tsText(value) {
+    var n = Number(value);
+    if (!isFinite(n) || n <= 0) return '--';
+    try { return new Date(n * 1000).toLocaleString(); } catch (e) { return '--'; }
+  }
+
+  function actionsCount(data) {
+    var actions = data && data.actions;
+    if (Array.isArray(actions)) return actions.length;
+    if (actions && typeof actions === 'object') {
+      try { return Object.keys(actions).length; } catch (e) { return 0; }
+    }
+    return 0;
+  }
+
+  function renderPolicy(data) {
+    data = (data && typeof data === 'object') ? data : {};
+    var rawMode = (data.mode !== undefined && data.mode !== null && data.mode !== '') ? data.mode : data.current_mode;
+    var rawReason = (data.reason !== undefined && data.reason !== null && data.reason !== '') ? data.reason : data.note;
+    var effectiveChanged = null;
+    var changed = '--';
+    var lc = Number(data.last_change_ts);
+    var lr = Number(data.last_run_ts);
+
+    if (typeof data.changed === 'boolean') {
+      effectiveChanged = data.changed;
+    } else if (isFinite(lc) && lc > 0 && isFinite(lr) && lr > 0) {
+      effectiveChanged = (lc === lr);
+    }
+
+    if (effectiveChanged === true) changed = '是';
+    else if (effectiveChanged === false) changed = '否';
+
+    el('val-mode').textContent = displayMode(rawMode);
+    el('val-reason').textContent = displayReason(rawReason);
+    el('val-changed').textContent = changed;
+    el('val-actions').textContent = String(actionsCount(data));
+    el('val-last-change').textContent = (data.last_change_ts !== undefined) ? tsText(data.last_change_ts) : '--';
+
+    if (data.success === false) {
+      setBadge('bad', '执行失败');
+    } else if (effectiveChanged === true) {
+      setBadge('ok', '已调整');
+    } else if (effectiveChanged === false) {
+      setBadge('warn', '未发生调整');
+    } else if (data.last_change_ts !== undefined || data.success === true) {
+      setBadge('warn', '已加载快照');
+    } else {
+      setBadge('warn', '状态未知');
+    }
+  }
+
+  function pretty(data) {
+    try { return JSON.stringify(data, null, 2); } catch (e) { return String(data); }
+  }
+
+  function setHint(text) {
+    el('hint-text').textContent = text || '';
+  }
+
+  function fetchStateIfExists() {
+    return fetch(STATE_URL, { cache: 'no-store' })
+      .then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+      })
+      .then(function(data) {
+        if (!data || typeof data !== 'object') throw new Error('invalid json');
+        lastSnapshot = data;
+        renderPolicy(data);
+        el('result-pre').textContent = pretty(data);
+        setHint('已加载状态接口快照');
+      })
+      .catch(function() {
+        setHint('尚未读取到状态快照，可先执行一次策略。');
+      });
+  }
+
+  function runOnce() {
+    setHint('策略执行中...');
+    return fetch(POLICY_ONCE_URL, { cache: 'no-store' })
+      .then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+      })
+      .then(function(data) {
+        if (!data || typeof data !== 'object') throw new Error('invalid json');
+        lastSnapshot = data;
+        renderPolicy(data);
+        el('result-pre').textContent = pretty(data);
+        setHint('已完成一次策略执行');
+      })
+      .catch(function(err) {
+        var out = {
+          success: false,
+          error: 'policy_once 执行失败',
+          details: (err && err.message) ? err.message : String(err)
+        };
+        renderPolicy(out);
+        el('result-pre').textContent = pretty(out);
+        setHint('策略执行失败');
+      });
+  }
+
+  function qUrl(format) {
+    return EXPORT_URL + '?format=' + encodeURIComponent(format);
+  }
+
+  function clearRows(msg) {
+    var tb = el('preview-tbody');
+    tb.innerHTML = '';
+    var tr = document.createElement('tr');
+    var td = document.createElement('td');
+    td.colSpan = 4;
+    td.textContent = msg || '--';
+    tr.appendChild(td);
+    tb.appendChild(tr);
+  }
+
+  function row(timeText, mode, reason, changed) {
+    var tr = document.createElement('tr');
+    [timeText, mode, reason, changed].forEach(function(value) {
+      var td = document.createElement('td');
+      td.textContent = value;
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+
+  function asEntries(data) {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== 'object') return null;
+    if (Array.isArray(data.entries)) return data.entries;
+    if (Array.isArray(data.logs)) return data.logs;
+    if (Array.isArray(data.data)) return data.data;
+    return null;
+  }
+
+  function toBoolText(value) {
+    if (typeof value === 'boolean') return value ? '是' : '否';
+    return '--';
+  }
+
+  function previewReport() {
+    el('preview-msg').textContent = '加载中...';
+    fetch(qUrl('json'), { cache: 'no-store' })
+      .then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.text();
+      })
+      .then(function(raw) {
+        var text = raw || '';
+        el('raw-pre').textContent = text.slice(0, 4000) || '--';
+
+        var data;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          throw new Error('导出 JSON 解析失败');
+        }
+
+        var entries = asEntries(data);
+        if (!entries) throw new Error('导出 JSON 中未找到记录数组');
+
+        el('preview-count').textContent = String(entries.length);
+        var tb = el('preview-tbody');
+        tb.innerHTML = '';
+        if (!entries.length) {
+          clearRows('暂无记录');
+        } else {
+          entries.slice(0, 5).forEach(function(item) {
+            item = (item && typeof item === 'object') ? item : {};
+            var decision = (item.decision && typeof item.decision === 'object') ? item.decision : {};
+            tb.appendChild(row(
+              tsText(item.time),
+              displayMode(decision.mode),
+              displayReason(decision.reason),
+              toBoolText(item.changed)
+            ));
+          });
+        }
+
+        setPreviewBadge('ok', '正常');
+        el('preview-msg').textContent = '预览成功，最多展示前 5 条记录';
+      })
+      .catch(function(err) {
+        clearRows('无法预览，请下载 JSON 或 CSV 查看');
+        setPreviewBadge('warn', '告警');
+        el('preview-count').textContent = '--';
+        el('preview-msg').textContent = (err && err.message) ? err.message : '预览失败';
+      });
+  }
+
+  function refreshView() {
+    if (lastSnapshot) {
+      renderPolicy(lastSnapshot);
+      el('result-pre').textContent = pretty(lastSnapshot);
+    } else {
+      renderPolicy({});
+      el('result-pre').textContent = '--';
+    }
+    fetchStateIfExists();
+  }
+
+  el('btn-run-once').addEventListener('click', runOnce);
+  el('btn-refresh').addEventListener('click', refreshView);
+  el('btn-preview').addEventListener('click', previewReport);
+  el('btn-csv').addEventListener('click', function() {
+    window.location.href = qUrl('csv');
+  });
+  el('btn-json').addEventListener('click', function() {
+    window.open(qUrl('json'), '_blank');
+  });
+
+  renderPolicy({});
+  setPreviewBadge('warn', '空闲');
+  fetchStateIfExists();
+})();
+</script>
+
+<%+footer%>

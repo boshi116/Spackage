@@ -1,0 +1,194 @@
+<%+header%>
+<%
+	local sys = require "luci.sys"
+	local util = require "luci.util"
+	local dispatcher = require "luci.dispatcher"
+	local i18n = require "luci.tcpdump.i18n"
+	local t = i18n.translate
+	local devices = sys.net.devices() or {}
+	table.sort(devices)
+
+	local status_url = dispatcher.build_url("admin", "services", "tcpdump", "status")
+	local start_url = dispatcher.build_url("admin", "services", "tcpdump", "start")
+	local stop_url = dispatcher.build_url("admin", "services", "tcpdump", "stop")
+	local function h(text)
+		return util.pcdata(t(text))
+	end
+%>
+
+<h2><%=h("Tcpdump Capture")%></h2>
+
+<div class="cbi-map">
+	<div class="cbi-section">
+		<div class="cbi-section-descr">
+			<%=h("Run tcpdump in the background, stop it from LuCI, and download the generated pcap file.")%>
+		</div>
+
+		<div class="cbi-value">
+			<label class="cbi-value-title" for="interface"><%=h("Interface")%></label>
+			<div class="cbi-value-field">
+				<select id="interface">
+					<option value="any">any</option>
+					<% for _, dev in ipairs(devices) do %>
+						<option value="<%=dev%>"><%=dev%></option>
+					<% end %>
+				</select>
+			</div>
+		</div>
+
+		<div class="cbi-value">
+			<label class="cbi-value-title" for="filter"><%=h("BPF Filter")%></label>
+			<div class="cbi-value-field">
+				<input id="filter" type="text" class="cbi-input-text" placeholder="host 192.168.1.1 and port 53" />
+			</div>
+		</div>
+
+		<div class="cbi-value">
+			<label class="cbi-value-title" for="packet_count"><%=h("Packet Limit")%></label>
+			<div class="cbi-value-field">
+				<input id="packet_count" type="number" min="0" value="0" class="cbi-input-text" />
+				<div class="cbi-value-description"><%=h("0 means capture until manually stopped.")%></div>
+			</div>
+		</div>
+
+		<div class="cbi-value">
+			<label class="cbi-value-title" for="snaplen"><%=h("Snaplen")%></label>
+			<div class="cbi-value-field">
+				<input id="snaplen" type="number" min="0" value="0" class="cbi-input-text" />
+				<div class="cbi-value-description"><%=h("0 means capture the full packet.")%></div>
+			</div>
+		</div>
+
+		<div class="cbi-value">
+			<label class="cbi-value-title" for="promiscuous"><%=h("Promiscuous Mode")%></label>
+			<div class="cbi-value-field">
+				<input id="promiscuous" type="checkbox" checked="checked" />
+			</div>
+		</div>
+
+		<div class="right">
+			<input id="toggle-btn" class="btn cbi-button cbi-button-apply" type="button" value="<%=h("Start Capture")%>" />
+			<a id="download-btn" class="btn cbi-button cbi-button-action" href="#" style="display:none"><%=h("Download Capture")%></a>
+		</div>
+	</div>
+
+	<div class="cbi-section">
+		<h3><%=h("Status")%></h3>
+		<pre id="status-panel"><%=h("Loading...")%></pre>
+	</div>
+</div>
+
+<script type="text/javascript">
+	(function() {
+		var statusUrl = '<%=status_url%>';
+		var startUrl = '<%=start_url%>';
+		var stopUrl = '<%=stop_url%>';
+		var statusPanel = document.getElementById('status-panel');
+		var toggleBtn = document.getElementById('toggle-btn');
+		var downloadBtn = document.getElementById('download-btn');
+		var lastInfo = null;
+		var labels = {
+			running: '<%=t("running")%>',
+			interface: '<%=t("interface")%>',
+			filter: '<%=t("filter")%>',
+			packetCount: '<%=t("packet_count")%>',
+			snaplen: '<%=t("snaplen")%>',
+			promiscuous: '<%=t("promiscuous")%>',
+			startedAt: '<%=t("started_at")%>',
+			fileName: '<%=t("file_name")%>',
+			pcapSize: '<%=t("pcap_size")%>',
+			bytes: '<%=t("bytes")%>',
+			log: '<%=t("log")%>',
+			yes: '<%=t("yes")%>',
+			no: '<%=t("no")%>',
+			failedToLoadStatus: '<%=t("Failed to load status")%>',
+			requestFailed: '<%=t("Request failed")%>',
+			startCapture: '<%=t("Start Capture")%>',
+			stopCapture: '<%=t("Stop Capture")%>'
+		};
+
+		function formData() {
+			return {
+				interface: document.getElementById('interface').value,
+				filter: document.getElementById('filter').value,
+				packet_count: document.getElementById('packet_count').value,
+				snaplen: document.getElementById('snaplen').value,
+				promiscuous: document.getElementById('promiscuous').checked ? '1' : '0'
+			};
+		}
+
+		function renderStatus(info) {
+			var lines = [];
+			lastInfo = info;
+
+			lines.push(labels.running + ': ' + (info.running ? labels.yes : labels.no));
+			lines.push(labels.interface + ': ' + (info.interface || '-'));
+			lines.push(labels.filter + ': ' + (info.filter || '-'));
+			lines.push(labels.packetCount + ': ' + (info.packet_count || '0'));
+			lines.push(labels.snaplen + ': ' + (info.snaplen || '0'));
+			lines.push(labels.promiscuous + ': ' + (info.promiscuous === '0' ? labels.no : labels.yes));
+			lines.push(labels.startedAt + ': ' + (info.started_at || '-'));
+			lines.push(labels.fileName + ': ' + (info.file_name || '-'));
+			lines.push(labels.pcapSize + ': ' + (info.pcap_size || 0) + ' ' + labels.bytes);
+
+			if (info.log) {
+				lines.push('');
+				lines.push(labels.log + ':');
+				lines.push(info.log);
+			}
+
+			statusPanel.textContent = lines.join('\n');
+			toggleBtn.disabled = false;
+			toggleBtn.value = info.running ? labels.stopCapture : labels.startCapture;
+			toggleBtn.className = info.running ? 'btn cbi-button cbi-button-reset' : 'btn cbi-button cbi-button-apply';
+
+			if (info.download_url) {
+				downloadBtn.href = info.download_url;
+				downloadBtn.style.display = '';
+			} else {
+				downloadBtn.style.display = 'none';
+			}
+		}
+
+		function selectedActionUrl() {
+			return lastInfo && lastInfo.running ? stopUrl : startUrl;
+		}
+
+		function loadStatus() {
+			XHR.get(statusUrl, null, function(x, info) {
+				if (!info) {
+					statusPanel.textContent = labels.failedToLoadStatus;
+					return;
+				}
+
+				renderStatus(info);
+			});
+		}
+
+		function submit(url) {
+			XHR.post(url, formData(), function(x, info) {
+				var message = info && info.message ? info.message : labels.requestFailed;
+				if (!info || info.success !== true) {
+					window.alert(message);
+				}
+
+				loadStatus();
+			});
+		}
+
+		toggleBtn.addEventListener('click', function() {
+			toggleBtn.disabled = true;
+			submit(selectedActionUrl());
+		});
+
+		downloadBtn.addEventListener('click', function() {
+			downloadBtn.style.display = 'none';
+			window.setTimeout(loadStatus, 500);
+		});
+
+		loadStatus();
+		window.setInterval(loadStatus, 3000);
+	})();
+</script>
+
+<%+footer%>
