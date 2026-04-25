@@ -119,7 +119,8 @@ jobs:
             git_clone  https://github.com/huchd0/luci-app-netwiz luci-app-netwiz
             git_clone  https://github.com/tpxcer/luci-app-minigate luci-app-minigate
             git_clone  https://github.com/MayflyDestiny/luci-app-mosdns-panel luci-app-mosdns-panel
-          } &
+            git_clone  https://github.com/DustReliant/luci-app-filetransfer luci-app-filetransfer
+          } & 
 
           {
             git clone --depth 1 https://github.com/kenzok8/jell jell_tmp
