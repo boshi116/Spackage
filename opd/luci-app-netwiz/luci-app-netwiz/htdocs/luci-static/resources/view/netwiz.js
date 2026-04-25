@@ -549,17 +549,16 @@ return view.extend({
             
             var start = Date.now(), done = false;
             
-            // 3. 极致全自动版：静默探活 -> 自动跳转 -> 触发后端雷达拆弹
-            // 3. 完美回歸版：防併發堆疊探活 + 自動跳轉
+            // 3. 防并发
             var succ = function() {
                 var h = window.location.hostname;
                 var sec = 0;
                 
                 if (selectedMode === 'lan' && a1 && a1 !== h) { 
-                    var bombTime = 120; // 120秒防失聯倒數計時
-                    var isProbing = false; // 🌟 核心併發鎖：防止探針堆疊欺騙後端雷達
+                    var bombTime = 120; // 120秒防失联倒计时
+                    var isProbing = false; // 并发锁
                     
-                    // 初始化等待 UI (全自動無按鈕)
+                    // 初始化等待 UI
                     var msgHtml = '<div style="font-size: 16px; margin-bottom: 12px;">' + T['LBL_TARGET'] + ' <b style="color:#3b82f6; font-size: 18px;">' + a1 + '</b></div>' +
                                   '<div id="nw-status-text" style="color: #10b981; font-size: 16px; font-weight: bold; margin-bottom: 10px;">' + T['MSG_WRITING'] + '</div>' +
                                   '<div id="nw-timer-text" style="color: #64748b; font-size: 14px; font-weight: bold;">' + T['MSG_PREP_ENV'] + '</div>';
@@ -569,33 +568,33 @@ return view.extend({
                         sec += 2;
                         
                         if (sec <= bombTime) {
-                            // 動態更新倒數計時
+                            // 动态倒计时
                             document.getElementById('nw-timer-text').innerHTML = T['MSG_TIMER'].replace('{sec}', sec).replace('{total}', bombTime);
                             
-                            // 延時 8 秒，且「當前沒有正在卡住的探活請求」時，才發起探測
+                            // 延时 8 秒，且「当前沒有正在卡住」時，才探測
                             if (sec >= 8 && !isProbing) {
-                                isProbing = true; // 上鎖
+                                isProbing = true; // 上锁
                                 document.getElementById('nw-status-text').innerHTML = '<span style="color:#f59e0b;">' + T['MSG_KNOCKING'].replace('{sec}', sec) + '</span>';
                                 
-                                // 發起單線程靜默探測
+                                // 单线程探测
                                 fetch('http://' + a1 + '/luci-static/resources/view/netwiz.js?v=' + Date.now(), { mode: 'no-cors', cache: 'no-store' })
                                 .then(function() {
                                     clearInterval(countdownTimer);
                                     document.getElementById('nw-status-text').innerHTML = '<span style="color:#3b82f6;">' + T['MSG_REDIRECTING'] + '</span>';
                                     document.getElementById('nw-timer-text').innerHTML = T['MSG_SCOUT_OK'];
                                     
-                                    // 延時 0.8 秒自動跳轉。落地後產生的真實流量，將瞬間觸發後端的 conns >= 2 完成拆彈！
+                                    // 延時 0.8 秒
                                     setTimeout(function() {
                                         window.location.href = 'http://' + a1 + '/cgi-bin/luci/';
                                     }, 800);
                                 }).catch(function() {
-                                    // 探測失敗（網路還不通），解鎖，允許下一個週期繼續探測
+                                    // 探測失敗（网络不通），解锁，允許下一个周期探测
                                     setTimeout(function() { isProbing = false; }, 500);
                                 });
                             }
                         } 
                         else {
-                            // 真正失聯：120秒超時，前端轉為回滾狀態
+                            // 120秒超時，真正失联，前端转为回滚
                             clearInterval(countdownTimer);
                             var rollbackSec = 0;
                             var checkOldIpTimer = setInterval(function() {
@@ -615,7 +614,7 @@ return view.extend({
                     }, 2000);
 
                 } else { 
-                    // 非 LAN IP 修改的原地等待邏輯
+                    // 非 LAN IP 修改的原地等待
                     var checkSameTimer = setInterval(function() {
                         sec += 2;
                         var waitNetMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' ' + actionDetail + '</div><div style="color: #059669; font-size: 16px; font-weight: bold;">' + T['MSG_WAIT_NET'].replace('{sec}', sec) + '</div>';
