@@ -137,7 +137,11 @@ var T = {
     'MSG_WRITING': _('Writing configuration to system, please do not close the page...'),
     'MSG_KNOCKING': _('Knocking on the new IP door... Elapsed: {sec}s'),
     'MSG_WAIT_NET': _('Waiting for network service to restart... Elapsed: {sec}s'),
-    'MSG_WAIT_OLD': _('Waiting for old IP to recover... Elapsed: {sec}s')
+    'MSG_WAIT_OLD': _('Waiting for old IP to recover... Elapsed: {sec}s'),
+    'MSG_PREP_ENV': _('Preparing environment...'),
+    'MSG_TIMER': _('Rollback countdown: <b style="color:#f59e0b;">{sec}</b> / {total} s'),
+    'MSG_SCOUT_OK': _('✅ Handshake successful'),
+    'MSG_REDIRECTING': _('Network connected! Automatically redirecting...')
 };
 
 // 声明后端的 RPC 接口调用
@@ -148,7 +152,14 @@ var callNetSetup = rpc.declare({
     expect: { result: 0 }
 });
 
-// 获取外网連線狀態的 RPC 接口
+// 声明主动取消定时装置接口
+var callNetDefuse = rpc.declare({
+    object: 'netwiz',
+    method: 'confirm',
+    expect: { result: 0 }
+});
+
+// 获取外网连线状态的 RPC 接口
 var getWanStatus = rpc.declare({
     object: 'network.interface',
     method: 'dump',
@@ -382,7 +393,19 @@ return view.extend({
                     var wProto = safeUciGet('network', 'wan', 'proto', '').toLowerCase();
                     var activeWan = ifaces.find(function(i) { return i && (i.interface === 'wan' || i.proto === wProto || i.device === 'eth0' || i.device === 'wan'); }) || {};
                     var liveWanIp = ((activeWan['ipv4-address'] && activeWan['ipv4-address'][0]) ? activeWan['ipv4-address'][0].address : '').split('/')[0];
-                    var liveGw = activeWan.nexthop || (activeWan['ipv4-address'] && activeWan['ipv4-address'][0] ? activeWan['ipv4-address'][0].ptpaddress : '') || T['TXT_GETTING'];
+
+                    // 网关抓取(兼容 Static, DHCP, PPPoE)
+                    var liveGw = activeWan.nexthop || '';
+                    // 如果根目录没有，去路由表里找目标为 0.0.0.0 的默认网关 (DHCP)
+                    if (!liveGw && Array.isArray(activeWan.route)) { 
+                        var defaultRoute = activeWan.route.find(function(r) { return r.target === '0.0.0.0'; }); 
+                        if (defaultRoute) liveGw = defaultRoute.nexthop; 
+                    }
+                    // 尝试找点对点地址 (PPPoE)
+                    if (!liveGw && activeWan['ipv4-address'] && activeWan['ipv4-address'][0]) {
+                        liveGw = activeWan['ipv4-address'][0].ptpaddress || '';
+                    }
+                    liveGw = liveGw || T['TXT_GETTING'];
                     var wIp = safeUciGet('network', 'wan', 'ipaddr', T['TXT_NOT_GOT']).split('/')[0], wGw = safeUciGet('network', 'wan', 'gateway', T['TXT_NOT_SET']); 
                     var lIp = safeUciGet('network', 'lan', 'ipaddr', window.location.hostname).split('/')[0], lGw = safeUciGet('network', 'lan', 'gateway', T['TXT_NOT_SET']), lIgnore = safeUciGet('dhcp', 'lan', 'ignore', ''), isBypass = (lIgnore === '1' || lIgnore === 'true' || lIgnore === 'on' || lIgnore === 'yes');
 
@@ -526,36 +549,53 @@ return view.extend({
             
             var start = Date.now(), done = false;
             
-            // 3. 异步探测与秒表读秒逻辑
+            // 3. 究极优雅版：全自动状态机 + 智能探活自动跳转
             var succ = function() {
-                var h = window.location.hostname, ts = new Date().getTime();
+                var h = window.location.hostname;
                 var sec = 0;
                 
                 if (selectedMode === 'lan' && a1 && a1 !== h) { 
-                    var bombTime = 120 * 1000; 
-                    var checkInterval = 2000;  
+                    var bombTime = 120; 
+                    
+                    // 初始化优雅的等待 UI
+                    var msgHtml = '<div style="font-size: 16px; margin-bottom: 12px;">' + T['LBL_TARGET'] + ' <b style="color:#3b82f6; font-size: 18px;">' + a1 + '</b></div>' +
+                                  '<div id="nw-status-text" style="color: #10b981; font-size: 16px; font-weight: bold; margin-bottom: 10px;">' + T['MSG_WRITING'] + '</div>' +
+                                  '<div id="nw-timer-text" style="color: #64748b; font-size: 14px; font-weight: bold;">' + T['MSG_PREP_ENV'] + '</div>';
+                    document.getElementById('nw-global-msg').innerHTML = msgHtml;
 
-                    var checkNewIpTimer = setInterval(function() {
-                        var elapsed = Date.now() - start;
+                    var countdownTimer = setInterval(function() {
                         sec += 2;
                         
-                        // 🌟 使用 replace('{sec}', sec) 替换占位符
-                        var knockingMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' <b style="color:#3b82f6;">' + a1 + '</b></div><div style="color: #10b981; font-size: 16px; font-weight: bold;">' + T['MSG_KNOCKING'].replace('{sec}', sec) + '</div>';
-                        document.getElementById('nw-global-msg').innerHTML = knockingMsg;
-
-                        if (elapsed < bombTime) {
-                            fetch('http://' + a1 + '/cgi-bin/luci/?v=' + ts, { mode: 'no-cors', cache: 'no-store' })
-                            .then(function() {
-                                clearInterval(checkNewIpTimer);
-                                window.location.href = 'http://' + a1 + '/cgi-bin/luci/';
-                            }).catch(function() {});
-                        } else {
-                            clearInterval(checkNewIpTimer);
+                        if (sec <= bombTime) {
+                            // 动态倒计时
+                            document.getElementById('nw-timer-text').innerHTML = T['MSG_TIMER'].replace('{sec}', sec).replace('{total}', bombTime);
+                            
+                            // 延时 8 秒后开始探测
+                            if (sec >= 8) {
+                                document.getElementById('nw-status-text').innerHTML = '<span style="color:#f59e0b;">' + T['MSG_KNOCKING'].replace('{sec}', sec) + '</span>';
+                                
+                                fetch('http://' + a1 + '/luci-static/resources/view/netwiz.js?v=' + Date.now(), { mode: 'no-cors', cache: 'no-store' })
+                                .then(function() {
+                                    clearInterval(countdownTimer);
+                                    
+                                    // 侦察兵汇报成功，替换纯文本状态
+                                    document.getElementById('nw-status-text').innerHTML = '<span style="color:#3b82f6;">' + T['MSG_REDIRECTING'] + '</span>';
+                                    document.getElementById('nw-timer-text').innerHTML = T['MSG_SCOUT_OK'];
+                                    
+                                    setTimeout(function() {
+                                        window.location.href = 'http://' + a1 + '/cgi-bin/luci/';
+                                    }, 1000);
+                                }).catch(function() {});
+                            }
+                        }
+                        else {
+                            // 120秒真失联，执行前端回退 UI
+                            clearInterval(countdownTimer);
                             var rollbackSec = 0;
                             var checkOldIpTimer = setInterval(function() {
                                 rollbackSec += 2;
-                                // 🌟 同样使用 replace
-                                var rollbackHtml = '<div style="color:#ef4444; font-weight:bold; font-size:15px; margin-bottom:10px;">' + T['M_SUCC_ROLLBACK'] + '</div><div style="font-size:16px; color:#666; font-weight:bold;">' + T['MSG_WAIT_OLD'].replace('{sec}', rollbackSec) + '</div>';
+                                var rollbackHtml = '<div style="color:#ef4444; font-weight:bold; font-size:15px; margin-bottom:10px;">' + T['M_SUCC_ROLLBACK'] + '</div>' +
+                                                   '<div style="font-size:16px; color:#666; font-weight:bold;">' + T['MSG_WAIT_OLD'].replace('{sec}', rollbackSec) + '</div>';
                                 document.getElementById('nw-global-title').innerHTML = T['M_RST_TIT'];
                                 document.getElementById('nw-global-msg').innerHTML = rollbackHtml;
 
@@ -566,12 +606,12 @@ return view.extend({
                                 }).catch(function() {});
                             }, 2000);
                         }
-                    }, checkInterval);
+                    }, 2000);
 
                 } else { 
+                    // ... 同 IP 重启逻辑保持不变 ...
                     var checkSameTimer = setInterval(function() {
                         sec += 2;
-                        // 🌟 同样使用 replace
                         var waitNetMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' ' + actionDetail + '</div><div style="color: #059669; font-size: 16px; font-weight: bold;">' + T['MSG_WAIT_NET'].replace('{sec}', sec) + '</div>';
                         document.getElementById('nw-global-msg').innerHTML = waitNetMsg;
 
