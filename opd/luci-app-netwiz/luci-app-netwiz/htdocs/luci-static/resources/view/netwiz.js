@@ -549,15 +549,15 @@ return view.extend({
             
             var start = Date.now(), done = false;
             
-            // 3. 究极优雅版：全自动状态机 + 智能探活自动跳转
+            // 3. 极致全自动版：静默探活 -> 自动跳转 -> 触发后端雷达拆弹
             var succ = function() {
                 var h = window.location.hostname;
                 var sec = 0;
                 
                 if (selectedMode === 'lan' && a1 && a1 !== h) { 
-                    var bombTime = 120; 
+                    var bombTime = 120; // 120秒防失联倒计时
                     
-                    // 初始化优雅的等待 UI
+                    // 初始化等待 UI (没有任何按钮，完全自动化)
                     var msgHtml = '<div style="font-size: 16px; margin-bottom: 12px;">' + T['LBL_TARGET'] + ' <b style="color:#3b82f6; font-size: 18px;">' + a1 + '</b></div>' +
                                   '<div id="nw-status-text" style="color: #10b981; font-size: 16px; font-weight: bold; margin-bottom: 10px;">' + T['MSG_WRITING'] + '</div>' +
                                   '<div id="nw-timer-text" style="color: #64748b; font-size: 14px; font-weight: bold;">' + T['MSG_PREP_ENV'] + '</div>';
@@ -567,29 +567,33 @@ return view.extend({
                         sec += 2;
                         
                         if (sec <= bombTime) {
-                            // 动态倒计时
+                            // 动态更新倒计时
                             document.getElementById('nw-timer-text').innerHTML = T['MSG_TIMER'].replace('{sec}', sec).replace('{total}', bombTime);
                             
-                            // 延时 8 秒后开始探测
+                            // 延时 8 秒后开始探测（等待路由器重启 network 服务）
                             if (sec >= 8) {
                                 document.getElementById('nw-status-text').innerHTML = '<span style="color:#f59e0b;">' + T['MSG_KNOCKING'].replace('{sec}', sec) + '</span>';
                                 
+                                // 侦察兵出动：静默探测新 IP (这只会产生 1 个 TCP 连接，不会被雷达误认)
                                 fetch('http://' + a1 + '/luci-static/resources/view/netwiz.js?v=' + Date.now(), { mode: 'no-cors', cache: 'no-store' })
                                 .then(function() {
                                     clearInterval(countdownTimer);
                                     
-                                    // 侦察兵汇报成功，替换纯文本状态
+                                    // 探活成功！路通了，准备带用户大部队跳转
                                     document.getElementById('nw-status-text').innerHTML = '<span style="color:#3b82f6;">' + T['MSG_REDIRECTING'] + '</span>';
                                     document.getElementById('nw-timer-text').innerHTML = T['MSG_SCOUT_OK'];
                                     
+                                    // 延时 1 秒自动跳转。落地后产生的浏览器真实流量，将触发后端的 conns >= 2 雷达完成拆弹！
                                     setTimeout(function() {
                                         window.location.href = 'http://' + a1 + '/cgi-bin/luci/';
                                     }, 1000);
-                                }).catch(function() {});
+                                }).catch(function() {
+                                    // 还没通，保持沉默，等待下一个探测周期
+                                });
                             }
-                        }
+                        } 
                         else {
-                            // 120秒真失联，执行前端回退 UI
+                            // 真失联：120秒超时，前端转为回滚状态并监控旧 IP
                             clearInterval(countdownTimer);
                             var rollbackSec = 0;
                             var checkOldIpTimer = setInterval(function() {
@@ -609,7 +613,7 @@ return view.extend({
                     }, 2000);
 
                 } else { 
-                    // ... 同 IP 重启逻辑保持不变 ...
+                    // 非 LAN IP 修改的等待逻辑（原地刷新）
                     var checkSameTimer = setInterval(function() {
                         sec += 2;
                         var waitNetMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' ' + actionDetail + '</div><div style="color: #059669; font-size: 16px; font-weight: bold;">' + T['MSG_WAIT_NET'].replace('{sec}', sec) + '</div>';
@@ -624,13 +628,25 @@ return view.extend({
                 }
             };
 
-            callNetSetup(mode, a1, a2, a3, a4).then(function() { done = true; succ(); }).catch(function(e){ 
-                if (Date.now() - start < 1500) { 
-                    done = true; 
-                    var failHtml = T['M_FAIL_MSG'] + '<br><small>' + T['M_FAIL_CODE'].replace('{code}', (e.message || 'Unknown')) + '</small>';
+            callNetSetup(mode, a1, a2, a3, a4).then(function() { 
+                done = true; succ(); 
+            }).catch(function(e) { 
+                done = true;
+                var errMsg = e.message || '';
+                
+                // 网络断开、中止等预期内的错误，视为成功并进入探测流程
+                if (errMsg.indexOf('aborted') !== -1 || errMsg.indexOf('NetworkError') !== -1 || errMsg.indexOf('Failed to fetch') !== -1) {
+                    console.log("捕获到预期的网络断开，继续执行跳转探测逻辑...");
+                    succ();
+                } 
+                // 其他真实的底层逻辑报错（且发生得极快），才弹窗提示
+                else if (Date.now() - start < 1500) { 
+                    var failHtml = T['M_FAIL_MSG'] + '<br><small>' + T['M_FAIL_CODE'].replace('{code}', errMsg) + '</small>';
                     openModal({ title: T['M_FAIL_TIT'], msg: failHtml, okText: T['M_CLOSE'], isDanger: true }); 
-                } else { 
-                    done = true; succ(); 
+                } 
+                // 超过 1.5 秒的超时报错，大概率也是网络已断开，进入探测流程
+                else { 
+                    succ(); 
                 } 
             });
             setTimeout(function() { if (!done) succ(); }, 8000);
