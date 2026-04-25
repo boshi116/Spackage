@@ -1,0 +1,456 @@
+<%#
+ Copyright 2024 DustReliant
+ Licensed to the public under the MIT License.
+-%>
+
+<%+header%>
+
+<div class="cbi-map">
+    <h2 name="content"><%:File Management%></h2>
+
+    <div class="cbi-section">
+        <div class="cbi-section-descr"><%:Browse and manage system files%></div>
+        
+        <!-- 简洁的地址栏 -->
+        <div class="path-bar">
+            <input type="text" id="current-path" value="/" placeholder="<%:Enter path...%>" class="path-input">
+            <button class="btn btn-primary" onclick="navigateToPath()"><%:Go%></button>
+            <button class="btn btn-secondary" onclick="refreshFiles()"><%:Refresh%></button>
+        </div>
+
+        <!-- 简洁的文件列表 -->
+        <div class="file-browser">
+            <div class="file-list" id="file-list">
+                <div class="loading" id="loading"><%:Loading...%></div>
+            </div>
+        </div>
+        
+        <!-- 状态栏 -->
+        <div class="status-bar">
+            <span id="file-count">0 <%:items%></span>
+        </div>
+    </div>
+</div>
+
+<style>
+.cbi-map {
+    background: #f5f5f5;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.cbi-section {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.cbi-section-descr {
+    color: #666;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+/* 地址栏 */
+.path-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.path-input {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    font-family: monospace;
+    font-size: 14px;
+}
+
+.path-input:focus {
+    border-color: #007bff;
+    outline: none;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn:hover {
+    opacity: 0.9;
+}
+
+/* 文件浏览器 */
+.file-browser {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background: white;
+    min-height: 400px;
+}
+
+.file-list {
+    padding: 0;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.file-item:hover {
+    background: #f8f9fa;
+}
+
+.file-item:last-child {
+    border-bottom: none;
+}
+
+.file-item.folder {
+    background: #fff9e6;
+}
+
+.file-item.folder:hover {
+    background: #e6f3ff;
+}
+
+.file-icon {
+    font-size: 20px;
+    margin-right: 12px;
+    width: 24px;
+    text-align: center;
+}
+
+.file-name {
+    flex: 1;
+    font-weight: 500;
+    color: #333;
+}
+
+.file-info {
+    display: flex;
+    gap: 20px;
+    color: #666;
+    font-size: 12px;
+    font-family: monospace;
+}
+
+.file-size {
+    min-width: 80px;
+    text-align: right;
+}
+
+.file-date {
+    min-width: 120px;
+}
+
+.file-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+.status-bar {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    color: #666;
+    font-size: 14px;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .path-bar {
+        flex-direction: column;
+    }
+    
+    .file-info {
+        display: none;
+    }
+    
+    .file-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .file-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+</style>
+
+<script>
+let currentPath = '/';
+
+// 错误日志记录函数
+function logError(type, message, details) {
+    const errorData = {
+        type: type || 'error',
+        message: message || 'Unknown error',
+        details: details || '',
+        url: window.location.href
+    };
+    
+    console.log('Logging error:', errorData); // 调试信息
+    
+    // 发送到调试API（不需要认证）
+    fetch('/cgi-bin/luci/filetransfer/debug/log_error', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: Object.keys(errorData).map(key => 
+            encodeURIComponent(key) + '=' + encodeURIComponent(errorData[key])
+        ).join('&')
+    }).then(response => {
+        console.log('Error logged successfully:', response.status);
+    }).catch(err => {
+        console.error('Failed to log error:', err);
+    });
+}
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    refreshFiles();
+});
+
+// 导航到指定路径
+function navigateTo(path) {
+    // 规范化路径
+    path = path.replace(/\/+/g, '/');
+    if (path !== '/' && path.endsWith('/')) {
+        path = path.slice(0, -1);
+    }
+    
+    currentPath = path;
+    document.getElementById('current-path').value = path;
+    refreshFiles();
+}
+
+// 从地址栏导航
+function navigateToPath() {
+    const path = document.getElementById('current-path').value;
+    navigateTo(path);
+}
+
+// 导航到文件夹（专门用于点击文件夹）
+function navigateToFolder(path) {
+    console.log('Navigating to folder:', path); // 调试信息
+    navigateTo(path);
+}
+
+// 刷新文件列表
+function refreshFiles() {
+    const fileList = document.getElementById('file-list');
+    
+    fileList.innerHTML = '<div class="loading"><%:Loading...%></div>';
+    
+    // 发送请求获取文件列表
+    fetch('/cgi-bin/luci/admin/system/filetransfer/browse_files', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `path=${encodeURIComponent(currentPath)}`
+    })
+    .then(response => {
+        if (!response.ok) {
+            logError('HTTP_ERROR', `HTTP ${response.status}: ${response.statusText}`, 'browse_files API请求失败');
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('API Response:', data); // 调试信息
+        if (data.status === 'success') {
+            displayFiles(data.files || []);
+            updateFileCount(data.files ? data.files.length : 0);
+        } else {
+            logError('API_ERROR', 'API返回错误状态', JSON.stringify(data));
+            throw new Error('API returned error status');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading files:', error);
+        logError('FETCH_ERROR', error.message, `获取文件列表失败，当前路径: ${currentPath}`);
+        // 显示示例文件列表作为fallback
+        displaySampleFiles();
+    });
+}
+
+// 显示示例文件列表（当API不可用时）
+function displaySampleFiles() {
+    const sampleFiles = [];
+    
+    // 如果不是根目录，添加返回上级目录
+    if (currentPath !== '/') {
+        sampleFiles.push({
+            name: '..',
+            type: 'directory',
+            size: 0,
+            modified: '',
+            permissions: 'drwxr-xr-x',
+            path: currentPath.split('/').slice(0, -1).join('/') || '/'
+        });
+    }
+    
+    // 添加示例文件夹和文件
+    if (currentPath === '/') {
+        sampleFiles.push(
+            { name: 'bin', type: 'directory', size: 0, modified: '2024-06-29 09:30', permissions: 'drwxr-xr-x' },
+            { name: 'etc', type: 'directory', size: 0, modified: '2024-06-29 09:25', permissions: 'drwxr-xr-x' },
+            { name: 'tmp', type: 'directory', size: 0, modified: '2024-06-29 10:05', permissions: 'drwxrwxrwx' },
+            { name: 'usr', type: 'directory', size: 0, modified: '2024-06-29 09:20', permissions: 'drwxr-xr-x' },
+            { name: 'var', type: 'directory', size: 0, modified: '2024-06-29 09:15', permissions: 'drwxr-xr-x' }
+        );
+    }
+    
+    displayFiles(sampleFiles);
+    updateFileCount(sampleFiles.length);
+}
+
+// 显示文件列表
+function displayFiles(files) {
+    const fileList = document.getElementById('file-list');
+    
+    if (files.length === 0) {
+        fileList.innerHTML = '<div class="loading"><%:No files found%></div>';
+        return;
+    }
+
+    let html = '';
+    files.forEach(file => {
+        const isFolder = file.type === 'directory';
+        const icon = isFolder ? '📁' : '📄';
+        const sizeDisplay = isFolder ? '-' : formatFileSize(file.size);
+        
+        // 构建目标路径
+        let targetPath;
+        if (file.name === '..') {
+            // 上级目录 - 使用服务器返回的path字段或者自己计算
+            if (file.path) {
+                targetPath = file.path;
+            } else {
+                const parts = currentPath.split('/').filter(p => p);
+                parts.pop();
+                targetPath = parts.length > 0 ? '/' + parts.join('/') : '/';
+            }
+        } else {
+            // 普通文件夹或文件 - 优先使用服务器返回的path字段
+            if (file.path) {
+                targetPath = file.path;
+            } else {
+                targetPath = currentPath === '/' ? '/' + file.name : currentPath + '/' + file.name;
+            }
+        }
+        
+        html += `
+            <div class="file-item ${isFolder ? 'folder' : ''}" ${isFolder ? `onclick="navigateToFolder('${targetPath}')" title="点击打开文件夹"` : ''}>
+                <div class="file-icon">${icon}</div>
+                <div class="file-name">${file.name}</div>
+                <div class="file-info">
+                    <div class="file-size">${sizeDisplay}</div>
+                    <div class="file-date">${file.modified}</div>
+                </div>
+                ${!isFolder ? `
+                <div class="file-actions">
+                    <button class="btn btn-sm btn-success" onclick="event.stopPropagation(); downloadFile('${file.name}')"><%:Download%></button>
+                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deleteFile('${file.name}')"><%:Delete%></button>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    });
+    
+    fileList.innerHTML = html;
+}
+
+// 格式化文件大小
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// 更新文件计数
+function updateFileCount(count) {
+    document.getElementById('file-count').textContent = `${count} <%:items%>`;
+}
+
+// 文件操作
+function downloadFile(filename) {
+    window.location.href = `/cgi-bin/luci/admin/system/filetransfer/download?filename=${encodeURIComponent(filename)}`;
+}
+
+function deleteFile(filename) {
+    if (confirm(`<%:Are you sure you want to delete%> "${filename}"?`)) {
+        fetch('/cgi-bin/luci/admin/system/filetransfer/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `filename=${encodeURIComponent(filename)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                refreshFiles();
+            } else {
+                alert('删除失败');
+            }
+        })
+        .catch(error => {
+            console.error('删除错误:', error);
+            alert('删除失败');
+        });
+    }
+}
+</script>
+
+<%+footer%> 

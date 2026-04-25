@@ -175,7 +175,7 @@ return view.extend({
             '.nw-main-title { font-size: 35px; font-weight: 600; margin-bottom: 10px; color: #ffffff; letter-spacing: 2px; }',
 
             '.nw-title-wrap { position: relative; display: inline-block; cursor: pointer; }',
-            '.nw-version-tag { position: absolute; top: 50%; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.1); color: #f8fafc; font-size: 13px; font-weight: 500; padding: 5px 12px; border-radius: 6px; opacity: 0; pointer-events: none; transition: all 0.25s ease; font-family: monospace; z-index: 50; box-shadow: 0 4px 15px rgba(0,0,0,0.15); white-space: nowrap; border: 1px solid rgba(255,255,255,0.1); }',
+            '.nw-version-tag { position: absolute; top: 50%; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.1); color: #f8fafc; font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 6px; opacity: 0; pointer-events: none; transition: all 0.25s ease; font-family: monospace; z-index: 50; box-shadow: 0 4px 15px rgba(0,0,0,0.15); white-space: nowrap; border: 1px solid rgba(255,255,255,0.1); }',
             '.nw-title-wrap:hover .nw-version-tag { opacity: 1; top: 145%; }',
             '.nw-version-dot { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.9); display: block; }',
 
@@ -521,7 +521,7 @@ return view.extend({
             }
 
             // 2. 弹出带有实际操作内容的初始面板
-            var initMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' ' + actionDetail + '</div><div style="color: #64748b; font-size: 14px;">' + T['MSG_WRITING'] + '</div>';
+            var initMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' ' + actionDetail + '</div><div style="color: #64748b; font-size: 16px;">' + T['MSG_WRITING'] + '</div>';
             openModal({ title: dynamicTitle, msg: initMsg, spin: true });
             
             var start = Date.now(), done = false;
@@ -540,7 +540,7 @@ return view.extend({
                         sec += 2;
                         
                         // 🌟 使用 replace('{sec}', sec) 替换占位符
-                        var knockingMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' <b style="color:#3b82f6;">' + a1 + '</b></div><div style="color: #10b981; font-size: 14px; font-weight: bold;">' + T['MSG_KNOCKING'].replace('{sec}', sec) + '</div>';
+                        var knockingMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' <b style="color:#3b82f6;">' + a1 + '</b></div><div style="color: #10b981; font-size: 16px; font-weight: bold;">' + T['MSG_KNOCKING'].replace('{sec}', sec) + '</div>';
                         document.getElementById('nw-global-msg').innerHTML = knockingMsg;
 
                         if (elapsed < bombTime) {
@@ -555,7 +555,7 @@ return view.extend({
                             var checkOldIpTimer = setInterval(function() {
                                 rollbackSec += 2;
                                 // 🌟 同样使用 replace
-                                var rollbackHtml = '<div style="color:#ef4444; font-weight:bold; font-size:15px; margin-bottom:10px;">' + T['M_SUCC_ROLLBACK'] + '</div><div style="font-size:14px; color:#666; font-weight:bold;">' + T['MSG_WAIT_OLD'].replace('{sec}', rollbackSec) + '</div>';
+                                var rollbackHtml = '<div style="color:#ef4444; font-weight:bold; font-size:15px; margin-bottom:10px;">' + T['M_SUCC_ROLLBACK'] + '</div><div style="font-size:16px; color:#666; font-weight:bold;">' + T['MSG_WAIT_OLD'].replace('{sec}', rollbackSec) + '</div>';
                                 document.getElementById('nw-global-title').innerHTML = T['M_RST_TIT'];
                                 document.getElementById('nw-global-msg').innerHTML = rollbackHtml;
 
@@ -572,7 +572,7 @@ return view.extend({
                     var checkSameTimer = setInterval(function() {
                         sec += 2;
                         // 🌟 同样使用 replace
-                        var waitNetMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' ' + actionDetail + '</div><div style="color: #059669; font-size: 14px; font-weight: bold;">' + T['MSG_WAIT_NET'].replace('{sec}', sec) + '</div>';
+                        var waitNetMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' ' + actionDetail + '</div><div style="color: #059669; font-size: 16px; font-weight: bold;">' + T['MSG_WAIT_NET'].replace('{sec}', sec) + '</div>';
                         document.getElementById('nw-global-msg').innerHTML = waitNetMsg;
 
                         fetch('http://' + h + '/cgi-bin/luci/?v=' + Date.now(), { mode: 'no-cors', cache: 'no-store' })
