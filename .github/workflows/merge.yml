@@ -85,10 +85,17 @@ jobs:
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
             git_clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic luci-app-unblockneteasemusic
+            
             git clone --depth 1 https://github.com/gaoderby/luci-app-kms tmp_kms
             cp -r tmp_kms/luci/applications/luci-app-vlmcsd opd/
             cp -r tmp_kms/package/network/vlmcsd opd/
             rm -rf tmp_kms
+
+            git clone --depth 1 https://github.com/kenzok8/openwrt-packages tmp_kenzok8
+            cp -r tmp_kenzok8/luci-app-filebrowser opd/
+            cp -r tmp_kenzok8/luci-app-fileassistant opd/
+            rm -rf tmp_kenzok8
+            
           } &
 
           {
