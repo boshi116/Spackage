@@ -550,14 +550,16 @@ return view.extend({
             var start = Date.now(), done = false;
             
             // 3. 极致全自动版：静默探活 -> 自动跳转 -> 触发后端雷达拆弹
+            // 3. 完美回歸版：防併發堆疊探活 + 自動跳轉
             var succ = function() {
                 var h = window.location.hostname;
                 var sec = 0;
                 
                 if (selectedMode === 'lan' && a1 && a1 !== h) { 
-                    var bombTime = 120; // 120秒防失联倒计时
+                    var bombTime = 120; // 120秒防失聯倒數計時
+                    var isProbing = false; // 🌟 核心併發鎖：防止探針堆疊欺騙後端雷達
                     
-                    // 初始化等待 UI (没有任何按钮，完全自动化)
+                    // 初始化等待 UI (全自動無按鈕)
                     var msgHtml = '<div style="font-size: 16px; margin-bottom: 12px;">' + T['LBL_TARGET'] + ' <b style="color:#3b82f6; font-size: 18px;">' + a1 + '</b></div>' +
                                   '<div id="nw-status-text" style="color: #10b981; font-size: 16px; font-weight: bold; margin-bottom: 10px;">' + T['MSG_WRITING'] + '</div>' +
                                   '<div id="nw-timer-text" style="color: #64748b; font-size: 14px; font-weight: bold;">' + T['MSG_PREP_ENV'] + '</div>';
@@ -567,33 +569,33 @@ return view.extend({
                         sec += 2;
                         
                         if (sec <= bombTime) {
-                            // 动态更新倒计时
+                            // 動態更新倒數計時
                             document.getElementById('nw-timer-text').innerHTML = T['MSG_TIMER'].replace('{sec}', sec).replace('{total}', bombTime);
                             
-                            // 延时 8 秒后开始探测（等待路由器重启 network 服务）
-                            if (sec >= 8) {
+                            // 延時 8 秒，且「當前沒有正在卡住的探活請求」時，才發起探測
+                            if (sec >= 8 && !isProbing) {
+                                isProbing = true; // 上鎖
                                 document.getElementById('nw-status-text').innerHTML = '<span style="color:#f59e0b;">' + T['MSG_KNOCKING'].replace('{sec}', sec) + '</span>';
                                 
-                                // 侦察兵出动：静默探测新 IP (这只会产生 1 个 TCP 连接，不会被雷达误认)
+                                // 發起單線程靜默探測
                                 fetch('http://' + a1 + '/luci-static/resources/view/netwiz.js?v=' + Date.now(), { mode: 'no-cors', cache: 'no-store' })
                                 .then(function() {
                                     clearInterval(countdownTimer);
-                                    
-                                    // 探活成功！路通了，准备带用户大部队跳转
                                     document.getElementById('nw-status-text').innerHTML = '<span style="color:#3b82f6;">' + T['MSG_REDIRECTING'] + '</span>';
                                     document.getElementById('nw-timer-text').innerHTML = T['MSG_SCOUT_OK'];
                                     
-                                    // 延时 1 秒自动跳转。落地后产生的浏览器真实流量，将触发后端的 conns >= 2 雷达完成拆弹！
+                                    // 延時 0.8 秒自動跳轉。落地後產生的真實流量，將瞬間觸發後端的 conns >= 2 完成拆彈！
                                     setTimeout(function() {
                                         window.location.href = 'http://' + a1 + '/cgi-bin/luci/';
-                                    }, 1000);
+                                    }, 800);
                                 }).catch(function() {
-                                    // 还没通，保持沉默，等待下一个探测周期
+                                    // 探測失敗（網路還不通），解鎖，允許下一個週期繼續探測
+                                    setTimeout(function() { isProbing = false; }, 500);
                                 });
                             }
                         } 
                         else {
-                            // 真失联：120秒超时，前端转为回滚状态并监控旧 IP
+                            // 真正失聯：120秒超時，前端轉為回滾狀態
                             clearInterval(countdownTimer);
                             var rollbackSec = 0;
                             var checkOldIpTimer = setInterval(function() {
@@ -613,7 +615,7 @@ return view.extend({
                     }, 2000);
 
                 } else { 
-                    // 非 LAN IP 修改的等待逻辑（原地刷新）
+                    // 非 LAN IP 修改的原地等待邏輯
                     var checkSameTimer = setInterval(function() {
                         sec += 2;
                         var waitNetMsg = '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' ' + actionDetail + '</div><div style="color: #059669; font-size: 16px; font-weight: bold;">' + T['MSG_WAIT_NET'].replace('{sec}', sec) + '</div>';
