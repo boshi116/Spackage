@@ -90,7 +90,9 @@ jobs:
             cp -r tmp_kms/luci/applications/luci-app-vlmcsd opd/
             cp -r tmp_kms/package/network/vlmcsd opd/
             rm -rf tmp_kms
-
+            git clone --depth 1 https://github.com/openwrt/packages tmp_openwrt_pkg
+            cp -r tmp_openwrt_pkg/net/adblock-fast opd/
+            rm -rf tmp_openwrt_pkg
             
           } &
 
