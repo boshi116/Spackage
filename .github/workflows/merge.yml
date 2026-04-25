@@ -94,6 +94,7 @@ jobs:
             git clone --depth 1 https://github.com/kenzok8/openwrt-packages tmp_kenzok8
             cp -r tmp_kenzok8/luci-app-filebrowser opd/
             cp -r tmp_kenzok8/luci-app-fileassistant opd/
+            cp -r tmp_kenzok8/filebrowser opd/
             rm -rf tmp_kenzok8
             
           } &
