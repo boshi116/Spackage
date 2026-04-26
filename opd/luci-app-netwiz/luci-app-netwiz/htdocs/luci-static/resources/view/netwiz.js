@@ -164,9 +164,9 @@ return view.extend({
         var htmlTemplate = [
             '<style>',
             // 强制显示滚动条占位
-            'html, body, #maincontent, .main-right { overflow-y: scroll !important; scrollbar-gutter: stable !important; }',
-            '.nw-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 101vh; padding-top: 4vh; padding-bottom: 10vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }',
-            '.nw-header { text-align: center; margin-bottom: 40px; background-color: #5e72e4; padding: 25px; margin-top: 2px; border-radius: 16px; position: relative; width: 100%; max-width: 750px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(94, 114, 228, 0.15); z-index: 20; }',
+            '#maincontent, .main-right { overflow-y: scroll !important; scrollbar-gutter: stable !important; }',
+            '.nw-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 101vh; padding-bottom: 10vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }',
+            '.nw-header { text-align: center; margin-bottom: 40px; background-color: #5e72e4; padding: 25px; border-radius: 16px; position: relative; width: 100%; max-width: 750px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(94, 114, 228, 0.15); z-index: 20; }',
         
             '.nw-main-title { font-size: 35px; font-weight: 600; margin-bottom: 10px; color: #ffffff; letter-spacing: 2px; }',
             '.nw-title-wrap { position: relative; display: inline-block; cursor: pointer; }',
@@ -199,12 +199,23 @@ return view.extend({
             '.nw-form-area input[type="text"], .nw-form-area input[type="password"] { appearance: none !important; width: 100% !important; box-sizing: border-box !important; padding: 14px 16px !important; border: 1px solid #cbd5e1 !important; border-radius: 8px !important; font-size: 15px !important; outline: none !important; background: #f8fafc !important; color: #0f172a !important; height: auto !important; min-height: 48px !important; line-height: normal !important; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02) !important; margin: 0 !important; transition: all 0.2s ease !important; display: block !important; }',
             '.nw-form-area input:focus { border-color: #3b82f6 !important; background: #ffffff !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important; }',
             '.nw-actions { margin-top: 35px; display: flex; justify-content: center; gap: 15px; }',
-            '.nw-actions button { appearance: none !important; border-radius: 8px !important; padding: 12px 28px !important; font-weight: 600 !important; font-size: 15px !important; cursor: pointer !important; border: none !important; min-width: 120px !important; outline: none !important; height: auto !important; line-height: normal !important; margin: 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important; transition: transform 0.1s, background 0.2s !important; }',
+            '.nw-actions button { appearance: none !important; border-radius: 8px !important; padding: 12px 28px !important; font-weight: 600 !important; font-size: 15px !important; cursor: pointer !important; border: none !important; min-width: 120px !important; outline: none !important; height: auto !important; line-height: normal !important; margin: 0 !important; transition: all 0.25s ease !important; }',
             '.nw-actions .cbi-button-apply { background: #10b981 !important; color: white !important; }',
+            '.nw-actions .cbi-button-apply:hover { background: #059669 !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(16, 185, 129, 0.35) !important; }',
             '.nw-actions .cbi-button-reset { background: #f43f5e !important; color: #fff !important; }',
-            '.nw-radio-group { display: flex; gap: 24px; font-size: 15px; color: #333; align-items: center; margin: 0; padding: 0; }',
-            '.nw-radio-group label { cursor: pointer; display: flex; align-items: center; gap: 6px; margin: 0 !important; padding: 0 !important; height: 20px; line-height: 1 !important; font-weight: normal; }',
-            '.nw-radio-group input[type="radio"] { margin: 0 !important; padding: 0 !important; cursor: pointer; width: 16px !important; height: 16px !important; position: relative; top: 0; appearance: auto !important; }',
+            '.nw-actions .cbi-button-reset:hover { background: #e11d48 !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(244, 63, 94, 0.35) !important; }',
+            
+            // 卡片式单选框 CSS
+            '.nw-radio-group { display: flex; gap: 15px; align-items: stretch; margin: 0; padding: 0; width: 100%; }',
+            '.nw-radio-btn { cursor: pointer; position: relative; display: block; flex: 1; margin: 0 !important; padding: 0 !important; }',
+            '.nw-radio-btn input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }',
+            '.nw-radio-btn-text { display: flex; align-items: center; justify-content: center; height: 100%; padding: 12px 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14.5px; color: #475569; background: #fff; transition: all 0.25s ease; position: relative; overflow: hidden; font-weight: normal; box-sizing: border-box; line-height: 1.3; text-align: center; }',
+            '.nw-radio-btn:hover .nw-radio-btn-text { border-color: #3b82f6; color: #3b82f6; background: #f8fafc; }',
+            '.nw-radio-btn input[type="radio"]:checked + .nw-radio-btn-text { border-color: #3b82f6; color: #ff0000; font-weight: 600; box-shadow: 0 0 0 1px #3b82f6; background: #eff6ff; }',
+            '.nw-radio-btn-text::after { content: ""; position: absolute; right: 0; bottom: 0; width: 0; height: 0; border-bottom: 24px solid #3b82f6; border-left: 24px solid transparent; opacity: 0; transition: opacity 0.2s ease; }',
+            '.nw-radio-btn-text::before { content: ""; position: absolute; right: 5px; bottom: 5px; width: 4px; height: 9px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); opacity: 0; transition: opacity 0.2s ease; z-index: 2; }',
+            '.nw-radio-btn input[type="radio"]:checked + .nw-radio-btn-text::after, .nw-radio-btn input[type="radio"]:checked + .nw-radio-btn-text::before { opacity: 1; }',
+            
             '.nw-switch { position: relative; display: inline-block; width: 46px; height: 24px; margin: 0; }',
             '.nw-switch input { opacity: 0; width: 0; height: 0; }',
             '.nw-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .3s; border-radius: 24px; }',
@@ -214,23 +225,24 @@ return view.extend({
             '#nw-global-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 999999; display: flex; align-items: center; justify-content: center; }',
             '#nw-global-modal .nw-modal-box { background: #fff; padding: 40px; border-radius: 16px; text-align: center; max-width: 420px; width: 90%; }',
             '#nw-global-modal h3 { font-size: 22px; color: #1e293b; margin-bottom: 15px; border:none; }',
-            '#nw-global-modal p { font-size: 15px; color: #475569; line-height: 1.6; margin: 0; }',
+            '#nw-global-modal p, #nw-global-msg div { font-size: 15px; color: #475569; line-height: 1.6; margin: 0; word-break: break-all; }',
             '.nw-spinner { width: 50px; height: 50px; border: 4px solid #f1f5f9; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 25px; }',
             '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }',
             
             // 明确区分确认和取消按钮的字体颜色
-            '.nw-modal-btn-ok, .nw-modal-btn-danger { color: white !important; }',
-            '.nw-modal-btn-cancel { color: #475569 !important; background: #f1f5f9 !important; }',
-            '.nw-modal-btn-cancel:hover { background: #e2e8f0 !important; }',
-            '.nw-modal-btn-ok, .nw-modal-btn-cancel, .nw-modal-btn-danger { border: none !important; padding: 12px 30px !important; border-radius: 8px !important; font-size: 15px !important; cursor: pointer !important; flex: 1 !important; transition: background 0.2s !important; height: auto !important; margin: 0 !important; }',
-            '.nw-modal-btn-ok { background: #3b82f6 !important; }',
-            '.nw-modal-btn-danger { background: #ef4444 !important; }',
+            '.nw-modal-btn-ok, .nw-modal-btn-cancel, .nw-modal-btn-danger { border: none !important; padding: 12px 30px !important; border-radius: 8px !important; font-size: 15px !important; cursor: pointer !important; flex: 1 !important; transition: all 0.25s ease !important; height: auto !important; margin: 0 !important; }',
+            '.nw-modal-btn-ok { background: #3b82f6 !important; color: white !important; }',
+            '.nw-modal-btn-ok:hover { background: #2563eb !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(59, 130, 246, 0.35) !important; }',
+            '.nw-modal-btn-danger { background: #ef4444 !important; color: white !important; }',
+            '.nw-modal-btn-danger:hover { background: #dc2626 !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(239, 68, 68, 0.35) !important; }',
+            '.nw-modal-btn-cancel { background: #f1f5f9 !important; color: #475569 !important; }',
+            '.nw-modal-btn-cancel:hover { background: #e2e8f0 !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1) !important; }',
             '.nw-hl { color: #facc15; font-weight: bold; margin-left: 6px; }',
             
             '@media screen and (max-width: 768px) {',
             '  .nw-wrapper { padding-top: 3vh; padding-bottom: 5vh; }',
-            '  .nw-header { margin: 0 auto 30px !important; padding: 20px 15px !important; width: 100% !important; max-width: 320px !important; box-sizing: border-box !important; border-radius: 12px; }',
-            '  .nw-main-title { font-size: 22px; }',
+            '  .nw-header { margin: -35px auto 15px !important; padding: 20px 15px !important; width: 100% !important; max-width: 320px !important; box-sizing: border-box !important; border-radius: 12px; }',
+            '  .nw-main-title { font-size: 22px; line-height: 1.3; }',
             '  .nw-header p { font-size: 13px; }',
             '  .nw-card-group { flex-direction: column; align-items: center; gap: 15px; margin-top: 0; }',
             '  .nw-card { width: 100% !important; max-width: 320px !important; padding: 25px 20px !important; text-align: center; box-sizing: border-box !important; margin: 0 auto !important; }',
@@ -286,14 +298,14 @@ return view.extend({
             '      </div>',
             '      <div id="fields-router" style="display: none;">',
             '        <div class="nw-step-title">{{TITLE_WAN}}</div>',
-            '        <div style="display: flex; align-items: center; width: 100%; padding: 15px 0;">',
-            '          <div style="font-weight: 600; color: #222; font-size: 16px; margin-right: 35px; line-height: 1;">{{LBL_CONN_TYPE}}</div>',
+            '        <div style="width: 100%; padding: 10px 0 15px 0;">',
+            '          <div class="nw-value-title" style="margin-bottom: 12px; display: block;">{{LBL_CONN_TYPE}}</div>',
             '          <div class="nw-radio-group">',
-            '            <label><input type="radio" name="router_type" value="dhcp" checked> {{OPT_DHCP}}</label>',
-            '            <label><input type="radio" name="router_type" value="static"> {{OPT_STATIC}}</label>',
+            '            <label class="nw-radio-btn"><input type="radio" name="router_type" value="dhcp" checked> <span class="nw-radio-btn-text">{{OPT_DHCP}}</span></label>',
+            '            <label class="nw-radio-btn"><input type="radio" name="router_type" value="static"> <span class="nw-radio-btn-text">{{OPT_STATIC}}</span></label>',
             '          </div>',
             '        </div>',
-            '        <div id="router-static-fields" style="display: none; margin-top: 10px; border-top: 1px dashed #e5e7eb; padding-top: 15px;">',
+            '        <div id="router-static-fields" style="display: none; margin-top: 5px; border-top: 1px dashed #e5e7eb; padding-top: 10px;">',
             '          <div class="nw-value"><label class="nw-value-title">{{LBL_IP}}</label><div class="nw-value-field"><input type="text" id="router-ip" placeholder="{{PH_IP}}" autocomplete="new-password"></div></div>',
             '          <div class="nw-value"><label class="nw-value-title">{{LBL_GW}}</label><div class="nw-value-field"><input type="text" id="router-gw" placeholder="{{PH_GW}}" autocomplete="new-password"></div></div>',
             '        </div>',
@@ -314,11 +326,11 @@ return view.extend({
             '        <div class="nw-value"><label class="nw-value-title">{{LBL_LAN_IP}}</label><div class="nw-value-field"><input type="text" id="lan-ip" placeholder="{{PH_IP}}" autocomplete="new-password"></div></div>',
             '        <div class="nw-value"><label class="nw-value-title">{{LBL_LAN_GW}}</label><div class="nw-value-field"><input type="text" id="lan-gw" placeholder="{{PH_LAN_GW}}" autocomplete="new-password"></div></div>',
             '        <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0 0 0; border-top: 1px solid #f1f5f9; margin-top: 15px;">',
-            '           <div>',
-            '               <div style="font-weight: 600; color: #222; font-size: 16px;">{{LBL_FORCE_APPLY}}</div>',
-            '               <div style="font-size: 12px; color: #64748b; margin-top: 4px;">{{DESC_FORCE_APPLY}}</div>',
+            '           <div style="flex: 1; padding-right: 15px; min-width: 0;">',
+            '               <div style="font-weight: 600; color: #222; font-size: 15px; word-break: break-word; line-height: 1.3;">{{LBL_FORCE_APPLY}}</div>',
+            '               <div style="font-size: 12px; color: #64748b; margin-top: 4px; word-break: break-word; line-height: 1.4;">{{DESC_FORCE_APPLY}}</div>',
             '           </div>',
-            '           <label class="nw-switch"><input type="checkbox" id="lan-force-toggle"><span class="nw-slider"></span></label>',
+            '           <label class="nw-switch" style="flex-shrink: 0;"><input type="checkbox" id="lan-force-toggle"><span class="nw-slider"></span></label>',
             '        </div>',
             '      </div>',
             '    </div>',
@@ -487,8 +499,8 @@ return view.extend({
                         // 防止没做任何修改就点应用
                         if ((selectedMode === 'lan' && targetIp === currentLanIp && targetGw === currentLanGw && newBypass === currentBypass) || (selectedMode === 'router' && rType === 'static' && targetIp === currentWanIp && targetGw === currentWanGw) || (selectedMode === 'router' && rType === 'dhcp' && currentWanProto === 'dhcp')) { openModal({title: T['M_NO_MOD_TIT'], msg: T['M_NO_MOD_MSG'], okText: T['M_EXIT'], onOk: returnToStep1 }); return; }
                         
-                        var b = function(t, p) { var h = "<div style='text-align:center; font-size:18px; margin-bottom:15px;'>" + t + "</div><div style='background:rgba(0,0,0,0.15); border-radius:8px; padding:10px 15px; font-size:14.5px;'>"; for (var i=0; i < p.length; i++) h += "<div style='display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.1);'><span style='opacity:0.8;'>" + p[i][0] + "</span><span style='font-family:monospace;'>" + p[i][1] + "</span></div>"; return h + "</div>"; };
-                        if (selectedMode === 'lan') confirmText.innerHTML = b(isBypass ? T['MODE_LAN_TITLE']+" - "+T['STAT_BYPASS'] : T['MODE_LAN_TITLE']+" - "+T['STAT_LAN'], [[T['TXT_DEV_IP'].replace(':',''), targetIp], [T['LBL_GW'], targetGw || T['TXT_NOT_SET']], ["DHCP", isBypass ? T['TXT_OFF'] : T['TXT_ON']]]);
+                        var b = function(t, p) { var h = "<div style='text-align:center; font-size:18px; margin-bottom:15px;'>" + t + "</div><div style='background:rgba(0,0,0,0.15); border-radius:8px; padding:10px 15px; font-size:14.5px;'>"; for (var i=0; i < p.length; i++) h += "<div style='display:flex; justify-content:space-between; align-items:flex-start; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.1); gap: 10px;'><span style='opacity:0.8; white-space:nowrap; flex-shrink:0;'>" + p[i][0] + "</span><span style='font-family:monospace; word-break:break-all; text-align:right;'>" + p[i][1] + "</span></div>"; return h + "</div>"; };
+                                                if (selectedMode === 'lan') confirmText.innerHTML = b(isBypass ? T['MODE_LAN_TITLE']+" - "+T['STAT_BYPASS'] : T['MODE_LAN_TITLE']+" - "+T['STAT_LAN'], [[T['TXT_DEV_IP'].replace(':',''), targetIp], [T['LBL_GW'], targetGw || T['TXT_NOT_SET']], ["DHCP", isBypass ? T['TXT_OFF'] : T['TXT_ON']]]);
                         else if (selectedMode === 'router') confirmText.innerHTML = (rType === 'static' ? b(T['STAT_SEC_STATIC'], [[T['TXT_WAN_IP'].replace(':',''), targetIp], [T['TXT_UP_GW'].replace(':',''), targetGw]]) : b(T['STAT_SEC_DHCP'], [[T['LBL_CONN_TYPE'], T['OPT_DHCP']], [T['M_IP_GW'], T['M_AUTO_UP']]]));
                         else confirmText.innerHTML = b(T['MODE_PPPOE_TITLE'], [[T['M_ACCT'], container.querySelector('#pppoe-user').value], [T['M_PWD'], T['M_HIDDEN']]]);
                         
