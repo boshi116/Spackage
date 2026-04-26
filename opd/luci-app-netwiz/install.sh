@@ -33,7 +33,7 @@ for FILE in $FILES; do
     PROXY_2="https://ghproxy.net/${URL_DIRECT}"
     PROXY_3="https://github.moeyy.xyz/${URL_DIRECT}"
 
-    echo "👉 正在拉取: ${TARGET_FILE} ..."
+    echo "正在拉取: ${TARGET_FILE} ..."
     
     # 尝试直连
     wget -qO "/tmp/${TARGET_FILE}" --no-check-certificate -T 10 "$URL_DIRECT"
@@ -54,7 +54,7 @@ for FILE in $FILES; do
     FILE_SIZE=$(ls -l "/tmp/${TARGET_FILE}" 2>/dev/null | awk '{print $5}')
     if [ -s "/tmp/${TARGET_FILE}" ] && [ "$FILE_SIZE" -gt 1000 ]; then
         DOWNLOAD_SUCCESS=$((DOWNLOAD_SUCCESS + 1))
-        echo "✅ ${TARGET_FILE} 下载成功！"
+        echo "👉 👉 👉 ✅ ${TARGET_FILE} 下载成功！✅"
     else
         echo "❌ 警告: ${TARGET_FILE} 下载失败！"
         rm -f "/tmp/${TARGET_FILE}" # 删除损坏的空文件
@@ -75,7 +75,7 @@ else
 fi
 
 # 4. 清理缓存
-echo "♻️ 正在重建 LuCI 缓存并清理当前登录会话..."
+echo "正在重建 LuCI 缓存并清理当前登录会话..."
 
 # 4.1 清理所有的菜单与编译缓存
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache/ /var/run/luci-indexcache /var/run/luci-modulecache/ 2>/dev/null
@@ -89,6 +89,6 @@ rm -rf /tmp/luci-sessions/* /var/run/luci-sessions/* 2>/dev/null
 # 4.4 重载 RPC 守护进程
 /etc/init.d/rpcd reload 2>/dev/null
 
-echo -e "\n🎉 NetWiz 核心程序及多语言包更新与部署完成！"
-echo -e "💡 登录状态已安全重置，请返回浏览器按下 【F5】 刷新，重新登录即可看到新菜单！"
+echo -e "\n👉 👉 👉  NetWiz 核心程序及多语言包更新与部署完成！✅"
+echo -e "💡 登录状态已安全重置，请返回浏览器按下 【F5】 刷新，【重新登录】即可看到新菜单！"
 exit 0
