@@ -100,6 +100,7 @@ var T = {
     'M_CFLT_IP': _('The WAN IP cannot be the same as the current LAN IP ({ip})!'),
     'M_CFLT_SUB1': _('The WAN port cannot be in the same subnet as the LAN ({ip})!'),
     'M_CFLT_SUB2': _('This causes a routing loop.'),
+    'M_CFLT_SUGGEST': _('Suggestion: Your upstream network uses the same IP subnet. Please go to [LAN Settings] first and change your Device LAN IP (e.g. to 192.168.10.1) to prevent network crash.'),
     'M_SUB_ERR_TIT': _('Subnet Error'),
     'M_SUB_ERR_WAN1': _('The WAN Static IP must be in the same subnet as the Gateway!'),
     'M_SUB_ERR_WAN2': _('e.g., if gateway is {gw}, the IP must be {ip}.x'),
@@ -145,7 +146,7 @@ var callNetDefuse = rpc.declare({ object: 'netwiz', method: 'confirm', expect: {
 var getWanStatus = rpc.declare({ object: 'network.interface', method: 'dump', expect: { '': {} } });
 
 return view.extend({
-    // 隐藏官方底栏
+    // 屏蔽 LuCI 自带的底部保存按钮
     handleSaveApply: null,
     handleSave: null,
     handleReset: null,
@@ -162,9 +163,10 @@ return view.extend({
 
         var htmlTemplate = [
             '<style>',
+            // 强制显示滚动条占位
             'html, body, #maincontent, .main-right { overflow-y: scroll !important; scrollbar-gutter: stable !important; }',
             '.nw-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 101vh; padding-top: 10vh; padding-bottom: 10vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }',
-            '.nw-header { text-align: center; margin-bottom: 40px; background-color: #5e72e4; padding: 25px; margin-top: -90px; border-radius: 0 0 15px 15px; position: relative; }',
+            '.nw-header { text-align: center; margin-bottom: 40px; background-color: #5e72e4; padding: 25px; margin-top: -75px; border-radius: 15px; position: relative; }',
             '.nw-main-title { font-size: 35px; font-weight: 600; margin-bottom: 10px; color: #ffffff; letter-spacing: 2px; }',
             '.nw-title-wrap { position: relative; display: inline-block; cursor: pointer; }',
             '.nw-version-tag { position: absolute; top: 50%; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.1); color: #f8fafc; font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 6px; opacity: 0; pointer-events: none; transition: all 0.25s ease; font-family: monospace; z-index: 50; box-shadow: 0 4px 15px rgba(0,0,0,0.15); white-space: nowrap; border: 1px solid rgba(255,255,255,0.1); }',
@@ -197,8 +199,6 @@ return view.extend({
             '.nw-form-area input:focus { border-color: #3b82f6 !important; background: #ffffff !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important; }',
             '.nw-actions { margin-top: 35px; display: flex; justify-content: center; gap: 15px; }',
             '.nw-actions button { appearance: none !important; border-radius: 8px !important; padding: 12px 28px !important; font-weight: 600 !important; font-size: 15px !important; cursor: pointer !important; border: none !important; min-width: 120px !important; outline: none !important; height: auto !important; line-height: normal !important; margin: 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important; transition: transform 0.1s, background 0.2s !important; }',
-            '.nw-actions .cbi-button-apply { background: #10b981 !important; color: white !important; }',
-            '.nw-actions .cbi-button-reset { background: #f43f5e !important; color: #fff !important; }',
             '.nw-radio-group { display: flex; gap: 24px; font-size: 15px; color: #333; align-items: center; margin: 0; padding: 0; }',
             '.nw-radio-group label { cursor: pointer; display: flex; align-items: center; gap: 6px; margin: 0 !important; padding: 0 !important; height: 20px; line-height: 1 !important; font-weight: normal; }',
             '.nw-radio-group input[type="radio"] { margin: 0 !important; padding: 0 !important; cursor: pointer; width: 16px !important; height: 16px !important; position: relative; top: 0; appearance: auto !important; }',
@@ -214,11 +214,18 @@ return view.extend({
             '#nw-global-modal p { font-size: 15px; color: #475569; line-height: 1.6; margin: 0; }',
             '.nw-spinner { width: 50px; height: 50px; border: 4px solid #f1f5f9; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 25px; }',
             '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }',
-            '.nw-modal-btn-ok, .nw-modal-btn-cancel, .nw-modal-btn-danger { color: white !important; border: none !important; padding: 12px 30px !important; border-radius: 8px !important; font-size: 15px !important; cursor: pointer !important; flex: 1 !important; transition: background 0.2s !important; height: auto !important; margin: 0 !important; }',
+            
+            // 明确区分确认和取消按钮的字体颜色
+            '.nw-modal-btn-ok, .nw-modal-btn-danger { color: white !important; }',
+            '.nw-modal-btn-cancel { color: #475569 !important; background: #f1f5f9 !important; }',
+            '.nw-modal-btn-cancel:hover { background: #e2e8f0 !important; }',
+            '.nw-modal-btn-ok, .nw-modal-btn-cancel, .nw-modal-btn-danger { border: none !important; padding: 12px 30px !important; border-radius: 8px !important; font-size: 15px !important; cursor: pointer !important; flex: 1 !important; transition: background 0.2s !important; height: auto !important; margin: 0 !important; }',
             '.nw-modal-btn-ok { background: #3b82f6 !important; }',
             '.nw-modal-btn-danger { background: #ef4444 !important; }',
             '.nw-hl { color: #facc15; font-weight: bold; margin-left: 6px; }',
+            
             '@media screen and (max-width: 768px) {',
+            '.nw-main-title { font-size: 20px; }',
             '  .nw-wrapper { padding-top: 3vh; padding-bottom: 5vh; }',
             '  .nw-header { margin: -30px auto 0 !important; padding: 20px 15px !important; width: 100% !important; max-width: 320px !important; border-radius: 12px; }',
             '  .nw-card { width: 100% !important; max-width: 320px !important; }',
@@ -323,7 +330,7 @@ return view.extend({
             '</div>'
         ].join('');
 
-        // 使用 split().join() 防止正则转义报错，完美支持任意语言字典
+        // 使用安全的替换方式，避免正则崩溃
         for (var k in T) {
             htmlTemplate = htmlTemplate.split('{{' + k + '}}').join(T[k]);
         }
@@ -349,6 +356,10 @@ return view.extend({
                     var wProto = safeUciGet('network', 'wan', 'proto', '').toLowerCase();
                     var activeWan = ifaces.find(function(i) { return i && (i.interface === 'wan' || i.proto === wProto || i.device === 'eth0' || i.device === 'wan'); }) || {};
                     var liveWanIp = ((activeWan['ipv4-address'] && activeWan['ipv4-address'][0]) ? activeWan['ipv4-address'][0].address : '').split('/')[0];
+                    
+                    // 物理网卡的真实 IP 并存入全局变量，用于外网/局域网冲突防呆检测
+                    window._liveWanIp = liveWanIp;
+                    
                     var liveGw = activeWan.nexthop || '';
                     if (!liveGw && Array.isArray(activeWan.route)) { var defaultRoute = activeWan.route.find(function(r) { return r.target === '0.0.0.0'; }); if (defaultRoute) liveGw = defaultRoute.nexthop; }
                     if (!liveGw && activeWan['ipv4-address'] && activeWan['ipv4-address'][0]) liveGw = activeWan['ipv4-address'][0].ptpaddress || '';
@@ -401,38 +412,76 @@ return view.extend({
         container.querySelector('#btn-back-2').addEventListener('click', function () { step3.style.display = 'none'; step2.style.display = 'block'; });
         container.querySelector('#top-back-2').addEventListener('click', function () { step3.style.display = 'none'; step2.style.display = 'block'; });
 
+        // 点击“下一步”时，同步执行基础校验，防止异步跳过
         container.querySelector('#btn-next-2').addEventListener('click', function () {
             try {
                 var rTypeEl = container.querySelector('input[name="router_type"]:checked');
                 var rType = rTypeEl ? rTypeEl.value : 'dhcp';
                 var targetIp = '', targetGw = '', isBypass = false;
                 
+                // 第一道防线：纯前端同步数据格式与基础冲突校验
                 if (selectedMode === 'lan') { 
                     targetIp = container.querySelector('#lan-ip').value.trim(); 
                     targetGw = container.querySelector('#lan-gw').value.trim(); 
                     isBypass = bypassToggle.checked;
                     if (!targetIp) { openModal({title: T['M_INC_TIT'], msg: T['M_INC_IP'], okText:T['BTN_EDIT']}); return; }
                     if (!isValidIP(targetIp)) { openModal({title:T['M_FMT_TIT'], msg:T['M_FMT_IP'], okText:T['BTN_EDIT']}); return; }
-                    if (isBypass && (!targetGw || !isValidIP(targetGw))) { openModal({title: (targetGw?T['M_FMT_TIT']:T['M_LOGIC_TIT']), msg: (targetGw?T['M_FMT_GW']:T['M_LOGIC_BYP']), okText:T['BTN_EDIT']}); return; }
+                    if (isBypass) {
+                        if (!targetGw) { openModal({title: T['M_LOGIC_TIT'], msg: T['M_LOGIC_BYP'], okText:T['BTN_EDIT']}); return; }
+                        if (!isValidIP(targetGw)) { openModal({title: T['M_FMT_TIT'], msg: T['M_FMT_GW'], okText:T['BTN_EDIT']}); return; }
+                        // 同步判断旁路由 IP 和网关是否一模一样
+                        if (targetIp === targetGw) { openModal({title: T['M_LOGIC_TIT'], msg: T['M_SAME_BYP'], okText:T['BTN_EDIT']}); return; }
+                        // 判断是否同网段
+                        if (!isSameSubnet(targetIp, targetGw)) { openModal({title: T['M_SUB_ERR_TIT'], msg: T['M_SUB_ERR_BYP'], okText:T['BTN_EDIT']}); return; }
+                    }
                 } else if (selectedMode === 'router' && rType === 'static') { 
                     targetIp = container.querySelector('#router-ip').value.trim(); 
                     targetGw = container.querySelector('#router-gw').value.trim();
                     if (!targetIp || !targetGw) { openModal({title:T['M_INC_TIT'], msg:T['M_INC_WAN'], okText:T['BTN_EDIT']}); return; }
                     if (!isValidIP(targetIp) || !isValidIP(targetGw)) { openModal({title:T['M_FMT_TIT'], msg:(!isValidIP(targetIp)?T['M_FMT_WAN']:T['M_FMT_GW']), okText:T['BTN_EDIT']}); return; }
+                    // WAN 静态 IP 和网关绝对不能一样
+                    if (targetIp === targetGw) { openModal({title: T['M_LOGIC_TIT'], msg: T['M_SAME_GW'], okText:T['BTN_EDIT']}); return; }
+                    if (!isSameSubnet(targetIp, targetGw)) { openModal({title: T['M_SUB_ERR_TIT'], msg: T['M_SUB_ERR_WAN1'] + '<br>' + T['M_SUB_ERR_WAN2'].replace('{gw}', targetGw).replace('{ip}', targetGw.substring(0, targetGw.lastIndexOf('.'))), okText:T['BTN_EDIT']}); return; }
                 } else if (selectedMode === 'pppoe') { 
                     if (!container.querySelector('#pppoe-user').value.trim() || !container.querySelector('#pppoe-pass').value.trim()) { openModal({title: T['M_INC_TIT'], msg: T['M_INC_PPPOE'], okText: T['BTN_EDIT']}); return; } 
                 }
                 
+                // 第二道防线：读取底层 UCI 配置进行高级校验（冲突、重复提交等）
                 uci.load('network').then(function() {
                     try {
-                        var currentLanIp = safeUciGet('network', 'lan', 'ipaddr', window.location.hostname).split('/')[0], currentLanGw = safeUciGet('network', 'lan', 'gateway', ''), currentWanProto = safeUciGet('network', 'wan', 'proto', '').toLowerCase();
-                        var currentWanIp = (currentWanProto === 'static') ? safeUciGet('network', 'wan', 'ipaddr', '').split('/')[0] : '', currentWanGw = safeUciGet('network', 'wan', 'gateway', ''), currentBypass = (safeUciGet('dhcp', 'lan', 'ignore', '') === '1' ? '1' : '0'), newBypass = bypassToggle.checked ? '1' : '0';
+                        var currentLanIp = safeUciGet('network', 'lan', 'ipaddr', window.location.hostname).split('/')[0];
+                        var currentLanGw = safeUciGet('network', 'lan', 'gateway', '');
+                        var currentWanProto = safeUciGet('network', 'wan', 'proto', '').toLowerCase();
+                        var currentWanIp = (currentWanProto === 'static') ? safeUciGet('network', 'wan', 'ipaddr', '').split('/')[0] : (window._liveWanIp || '');
+                        var currentWanGw = safeUciGet('network', 'wan', 'gateway', '');
+                        var currentBypass = (safeUciGet('dhcp', 'lan', 'ignore', '') === '1' ? '1' : '0');
+                        var newBypass = bypassToggle.checked ? '1' : '0';
+
+                        // 全局 WAN/LAN 网段冲突拦截：只有在真正获取到有效外网 IP 时才比对
+                        var checkWanIp = (selectedMode === 'router' && rType === 'static') ? targetIp : currentWanIp;
+                        var checkLanIp = (selectedMode === 'lan') ? targetIp : currentLanIp;
+
+                        if (checkWanIp && checkLanIp && isSameSubnet(checkWanIp, checkLanIp)) {
+                            var cfltMsg = T['M_CFLT_SUB1'].replace('{ip}', checkLanIp) + '<br>' + T['M_CFLT_SUB2'];
+                            // 如果用户正在设置外网 DHCP 导致了冲突，给出直观的建议
+                            if (selectedMode === 'router' && rType === 'dhcp') {
+                                cfltMsg += '<br><br><span style="color:#ef4444; font-weight:bold;">' + T['M_CFLT_SUGGEST'] + '</span>';
+                            }
+                            openModal({title: T['M_CFLT_TIT'], msg: cfltMsg, okText: T['BTN_EDIT']});
+                            return;
+                        }
+
+                        // 防止没做任何修改就点应用
                         if ((selectedMode === 'lan' && targetIp === currentLanIp && targetGw === currentLanGw && newBypass === currentBypass) || (selectedMode === 'router' && rType === 'static' && targetIp === currentWanIp && targetGw === currentWanGw) || (selectedMode === 'router' && rType === 'dhcp' && currentWanProto === 'dhcp')) { openModal({title: T['M_NO_MOD_TIT'], msg: T['M_NO_MOD_MSG'], okText: T['M_EXIT'], onOk: returnToStep1 }); return; }
+                        
                         var b = function(t, p) { var h = "<div style='text-align:center; font-size:18px; margin-bottom:15px;'>" + t + "</div><div style='background:rgba(0,0,0,0.15); border-radius:8px; padding:10px 15px; font-size:14.5px;'>"; for (var i=0; i < p.length; i++) h += "<div style='display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.1);'><span style='opacity:0.8;'>" + p[i][0] + "</span><span style='font-family:monospace;'>" + p[i][1] + "</span></div>"; return h + "</div>"; };
                         if (selectedMode === 'lan') confirmText.innerHTML = b(isBypass ? T['MODE_LAN_TITLE']+" - "+T['STAT_BYPASS'] : T['MODE_LAN_TITLE']+" - "+T['STAT_LAN'], [[T['TXT_DEV_IP'].replace(':',''), targetIp], [T['LBL_GW'], targetGw || T['TXT_NOT_SET']], ["DHCP", isBypass ? T['TXT_OFF'] : T['TXT_ON']]]);
                         else if (selectedMode === 'router') confirmText.innerHTML = (rType === 'static' ? b(T['STAT_SEC_STATIC'], [[T['TXT_WAN_IP'].replace(':',''), targetIp], [T['TXT_UP_GW'].replace(':',''), targetGw]]) : b(T['STAT_SEC_DHCP'], [[T['LBL_CONN_TYPE'], T['OPT_DHCP']], [T['M_IP_GW'], T['M_AUTO_UP']]]));
                         else confirmText.innerHTML = b(T['MODE_PPPOE_TITLE'], [[T['M_ACCT'], container.querySelector('#pppoe-user').value], [T['M_PWD'], T['M_HIDDEN']]]);
+                        
+                        // 高危：主路由填网关发出警告
                         if (selectedMode === 'lan' && !isBypass && targetGw !== '') { openModal({ title: T['M_WARN_TIT'], msg: T['M_WARN_MSG'], cancelText: T['BTN_EDIT'], okText: T['M_WARN_BTN'], isDanger: true, onOk: function() { container.querySelector('#nw-global-modal').style.display = 'none'; step2.style.display = 'none'; step3.style.display = 'block'; } }); return; }
+                        
                         step2.style.display = 'none'; step3.style.display = 'block';
                     } catch (err) {
                         openModal({ title: 'System Error', msg: 'Data processing failed: ' + err, okText: 'Close' });
@@ -445,6 +494,7 @@ return view.extend({
             }
         });
 
+        // 带极速超时机制的防卡死请求
         var fetchProbe = function(url, ms) {
             return Promise.race([
                 fetch(url, { mode: 'no-cors', cache: 'no-store' }),
@@ -452,6 +502,7 @@ return view.extend({
             ]);
         };
 
+        // 最终应用下发配置
         container.querySelector('#btn-apply').addEventListener('click', function () {
             var rTypeEl = container.querySelector('input[name="router_type"]:checked');
             var rType = rTypeEl ? rTypeEl.value : 'dhcp';
@@ -472,7 +523,14 @@ return view.extend({
                 a2 = container.querySelector('#pppoe-pass').value; 
             }
             
-            var actionDetail = '<b style="color:#3b82f6;">' + a1 + '</b>';
+            // 外网自动获取，目标处显示文本而非空
+            var actionDetail = "";
+            if (selectedMode === 'router' && rType === 'dhcp') {
+                actionDetail = '<b style="color:#10b981;">' + T['OPT_DHCP'] + '</b>';
+            } else {
+                actionDetail = '<b style="color:#3b82f6;">' + a1 + '</b>';
+            }
+            
             openModal({ title: T['ACT_LAN'], msg: '<div style="font-size: 16px; margin-bottom: 10px;">' + T['LBL_TARGET'] + ' ' + actionDetail + '</div><div style="color: #64748b; font-size: 16px;">' + T['MSG_WRITING'] + '</div>', spin: true });
             
             var succ = function() {
@@ -484,14 +542,13 @@ return view.extend({
                             if (sec <= 120) {
                                 document.getElementById('nw-global-msg').innerHTML = '<div style="font-size: 16px; margin-bottom: 12px;">' + T['LBL_TARGET'] + ' <b style="color:#3b82f6; font-size: 18px;">' + a1 + '</b></div><div style="color: #64748b; font-size: 14px; font-weight: bold;">' + T['MSG_TIMER'].replace('{sec}', sec).replace('{total}', 120) + '</div>';
                                 if (sec >= 8) { 
-
                                     fetchProbe('http://' + a1 + '/luci-static/resources/view/netwiz.js?v=' + Date.now(), 2000)
                                     .then(function() { 
                                         clearInterval(countdownTimer); 
-
-                                        var skipWait = false;
-                                        callNetDefuse().then(function() { skipWait=true; window.location.href = 'http://' + a1 + '/cgi-bin/luci/admin/netwiz'; }).catch(function() { skipWait=true; window.location.href = 'http://' + a1 + '/cgi-bin/luci/admin/netwiz'; }); 
-                                        setTimeout(function() { if(!skipWait) window.location.href = 'http://' + a1 + '/cgi-bin/luci/admin/netwiz'; }, 1000);
+                                        var jumpUrl = 'http://' + a1 + '/cgi-bin/luci/admin/netwiz';
+                                        var doJump = function() { window.location.href = jumpUrl; };
+                                        callNetDefuse().then(doJump).catch(doJump); 
+                                        setTimeout(doJump, 1000);
                                     }).catch(function() {}); 
                                 }
                             } else {
@@ -509,7 +566,6 @@ return view.extend({
                             }
                         }, 3000);
                     } else {
-                        
                         var probeNewTimer = setInterval(function() { 
                             document.getElementById('nw-global-msg').innerHTML = '<div style="color: #ef4444; font-size: 16px; font-weight: bold; margin-top:20px;">' + T['MSG_SAFE_OFF'] + '</div><div style="color:#64748b; font-size:13px; line-height:1.6; margin-top:10px;">' + T['MSG_MANUAL_VISIT'] + '<br><br><a href="http://' + a1 + '/cgi-bin/luci/admin/netwiz" style="color:#10b981; font-weight:bold; font-size:16px;">http://' + a1 + '</a></div>'; 
                             fetchProbe('http://' + a1 + '/luci-static/resources/view/netwiz.js?v=' + Date.now(), 2000)
