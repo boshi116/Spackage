@@ -48,16 +48,19 @@ case "$1" in
                 arg5=$(echo "$input" | jsonfilter -e '@.arg5')
 
                 validate_strict_ip() {
-                    if [ -n "$1" ] && ! echo "$1" | grep -Eq '^[0-9.]+$'; then
-                        log "安全拦截：参数 '$1' 包含非法字符，已拒绝底层操作"
+                    if [ -n "$1" ] && ! echo "$1" | awk -F. 'NF==4 && $1>=0 && $1<=255 && $2>=0 && $2<=255 && $3>=0 && $3<=255 && $4>=0 && $4<=255 {print "ok"}' | grep -q "ok"; then
+                        log "安全拦截：参数 '$1' 格式非法，已拒绝底层操作"
                         echo '{"result":1,"error":"Invalid format"}'
                         exit 1
                     fi
                 }
 
-                [ "$mode" != "pppoe" ] && [ "$mode" != "wifi" ] && validate_strict_ip "$arg1"
-                [ "$mode" != "wifi" ] && validate_strict_ip "$arg2"
-                validate_strict_ip "$arg3"
+                # 在配置 IP 的模式下安全拦截，绝 PPPoE 和 Wi-Fi 的密码参数！
+                if [ "$mode" = "wan_static" ] || [ "$mode" = "lan" ]; then
+                    validate_strict_ip "$arg1" # IP
+                    validate_strict_ip "$arg2" # 网关
+                    validate_strict_ip "$arg3" # 掩码
+                fi
 
                 cleanup_lan_for_wan_modes() {
                     uci delete network.lan.gateway 2>/dev/null
@@ -75,7 +78,7 @@ case "$1" in
                         echo "$arg1" > /tmp/netwiz_target_ip
                         echo $(($(date +%s) + 120)) > /tmp/netwiz_rollback_time
                     else
-                        log "LAN IP 即将修改为 $arg1，(用户选择了直接生效模式) 跳过回退装置"
+                        log "LAN IP 即将修改为 $arg1，(选择了直接生效模式) 跳过回退装置"
                     fi
                 fi
 
@@ -123,12 +126,23 @@ case "$1" in
                         path=$(uci -q get wireless.$dev.path || true)
                         
                         is_5g=0
-                        if echo "$hwmode" | grep -q "a"; then
-                            is_5g=1
-                        elif echo "$hwmode" | grep -qE "g|b"; then
-                            is_5g=0
-                        elif [ "$band" = "5g" ] || echo "$path" | grep -qi "pcie1" || echo "$path" | grep -qi "pcie2"; then
-                            is_5g=1
+                        
+                        if command -v iwinfo >/dev/null 2>&1; then
+                            if iwinfo $dev freqlist 2>/dev/null | grep -q "^  5"; then
+                                is_5g=1
+                            elif iwinfo $dev hwmodelist 2>/dev/null | grep -qi "ac\|ax\|be\|a"; then
+                                is_5g=1
+                            fi
+                        fi
+                        
+                        if [ "$is_5g" = "0" ]; then
+                            if echo "$hwmode" | grep -q "a"; then
+                                is_5g=1
+                            elif echo "$hwmode" | grep -qE "g|b"; then
+                                is_5g=0
+                            elif [ "$band" = "5g" ] || echo "$path" | grep -qi "pcie1" || echo "$path" | grep -qi "pcie2"; then
+                                is_5g=1
+                            fi
                         fi
 
                         if [ "$is_5g" = "1" ]; then
@@ -155,13 +169,18 @@ case "$1" in
                         local p_ssid=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.ssid" || echo "")
                         local p_key=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.key" || echo "")
                         local p_enc=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.encryption" || echo "psk2+sae")
+                        local p_hidden=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.hidden" || echo "0")
+                        
+                        local p_mode=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.mode" || echo "auto")
+                        local p_chan=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.channel" || echo "auto")
+                        local p_bw=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.bandwidth" || echo "auto")
                         
                         uci set wireless.$iface_name=wifi-iface
                         uci set wireless.$iface_name.device="$dev"
                         uci set wireless.$iface_name.network="lan"
                         uci set wireless.$iface_name.mode="ap"
                         
-                        log "正在为芯片 [$dev] 注入目标配置: UI=[$ui_prefix], SSID=[$p_ssid], 启用=[$p_en]"
+                        log "正在为芯片 [$dev] 注入目标配置: UI=[$ui_prefix], 启用=[$p_en], Mode=[$p_mode]"
                         
                         if [ "$p_en" = "0" ]; then
                             uci set wireless.$iface_name.disabled='1'
@@ -174,54 +193,80 @@ case "$1" in
                         [ -n "$p_ssid" ] && uci set wireless.$iface_name.ssid="$p_ssid"
                         [ -n "$p_enc" ] && uci set wireless.$iface_name.encryption="$p_enc"
                         [ -n "$p_key" ] && uci set wireless.$iface_name.key="$p_key"
-                            
-                        uci set wireless.$dev.channel='auto'
                         
-                        # 提取原生硬件属性，准备防降级策略
+                        if [ "$p_hidden" = "1" ]; then
+                            uci set wireless.$iface_name.hidden='1'
+                            log "  - 接口已设置隐藏名称 (SSID)"
+                        else
+                            uci delete wireless.$iface_name.hidden 2>/dev/null
+                        fi
+                            
+                        if [ "$p_chan" != "auto" ] && [ -n "$p_chan" ]; then
+                            uci set wireless.$dev.channel="$p_chan"
+                            log "  - 锁定自定义信道: $p_chan"
+                        else
+                            uci set wireless.$dev.channel='auto'
+                        fi
+
                         local current_hw=$(uci -q get wireless.$dev.hwmode || echo "")
                         local current_ht=$(uci -q get wireless.$dev.htmode || echo "")
                         
-                        if [ "$intended_band" = "2g" ]; then
-                            if [ "$arg4" = "1" ]; then
-                                uci set wireless.$dev.hwmode='11b'
-                                uci set wireless.$dev.htmode='HT20'
-                                uci set wireless.$dev.band='2g' 2>/dev/null || true
-                                log "  - [$dev] 强行洗白为 2.4G (Legacy 11b, HT20)"
-                            else
-                                # 如果是 Wi-Fi 6 (ax) 或 Wi-Fi 7 (be)，坚决保留 hwmode！
-                                if echo "$current_hw" | grep -qEi "be|ax|g"; then
+                        local final_bw="40"
+                        if [ "$intended_band" = "5g" ]; then final_bw="80"; fi
+                        if [ "$p_bw" != "auto" ] && [ -n "$p_bw" ]; then final_bw="$p_bw"; fi
+
+                        if [ "$p_mode" != "auto" ] && [ -n "$p_mode" ]; then
+                            uci set wireless.$dev.hwmode="$p_mode"
+                            if [ "$intended_band" = "2g" ]; then uci set wireless.$dev.band='2g' 2>/dev/null || true; fi
+                            if [ "$intended_band" = "5g" ]; then uci set wireless.$dev.band='5g' 2>/dev/null || true; fi
+                            
+                            if [ "$p_mode" = "11be" ]; then uci set wireless.$dev.htmode="EHT${final_bw}"
+                            elif [ "$p_mode" = "11ax" ]; then uci set wireless.$dev.htmode="HE${final_bw}"
+                            elif [ "$p_mode" = "11ac" ]; then uci set wireless.$dev.htmode="VHT${final_bw}"
+                            elif [ "$p_mode" = "11n" ] || [ "$p_mode" = "11g" ]; then uci set wireless.$dev.htmode="HT${final_bw}"
+                            else uci set wireless.$dev.htmode="HT20"; fi
+                            
+                            log "  - ！！！危险警告：强制越权指定物理模式: $p_mode ！！！"
+                        else
+                            if [ "$intended_band" = "2g" ]; then
+                                if [ "$arg4" = "1" ]; then
+                                    uci set wireless.$dev.hwmode='11b'
+                                    uci set wireless.$dev.htmode='HT20'
+                                    uci set wireless.$dev.band='2g' 2>/dev/null || true
+                                    log "  - [$dev] 强行清洗为 2.4G (Legacy 11b, HT20)"
+                                else
+                                    if echo "$current_hw" | grep -qEi "be|ax|g"; then
+                                        uci set wireless.$dev.hwmode="$current_hw"
+                                    else
+                                        uci set wireless.$dev.hwmode='11g'
+                                    fi
+                                    uci set wireless.$dev.band='2g' 2>/dev/null || true
+                                    
+                                    if echo "$current_ht" | grep -qEi "eht|he"; then
+                                        local prefix=$(echo "$current_ht" | grep -oEi "eht|he" | tr 'a-z' 'A-Z')
+                                        if [ "$p_bw" = "auto" ]; then final_bw="40"; fi
+                                        uci set wireless.$dev.htmode="${prefix}${final_bw}"
+                                    else
+                                        uci set wireless.$dev.htmode="HT${final_bw}"
+                                    fi
+                                    log "  - [$dev] 洗白为 2.4G ($(uci -q get wireless.$dev.hwmode), $(uci -q get wireless.$dev.htmode))"
+                                fi
+                            elif [ "$intended_band" = "5g" ]; then
+                                if echo "$current_hw" | grep -qEi "be|ax|ac"; then
                                     uci set wireless.$dev.hwmode="$current_hw"
                                 else
-                                    uci set wireless.$dev.hwmode='11g'
+                                    uci set wireless.$dev.hwmode='11a'
                                 fi
-                                uci set wireless.$dev.band='2g' 2>/dev/null || true
+                                uci set wireless.$dev.band='5g' 2>/dev/null || true
                                 
-                                # 频宽防降级：保留 EHT(Wi-Fi 7) 和 HE(Wi-Fi 6)
                                 if echo "$current_ht" | grep -qEi "eht|he"; then
-                                    # 2.4G 跑 160MHz 或 80MHz 极易报错崩溃，安全将其正则替换为 40MHz
-                                    local safe_ht=$(echo "$current_ht" | sed -E 's/160|80/40/g')
-                                    uci set wireless.$dev.htmode="$safe_ht"
+                                    local prefix=$(echo "$current_ht" | grep -oEi "eht|he" | tr 'a-z' 'A-Z')
+                                    uci set wireless.$dev.htmode="${prefix}${final_bw}"
                                 else
-                                    uci set wireless.$dev.htmode='HT40'
+                                    uci set wireless.$dev.htmode="VHT${final_bw}"
                                 fi
-                                log "  - [$dev] 洗白为 2.4G ($(uci -q get wireless.$dev.hwmode), $(uci -q get wireless.$dev.htmode))"
+                                log "  - [$dev] 洗白为 5G ($(uci -q get wireless.$dev.hwmode), $(uci -q get wireless.$dev.htmode))"
                             fi
-                        elif [ "$intended_band" = "5g" ]; then
-                            # 如果是 Wi-Fi 7(be) / Wi-Fi 6(ax) / AC，保留 hwmode
-                            if echo "$current_hw" | grep -qEi "be|ax|ac"; then
-                                uci set wireless.$dev.hwmode="$current_hw"
-                            else
-                                uci set wireless.$dev.hwmode='11a'
-                            fi
-                            uci set wireless.$dev.band='5g' 2>/dev/null || true
-                            
-                            # 频宽防降级：如果有 EHT 或 HE，保留满血频宽！否则再用 VHT80 兜底。
-                            if echo "$current_ht" | grep -qEi "eht|he"; then
-                                uci set wireless.$dev.htmode="$current_ht"
-                            else
-                                uci set wireless.$dev.htmode='VHT80'
-                            fi
-                            log "  - [$dev] 洗白为 5G ($(uci -q get wireless.$dev.hwmode), $(uci -q get wireless.$dev.htmode))"
                         fi
                     }
 
