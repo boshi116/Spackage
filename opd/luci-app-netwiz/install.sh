@@ -6,11 +6,12 @@ echo "🚀 开始极速安装/升级 NetWiz 网络设置向导 (含多语言包)
 echo "🧹 正在清理旧版本与系统残留..."
 if command -v apk >/dev/null 2>&1; then
     PKG_TYPE="apk"
-    apk del luci-app-netwiz luci-i18n-netwiz-zh-cn luci-i18n-netwiz-zh-tw >/dev/null 2>&1
+    apk del luci-app-netwiz luci-i18n-netwiz-zh-cn luci-i18n-netwiz-zh-tw>/dev/null 2>&1
 elif command -v opkg >/dev/null 2>&1; then
     PKG_TYPE="ipk"
     opkg remove luci-app-netwiz luci-i18n-netwiz-zh-cn luci-i18n-netwiz-zh-tw --force-remove >/dev/null 2>&1
 else
+    # 其他处理逻辑
     echo "❌ 找不到支持的软件包管理器 (未找到 apk 或 opkg)！"
     exit 1
 fi
