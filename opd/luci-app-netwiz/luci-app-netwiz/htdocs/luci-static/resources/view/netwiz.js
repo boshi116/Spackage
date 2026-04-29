@@ -661,13 +661,15 @@ return view.extend({
 
                                     var actSsid = activeIface ? (activeIface.ssid || '') : '';
                                     var actKey = activeIface ? (activeIface.key || '') : '';
-                                    var actEnc = activeIface ? (activeIface.encryption || 'sae-mixed') : 'sae-mixed';
+                                    var actEnc = activeIface ? (activeIface.encryption || 'psk2+sae') : 'psk2+sae';
+                                    if (actEnc === 'sae-mixed') actEnc = 'psk2+sae';
                                     var actHidden = activeIface ? (activeIface.hidden === '1') : false;
                                     var actDisabled = activeIface ? (activeIface.disabled === '1' || theDev.disabled === '1') : true;
 
                                     var inactSsid = inactiveIface ? (inactiveIface.ssid || '') : '';
                                     var inactKey = inactiveIface ? (inactiveIface.key || '') : '';
-                                    var inactEnc = inactiveIface ? (inactiveIface.encryption || 'sae-mixed') : 'sae-mixed';
+                                    var inactEnc = inactiveIface ? (inactiveIface.encryption || 'psk2+sae') : 'psk2+sae';
+                                    if (inactEnc === 'sae-mixed') inactEnc = 'psk2+sae';
                                     var inactHidden = inactiveIface ? (inactiveIface.hidden === '1') : false;
 
                                     var chan = theDev.channel || 'auto';
@@ -776,10 +778,14 @@ return view.extend({
 
                                     var isLegacy = dev2g && dev2g.hwmode === '11b';
                                     
-                                    var s2 = i2g.ssid || '', k2 = i2g.key || '', e2 = i2g.encryption || 'psk2+sae', h2 = i2g.hidden === '1';
+                                    var s2 = i2g.ssid || '', k2 = i2g.key || '';
+                                    var e2 = i2g.encryption || 'psk2+sae'; if (e2 === 'sae-mixed') e2 = 'psk2+sae';
+                                    var h2 = i2g.hidden === '1';
                                     var d2 = (i2g.disabled === '1' || (dev2g && dev2g.disabled === '1'));
-                                    
-                                    var s5 = i5g.ssid || '', k5 = i5g.key || '', e5 = i5g.encryption || 'psk2+sae', h5 = i5g.hidden === '1';
+
+                                    var s5 = i5g.ssid || '', k5 = i5g.key || '';
+                                    var e5 = i5g.encryption || 'psk2+sae'; if (e5 === 'sae-mixed') e5 = 'psk2+sae';
+                                    var h5 = i5g.hidden === '1';
                                     var d5 = (i5g.disabled === '1' || (dev5g && dev5g.disabled === '1'));
                                     
                                     var isSmart = (!isLegacy && s2 && s5 && s2 === s5 && k2 === k5 && e2 === e5);
@@ -1272,7 +1278,10 @@ return view.extend({
                         } else if (selectedMode === 'wifi') {
                             var confirmList = [];
                             var sTog = container.querySelector('#wifi-smart-toggle').checked && !window._isSingleChip;
-                            var getSelTxt = function(id) { var e = container.querySelector(id); return e ? e.options[e.selectedIndex].text : ''; };
+                            var getSelTxt = function(id) { 
+                                var e = container.querySelector(id); 
+                                return (e && e.options && e.selectedIndex >= 0) ? e.options[e.selectedIndex].text : (e ? e.value : ''); 
+                            };
                             
                             if (sTog) {
                                 var isEn = container.querySelector('#wifi-smart-en').checked;
