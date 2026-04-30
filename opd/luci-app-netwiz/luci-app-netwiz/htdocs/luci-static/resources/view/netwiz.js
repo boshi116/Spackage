@@ -179,14 +179,18 @@ var T = {
     // 中继功能词条
     'LBL_WISP_EN': _('Enable Wireless Relay (WISP)'),
     'DESC_WISP': _('Receive upstream Wi-Fi and broadcast your own network.'),
-    'BTN_SCAN': _('🔄 Scan Nearby Wi-Fi'),
+    'BTN_SCAN': '🔄 ' + _('Scan Nearby Wi-Fi'),
     'MODAL_WISP_TITLE': _('Select Upstream Network'),
     'WISP_PWD_PROMPT': _('Password for upstream:'),
     'TXT_WISP_ON': _('WISP Enabled'),
     // 扫描与错误提示词条
-    'TXT_SCANNING': _('⏳ Scanning...'),
+    'TXT_SCANNING': '⏳ ' + _('Scanning...'),
     'TXT_NO_NETWORKS': _('No networks found.'),
-    'TXT_SCAN_FAILED': _('Scan failed. Driver might be busy.')
+    'TXT_SCAN_FAILED': _('Scan failed. Driver might be busy.'),
+    'LBL_ROAMING': _('802.11k/v/r Fast Roaming'),
+    'DESC_ROAMING': _('Enable seamless transition. May cause connection issues for old IoT devices.'),
+    'TXT_TARGET_SSID': _('Target Wi-Fi'),
+    'PH_WISP_PWD': _('Upstream Wi-Fi Password'),
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -419,6 +423,15 @@ return view.extend({
             '             <div class="nw-value"><label class="nw-value-title">{{LBL_WIFI_ENC}}</label><div class="nw-value-field">',
             '               <select id="wifi-smart-enc"><option value="psk2+sae">{{OPT_PSK2SAE}}</option><option value="psk2">{{OPT_PSK2}}</option><option value="sae">{{OPT_SAE}}</option><option value="none">{{OPT_NONE}}</option></select>',
             '             </div></div>',
+            // ==== 漫游开关（默认勾选 checked）====
+            '             <div style="display: flex; align-items: center; justify-content: space-between; padding: 5px 0 15px 0; border-bottom: 1px dashed #cbd5e1; margin-bottom: 15px;">',
+            '                <div style="flex: 1; padding-right: 15px;">',
+            '                   <div style="font-weight: 600; color: #334155; font-size: 14.5px;">{{LBL_ROAMING}}</div>',
+            '                   <div style="font-size: 12px; color: #64748b; margin-top: 4px; line-height: 1.4;">{{DESC_ROAMING}}</div>',
+            '                </div>',
+            '                <label class="nw-switch" style="flex-shrink:0;"><input type="checkbox" id="wifi-smart-roaming" checked><span class="nw-slider"></span></label>',
+            '             </div>',
+            // ==== 结束 ====
             '          </div>',
             '        </div>',
 
@@ -468,6 +481,15 @@ return view.extend({
             '                 <div class="nw-value"><label class="nw-value-title">{{LBL_BANDWIDTH}}</label><div class="nw-value-field">',
             '                    <select id="wifi-2g-bw"><option value="auto">{{OPT_AUTO}}</option><option value="20">20 MHz</option><option value="40">40 MHz</option></select>',
             '                 </div></div>',
+            // ==== 2.4G 为了兼容智能家居，默认不带 checked ====
+            '                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0 5px 0; border-top: 1px dashed #cbd5e1; margin-top: 10px;">',
+            '                    <div style="flex: 1; padding-right: 15px;">',
+            '                       <div style="font-weight: 600; color: #334155; font-size: 14.5px;">{{LBL_ROAMING}}</div>',
+            '                       <div style="font-size: 12px; color: #64748b; margin-top: 4px; line-height: 1.4;">{{DESC_ROAMING}}</div>',
+            '                    </div>',
+            '                    <label class="nw-switch" style="flex-shrink:0;"><input type="checkbox" id="wifi-2g-roaming"><span class="nw-slider"></span></label>',
+            '                 </div>',
+            // ==== 结束 ====
             '              </div>',
             '           </div>',
 
@@ -493,6 +515,15 @@ return view.extend({
             '                 <div class="nw-value"><label class="nw-value-title">{{LBL_BANDWIDTH}}</label><div class="nw-value-field">',
             '                    <select id="wifi-5g-bw"><option value="auto">{{OPT_AUTO}}</option><option value="20">20 MHz</option><option value="40">40 MHz</option><option value="80">80 MHz</option><option value="160">160 MHz</option></select>',
             '                 </div></div>',
+            // ==== 5G 给手机跑满速漫游，默认勾选 checked ====
+            '                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0 5px 0; border-top: 1px dashed #cbd5e1; margin-top: 10px;">',
+            '                    <div style="flex: 1; padding-right: 15px;">',
+            '                       <div style="font-weight: 600; color: #334155; font-size: 14.5px;">{{LBL_ROAMING}}</div>',
+            '                       <div style="font-size: 12px; color: #64748b; margin-top: 4px; line-height: 1.4;">{{DESC_ROAMING}}</div>',
+            '                    </div>',
+            '                    <label class="nw-switch" style="flex-shrink:0;"><input type="checkbox" id="wifi-5g-roaming" checked><span class="nw-slider"></span></label>',
+            '                 </div>',
+            // ==== 结束 ====
             '              </div>',
             '           </div>',
             '        </div>',
@@ -503,11 +534,11 @@ return view.extend({
             '              <label class="nw-switch"><input type="checkbox" id="wisp-toggle"><span class="nw-slider"></span></label>',
             '           </div>',
             '           <div style="font-size: 13px; color: #64748b; margin-bottom: 15px;">{{DESC_WISP}}</div>',
-            '           <div id="wisp-ui-panel" style="text-align: center; display:none; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">',
+            '           <div id="wisp-ui-panel" style="display:none; flex-direction:column; align-items:center; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">',
             '              <button id="btn-wisp-scan" class="cbi-button cbi-button-apply" style="width:100%; background:#0f172a !important;">{{BTN_SCAN}}</button>',
             '              <div id="wisp-selected-info" style="display:none;">',
-            '                 <div class="nw-value"><label class="nw-value-title">Target SSID</label><div class="nw-value-field"><input type="text" id="wisp-target-ssid" readonly style="background:#e2e8f0 !important; color:#475569 !important;"></div></div>',
-            '                 <div class="nw-value"><label class="nw-value-title">{{WISP_PWD_PROMPT}}</label><div class="nw-value-field"><input type="password" id="wisp-target-key" placeholder="Upstream Wi-Fi Password"></div></div>',
+            '                 <div class="nw-value"><label class="nw-value-title">{{TXT_TARGET_SSID}}</label><div class="nw-value-field"><input type="text" id="wisp-target-ssid" readonly style="background:#e2e8f0 !important; color:#475569 !important;"></div></div>',
+            '                 <div class="nw-value"><label class="nw-value-title">{{WISP_PWD_PROMPT}}</label><div class="nw-value-field"><input type="password" id="wisp-target-key" placeholder="{{PH_WISP_PWD}}"></div></div>',
             '                 <input type="hidden" id="wisp-target-enc" value="psk2">',
             '                 <input type="hidden" id="wisp-target-device" value="radio0">',
             '                 <input type="hidden" id="wisp-target-bssid" value=""></input>',
@@ -645,10 +676,30 @@ return view.extend({
                     // --- 同步 WISP 开关状态 ---
                     var wispToggleEl = container.querySelector('#wisp-toggle');
                     if (wispToggleEl) {
-                        var isWispOn = uci.sections('wireless', 'wifi-iface').find(function(i) { return i.network === 'wwan' && i.mode === 'sta'; });
-                        wispToggleEl.checked = !!isWispOn;
+                        var wispIface = uci.sections('wireless', 'wifi-iface').find(function(i) { return i.network === 'wwan' && i.mode === 'sta'; });
+                        wispToggleEl.checked = !!wispIface;
                         var wispUi = container.querySelector('#wisp-ui-panel');
-                        if (wispUi) wispUi.style.display = wispToggleEl.checked ? 'block' : 'none';
+                        
+                        if (wispUi) {
+                            wispUi.style.display = 'none';
+                            
+                            if (wispIface) {
+                                var ssidInput = container.querySelector('#wisp-target-ssid');
+                                if (ssidInput) ssidInput.value = wispIface.ssid || '';
+                                
+                                var keyInput = container.querySelector('#wisp-target-key');
+                                if (keyInput) keyInput.value = wispIface.key || '';
+                                
+                                var encInput = container.querySelector('#wisp-target-enc');
+                                if (encInput) encInput.value = wispIface.encryption || 'psk2';
+                                
+                                var devInput = container.querySelector('#wisp-target-device');
+                                if (devInput) devInput.value = wispIface.device || 'radio0';
+                                
+                                var bssidInput = container.querySelector('#wisp-target-bssid');
+                                if (bssidInput) bssidInput.value = wispIface.bssid || '';
+                            }
+                        }
                     }
                     // ---------------------------------------
 
@@ -914,7 +965,16 @@ return view.extend({
                                 ss: container.querySelector('#wifi-smart-ssid').value,
                                 ks: container.querySelector('#wifi-smart-key').value,
                                 ecs: container.querySelector('#wifi-smart-enc').value,
-                                hs: container.querySelector('#wifi-smart-hidden').checked
+                                hs: container.querySelector('#wifi-smart-hidden').checked,
+                                r2: container.querySelector('#wifi-2g-roaming') ? container.querySelector('#wifi-2g-roaming').checked : false,
+                                r5: container.querySelector('#wifi-5g-roaming') ? container.querySelector('#wifi-5g-roaming').checked : false,
+                                rs: container.querySelector('#wifi-smart-roaming') ? container.querySelector('#wifi-smart-roaming').checked : false,
+                                wt: container.querySelector('#wisp-toggle') ? container.querySelector('#wisp-toggle').checked : false,
+                                ws: container.querySelector('#wisp-target-ssid') ? container.querySelector('#wisp-target-ssid').value : '',
+                                wk: container.querySelector('#wisp-target-key') ? container.querySelector('#wisp-target-key').value : '',
+                                we: container.querySelector('#wisp-target-enc') ? container.querySelector('#wisp-target-enc').value : '',
+                                wd: container.querySelector('#wisp-target-device') ? container.querySelector('#wisp-target-device').value : '',
+                                wb: container.querySelector('#wisp-target-bssid') ? container.querySelector('#wisp-target-bssid').value : ''
                             });
                             
                             window._wifiLoaded = true;
@@ -946,9 +1006,8 @@ return view.extend({
                             var sName = i.ssid;
                             var kTxt = i.key || "<span style='color:#ef4444;'>" + T['TXT_NO_PASS'] + "</span>";
                             
-                            // 暴力判定：只要是 sta 模式，就是中继！
+                            // 只要是 sta 模式，就是中继！
                             if (i.mode === 'sta') {
-                                // 中继模式：绿字标题，绝对不显示密码括号！
                                 var tLbl = "<b style='color:#10b981;padding: 8px 16px;background: #fff;border-radius: 10px;'>" + T['TXT_WISP_ON'] + "</b>";
                                 wifiLines.push("<div style='display:flex; align-items:center; justify-content:center; gap:8px;'><span><span style='font-size:15.5px; opacity:0.9; font-weight: 600;'>" + tLbl + ":</span> <span class='nw-hl' style='font-size:16.5px; letter-spacing:0.5px; margin-left:4px;'>" + sName + "</span></span></div>");
                             } else {
@@ -1188,6 +1247,46 @@ return view.extend({
                 if(!container.querySelector('#wifi-5g-key').value) container.querySelector('#wifi-5g-key').value = container.querySelector('#wifi-2g-key').value;
             }
         });
+        // ===== 漫游与加密方式智能联动 =====
+        // 1. 智能合一面板联动
+        var smartRoamingToggle = container.querySelector('#wifi-smart-roaming');
+        if (smartRoamingToggle) {
+            smartRoamingToggle.addEventListener('change', function(e) {
+                if (e && e.isTrusted && this.checked) {
+                    var encSelect = container.querySelector('#wifi-smart-enc');
+                    if (encSelect && encSelect.value !== 'psk2+sae') {
+                        encSelect.value = 'psk2+sae';
+                    }
+                }
+            });
+        }
+
+        // 2. 2.4G 独立面板联动
+        var r2gToggle = container.querySelector('#wifi-2g-roaming');
+        if (r2gToggle) {
+            r2gToggle.addEventListener('change', function(e) {
+                if (e && e.isTrusted && this.checked) {
+                    var encSelect = container.querySelector('#wifi-2g-enc');
+                    if (encSelect && encSelect.value !== 'psk2+sae') {
+                        encSelect.value = 'psk2+sae';
+                    }
+                }
+            });
+        }
+
+        // 3. 5G 独立面板联动
+        var r5gToggle = container.querySelector('#wifi-5g-roaming');
+        if (r5gToggle) {
+            r5gToggle.addEventListener('change', function(e) {
+                if (e && e.isTrusted && this.checked) {
+                    var encSelect = container.querySelector('#wifi-5g-enc');
+                    if (encSelect && encSelect.value !== 'psk2+sae') {
+                        encSelect.value = 'psk2+sae';
+                    }
+                }
+            });
+        }
+        // ==================================
         // WISP 交互与扫描逻辑
         var wispToggle = container.querySelector('#wisp-toggle');
         var wispUiPanel = container.querySelector('#wisp-ui-panel');
@@ -1195,8 +1294,22 @@ return view.extend({
         var wispModal = container.querySelector('#wisp-scan-modal');
         
         if (wispToggle) {
-            wispToggle.addEventListener('change', function() {
-                wispUiPanel.style.display = this.checked ? 'block' : 'none';
+            wispToggle.addEventListener('change', function(e) {
+                wispUiPanel.style.display = this.checked ? 'flex' : 'none';
+                
+                // 鼠标真实点击，且打开开关时才触发重置
+                if (e && e.isTrusted && this.checked) {
+                    
+                    // ==== 恢复扫描按钮 ====
+                    var btnScanLive = container.querySelector('#btn-wisp-scan');
+                    if (btnScanLive) {
+                        btnScanLive.style.display = 'block';
+                    }
+                    
+                    // 隐藏密码输入框
+                    var selectedInfo = container.querySelector('#wisp-selected-info');
+                    if (selectedInfo) selectedInfo.style.display = 'none';
+                }
             });
             container.querySelector('#wisp-modal-close').addEventListener('click', function() { wispModal.style.display = 'none'; });
 
@@ -1239,7 +1352,7 @@ return view.extend({
                                     // 1. 填入 SSID
                                     container.querySelector('#wisp-target-ssid').value = net.ssid || '';
                                     
-                                    // 2. 极其安全的加密类型解析
+                                    // 2. 加密类型解析
                                     var encVal = 'none';
                                     if (net.encryption) {
                                         var desc = typeof net.encryption === 'string' ? net.encryption : (net.encryption.description || '');
@@ -1259,12 +1372,21 @@ return view.extend({
                                     // 4. 显示输入密码区域并关闭弹窗
                                     container.querySelector('#wisp-selected-info').style.display = 'block';
                                     wispModal.style.display = 'none';
+                                    var btnScanLive = container.querySelector('#btn-wisp-scan');
+                                    if (btnScanLive) {
+                                        btnScanLive.style.display = 'none';
+                                    }
                                     
-                                    // 5. 延时对焦，防止在部分浏览器中引发卡顿
+                                    // 5. 光标对焦自动全选
                                     setTimeout(function() {
                                         var pwdInput = container.querySelector('#wisp-target-key');
-                                        if (pwdInput && encVal !== 'none') pwdInput.focus();
-                                    }, 100);
+                                        // 只要选中的不是“无密码(none)”的 Wi-Fi
+                                        if (pwdInput && encVal !== 'none') {
+                                            pwdInput.focus();
+                                            // 全选框内的旧内容
+                                            pwdInput.select(); 
+                                        }
+                                    }, 300); // 延300 毫秒，确保动画和 CSS 完全渲染
                                     
                                 } catch(err) {
                                     console.error("选取 Wi-Fi 时发生错误:", err);
@@ -1388,7 +1510,16 @@ return view.extend({
                             ss: container.querySelector('#wifi-smart-ssid').value,
                             ks: container.querySelector('#wifi-smart-key').value,
                             ecs: container.querySelector('#wifi-smart-enc').value,
-                            hs: container.querySelector('#wifi-smart-hidden').checked
+                            hs: container.querySelector('#wifi-smart-hidden').checked,
+                            r2: container.querySelector('#wifi-2g-roaming') ? container.querySelector('#wifi-2g-roaming').checked : false,
+                            r5: container.querySelector('#wifi-5g-roaming') ? container.querySelector('#wifi-5g-roaming').checked : false,
+                            rs: container.querySelector('#wifi-smart-roaming') ? container.querySelector('#wifi-smart-roaming').checked : false,
+                            wt: container.querySelector('#wisp-toggle') ? container.querySelector('#wisp-toggle').checked : false,
+                            ws: container.querySelector('#wisp-target-ssid') ? container.querySelector('#wisp-target-ssid').value : '',
+                            wk: container.querySelector('#wisp-target-key') ? container.querySelector('#wisp-target-key').value : '',
+                            we: container.querySelector('#wisp-target-enc') ? container.querySelector('#wisp-target-enc').value : '',
+                            wd: container.querySelector('#wisp-target-device') ? container.querySelector('#wisp-target-device').value : '',
+                            wb: container.querySelector('#wisp-target-bssid') ? container.querySelector('#wisp-target-bssid').value : ''
                         });
 
                         var checkWanIp = (selectedMode === 'router' && rType === 'static') ? targetIp : currentWanIp;
@@ -1408,10 +1539,9 @@ return view.extend({
                         if (selectedMode === 'router' && rType === 'static' && targetIp === currentWanIp && targetGw === currentWanGw) isNoMod = true;
                         if (selectedMode === 'router' && rType === 'dhcp' && currentWanProto === 'dhcp') isNoMod = true;
                         if (selectedMode === 'pppoe' && container.querySelector('#pppoe-user').value === safeUciGet('network', 'wan', 'username', '') && container.querySelector('#pppoe-pass').value === safeUciGet('network', 'wan', 'password', '')) isNoMod = true;
-                        // 如果开启了 WISP 中继，跳过拦截！
+                        // 严谨拦截：只要新旧快照完全一致，直接弹窗拦截
                         if (selectedMode === 'wifi' && window._origWifiState && currentWifiState === window._origWifiState) {
-                            var wTog = container.querySelector('#wisp-toggle');
-                            if (!wTog || !wTog.checked) isNoMod = true; 
+                            isNoMod = true; 
                         }
 
                         if (isNoMod) { openModal({title: T['M_NO_MOD_TIT'], msg: T['M_NO_MOD_MSG'], okText: T['M_EXIT'], onOk: returnToStep1 }); return; }
@@ -1441,7 +1571,7 @@ return view.extend({
                                 if (isEn) {
                                     confirmList.push(['<span style="color:#ffffff; font-weight:500;">SSID</span>', '<span style="font-weight:bold; color:#ffffff;">' + container.querySelector('#wifi-smart-ssid').value + '</span>']);
                                     confirmList.push(['<span style="color:#ffffff; font-weight:500;">' + T['LBL_WIFI_ENC'] + '</span>', '<span style="color:#ffffff;">' + getSelTxt('#wifi-smart-enc') + '</span>']);
-                                    if (container.querySelector('#wifi-smart-enc').value !== 'none') {
+                                    if (container.querySelector('#wifi-smart-roaming').checked) {
                                         confirmList.push(['<span style="color:#ffffff; font-weight:500;">802.11k/v/r 漫游</span>', '<span style="color:#10b981; font-weight:bold;">' + T['TXT_ON'] + '</span>']);
                                     }
                                     if (container.querySelector('#wifi-smart-hidden').checked) {
@@ -1455,7 +1585,7 @@ return view.extend({
                                     confirmList.push(['<span style="padding-left:12px; color:#ffffff; font-weight:500; opacity:0.95;">└ SSID</span>', '<span style="font-weight:bold; color:#ffffff;">' + container.querySelector('#wifi-2g-ssid').value + '</span>']);
                                     confirmList.push(['<span style="padding-left:12px; color:#ffffff; font-weight:500; opacity:0.95;">└ ' + T['LBL_WIFI_ENC'] + '</span>', '<span style="color:#ffffff;">' + getSelTxt('#wifi-2g-enc') + '</span>']);
                                     confirmList.push(['<span style="padding-left:12px; color:#ffffff; font-weight:500; opacity:0.95;">└ ' + T['LBL_CHANNEL'] + '</span>', '<span style="color:#ffffff;">' + getSelTxt('#wifi-2g-chan') + ' (' + getSelTxt('#wifi-2g-bw') + ')</span>']);
-                                    if (container.querySelector('#wifi-2g-enc').value !== 'none') {
+                                    if (container.querySelector('#wifi-2g-roaming').checked) {
                                         confirmList.push(['<span style="padding-left:12px; color:#ffffff; font-weight:500; opacity:0.95;">└ 802.11r 漫游</span>', '<span style="color:#10b981; font-weight:bold;">' + T['TXT_ON'] + '</span>']);
                                     }
                                 }
@@ -1466,7 +1596,7 @@ return view.extend({
                                     confirmList.push(['<span style="padding-left:12px; color:#ffffff; font-weight:500; opacity:0.95;">└ SSID</span>', '<span style="font-weight:bold; color:#ffffff;">' + container.querySelector('#wifi-5g-ssid').value + '</span>']);
                                     confirmList.push(['<span style="padding-left:12px; color:#ffffff; font-weight:500; opacity:0.95;">└ ' + T['LBL_WIFI_ENC'] + '</span>', '<span style="color:#ffffff;">' + getSelTxt('#wifi-5g-enc') + '</span>']);
                                     confirmList.push(['<span style="padding-left:12px; color:#ffffff; font-weight:500; opacity:0.95;">└ ' + T['LBL_CHANNEL'] + '</span>', '<span style="color:#ffffff;">' + getSelTxt('#wifi-5g-chan') + ' (' + getSelTxt('#wifi-5g-bw') + ')</span>']);
-                                    if (container.querySelector('#wifi-5g-enc').value !== 'none') {
+                                    if (container.querySelector('#wifi-5g-roaming').checked) {
                                         confirmList.push(['<span style="padding-left:12px; color:#ffffff; font-weight:500; opacity:0.95;">└ 802.11r 漫游</span>', '<span style="color:#10b981; font-weight:bold;">' + T['TXT_ON'] + '</span>']);
                                     }
                                 }
@@ -1546,7 +1676,8 @@ return view.extend({
                             ssid: container.querySelector('#wifi-smart-ssid').value.trim(),
                             key: container.querySelector('#wifi-smart-key').value,
                             encryption: container.querySelector('#wifi-smart-enc').value,
-                            hidden: container.querySelector('#wifi-smart-hidden').checked ? "1" : "0"
+                            hidden: container.querySelector('#wifi-smart-hidden').checked ? "1" : "0",
+                            roaming: container.querySelector('#wifi-smart-roaming').checked ? "1" : "0"
                         };
                     } else {
                         payload.radio_2g = {
@@ -1557,7 +1688,8 @@ return view.extend({
                             hidden: container.querySelector('#wifi-2g-hidden').checked ? "1" : "0",
                             mode: container.querySelector('#wifi-2g-mode').value,
                             channel: container.querySelector('#wifi-2g-chan').value,
-                            bandwidth: container.querySelector('#wifi-2g-bw').value
+                            bandwidth: container.querySelector('#wifi-2g-bw').value,
+                            roaming: container.querySelector('#wifi-2g-roaming').checked ? "1" : "0"
                         };
                         payload.radio_5g = {
                             enabled: container.querySelector('#wifi-5g-en').checked ? "1" : "0",
@@ -1567,7 +1699,8 @@ return view.extend({
                             hidden: container.querySelector('#wifi-5g-hidden').checked ? "1" : "0",
                             mode: container.querySelector('#wifi-5g-mode').value,
                             channel: container.querySelector('#wifi-5g-chan').value,
-                            bandwidth: container.querySelector('#wifi-5g-bw').value
+                            bandwidth: container.querySelector('#wifi-5g-bw').value,
+                            roaming: container.querySelector('#wifi-5g-roaming').checked ? "1" : "0"
                         };
                     }
                     // WISP 参数打包
