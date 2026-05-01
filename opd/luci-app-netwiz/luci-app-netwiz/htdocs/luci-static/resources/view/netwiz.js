@@ -144,7 +144,6 @@ var T = {
     'M_CLOSE': _('Close'),
     'M_ACCT': _('Account'),
     'M_PWD': _('Password'),
-    'M_HIDDEN': _('Hidden'),
     'M_IP_GW': _('IP & Gateway'),
     'M_AUTO_UP': _('Auto-assigned by upstream router'),
     'LBL_TARGET': _('Target:'),
@@ -333,8 +332,8 @@ return view.extend({
             // WISP 扫描结果
             '  <div id="wisp-scan-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:999999; align-items:center; justify-content:center;">',
             '    <div style="background:#fff; width:90%; max-width:400px; border-radius:12px; overflow:hidden; display:flex; flex-direction:column; max-height:80vh;">',
-            '      <div style="padding:15px 20px; background:#f8fafc; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">',
-            '         <h3 style="margin:0; font-size:16px; color:#0f172a;">{{MODAL_WISP_TITLE}}</h3>',
+            '      <div style="padding:10px 20px; background:#f8fafc; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">',
+            '         <h3 style="margin:0 20px; font-size:16px; color:#eee; background: #0f172a; text-align: center; border-radius: 12px;">{{MODAL_WISP_TITLE}}</h3>',
             '         <span id="wisp-modal-close" style="font-size:24px; cursor:pointer; color:#94a3b8;">&times;</span>',
             '      </div>',
             '      <div style="padding:0; overflow-y:auto; flex:1;">',
@@ -389,7 +388,7 @@ return view.extend({
             '      <div id="fields-pppoe" style="display: none;">',
             '        <div class="nw-step-title">{{TITLE_PPPOE}}</div>',
             '        <div class="nw-value"><label class="nw-value-title">{{LBL_USER}}</label><div class="nw-value-field"><input type="text" id="pppoe-user" placeholder="{{PH_USER}}" autocomplete="new-password"></div></div>',
-            '        <div class="nw-value"><label class="nw-value-title">{{LBL_PASS}}</label><div class="nw-value-field"><input type="password" id="pppoe-pass" placeholder="{{PH_PASS}}" autocomplete="new-password"></div></div>',
+            '        <div class="nw-value"><label class="nw-value-title">{{LBL_PASS}}</label><div class="nw-value-field"><input type="text" id="pppoe-pass" placeholder="{{PH_PASS}}" autocomplete="new-password"></div></div>',
             '      </div>',
             '      <div id="fields-wifi" style="display: none;">',
             '        <div class="nw-step-title">{{TITLE_WIFI}}</div>',
@@ -533,7 +532,7 @@ return view.extend({
             '              <button id="btn-wisp-scan" class="cbi-button cbi-button-apply" style="width:100%; background:#0f172a !important;">{{BTN_SCAN}}</button>',
             '              <div id="wisp-selected-info" style="display:none;">',
             '                 <div class="nw-value"><label class="nw-value-title">{{TXT_TARGET_SSID}}</label><div class="nw-value-field"><input type="text" id="wisp-target-ssid" readonly style="background:#e2e8f0 !important; color:#475569 !important;"></div></div>',
-            '                 <div class="nw-value"><label class="nw-value-title">{{WISP_PWD_PROMPT}}</label><div class="nw-value-field"><input type="password" id="wisp-target-key" placeholder="{{PH_WISP_PWD}}"></div></div>',
+            '                 <div class="nw-value"><label class="nw-value-title">{{WISP_PWD_PROMPT}}</label><div class="nw-value-field"><input type="text" id="wisp-target-key" placeholder="{{PH_WISP_PWD}}"></div></div>',
             '                 <input type="hidden" id="wisp-target-enc" value="psk2">',
             '                 <input type="hidden" id="wisp-target-device" value="radio0">',
             '                 <input type="hidden" id="wisp-target-bssid" value=""></input>',
@@ -951,7 +950,7 @@ return view.extend({
                                         iface = (targetBand === '2g') ? apIfaces[0] : (apIfaces[1] || apIfaces[0]);
                                     }
                                 } else {
-                                    // 多芯片模式：独占网卡，直接找激活的接口
+                                    // 多芯片模式：独占网卡，直接找激活的接口，并且必须严格限制 mode === 'ap'，避开 WISP 的 sta 接口！
                                     iface = ifaceList.find(function(i) { return i.device === devName && i.mode === 'ap' && i.disabled !== '1'; });
                                     if (!iface) iface = ifaceList.find(function(i) { return i.device === devName && i.mode === 'ap'; });
                                 }
@@ -968,7 +967,8 @@ return view.extend({
                                 
                                 // 判断是否非标
                                 var encVal = encEl ? encEl.value : (iface.encryption || 'psk2');
-                                var isDirty = rOn && (iface.mobility_domain !== 'e4d1' || iface.ft_psk_generate_local !== '1' || (encVal !== 'psk2+sae' && encVal !== 'sae-mixed'));
+                                // 只有当开启了漫游，但 mobility_domain 不是我们插件设定的值，或者加密方式不支持时，才报红警！
+                                var isDirty = rOn && (iface.mobility_domain !== 'e4d1' || (encVal !== 'psk2+sae' && encVal !== 'sae-mixed'));
                                 
                                 if (isDirty) {
                                     tog.classList.add('is-dirty'); 
@@ -1420,47 +1420,49 @@ return view.extend({
                             li.onmouseover = function() { this.style.background = '#f8fafc'; };
                             li.onmouseout = function() { this.style.background = 'transparent'; };
                             
-                            li.onclick = function() {
+                            li.onclick = function(e) {
+                                if (e) { e.preventDefault(); e.stopPropagation(); }
+                                
                                 try {
                                     // 1. 填入 SSID
                                     container.querySelector('#wisp-target-ssid').value = net.ssid || '';
                                     
-                                    // 2. 加密类型解析
-                                    var encVal = 'none';
+                                    var encVal = 'none'; // 默认无密码
                                     if (net.encryption) {
-                                        var desc = typeof net.encryption === 'string' ? net.encryption : (net.encryption.description || '');
+                                        // 容错处理：获取完整的描述字符串
+                                        var desc = typeof net.encryption === 'string' ? net.encryption : (net.encryption.description || JSON.stringify(net.encryption));
                                         desc = desc.toLowerCase();
-                                        if (desc.indexOf('wpa3') !== -1 || desc.indexOf('sae') !== -1) {
-                                            encVal = 'sae-mixed';
-                                        } else if (desc.indexOf('wpa') !== -1 || desc.indexOf('psk') !== -1 || desc.indexOf('mixed') !== -1) {
-                                            encVal = 'psk2';
+                                        
+                                        // 强制判定为有密码！
+                                        var isExplicitNone = (net.encryption.enabled === false || desc === 'none' || desc === '{"enabled":false}');
+                                        
+                                        if (!isExplicitNone) {
+                                            if (desc.indexOf('wpa3') !== -1 || desc.indexOf('sae') !== -1) {
+                                                encVal = 'sae-mixed';
+                                            } else {
+                                                encVal = 'psk2'; // 绝大多数带密码的网络直接走 WPA2
+                                            }
                                         }
                                     }
                                     container.querySelector('#wisp-target-enc').value = encVal;
-                                    
-                                    // 3. 填入绑定的物理网卡
                                     container.querySelector('#wisp-target-device').value = scanDevice; 
                                     container.querySelector('#wisp-target-bssid').value = net.bssid || '';
                                     
-                                    // 4. 显示输入密码区域并关闭弹窗
+                                    // 3. 界面切换：隐藏弹窗，显示密码面板
                                     container.querySelector('#wisp-selected-info').style.display = 'block';
-                                    wispModal.style.display = 'none';
+                                    wispModal.style.display = 'none'; 
+                                    
                                     var btnScanLive = container.querySelector('#btn-wisp-scan');
-                                    if (btnScanLive) {
-                                        btnScanLive.style.display = 'none';
-                                    }
+                                    if (btnScanLive) btnScanLive.style.display = 'none';
                                     
-                                    // 5. 光标对焦自动全选
-                                    setTimeout(function() {
-                                        var pwdInput = container.querySelector('#wisp-target-key');
-                                        // 只要选中的不是“无密码(none)”的 Wi-Fi
-                                        if (pwdInput && encVal !== 'none') {
+                                    // 4. 精准对焦！
+                                    var pwdInput = container.querySelector('#wisp-target-key');
+                                    if (pwdInput && encVal !== 'none') {
+                                        setTimeout(function() {
                                             pwdInput.focus();
-                                            // 全选框内的旧内容
-                                            pwdInput.select(); 
-                                        }
-                                    }, 300); // 延300 毫秒，确保动画和 CSS 完全渲染
-                                    
+                                            pwdInput.select();
+                                        }, 150); // 留出 150ms 让弹窗消失的动画跑完
+                                    }
                                 } catch(err) {
                                     console.error("选取 Wi-Fi 时发生错误:", err);
                                 }
@@ -1685,7 +1687,7 @@ return view.extend({
                             
                             confirmText.innerHTML = b(T['MODE_WIFI_TITLE'], confirmList);
                         } else {
-                            confirmText.innerHTML = b(T['MODE_PPPOE_TITLE'], [[T['M_ACCT'], container.querySelector('#pppoe-user').value], [T['M_PWD'], T['M_HIDDEN']]]);
+                            confirmText.innerHTML = b(T['MODE_PPPOE_TITLE'], [[T['M_ACCT'], container.querySelector('#pppoe-user').value], [T['M_PWD'], container.querySelector('#pppoe-pass').value]]);
                         }
                         
                         if (selectedMode === 'lan' && !isBypass && targetGw !== '') { openModal({ title: T['M_WARN_TIT'], msg: T['M_WARN_MSG'], cancelText: T['BTN_EDIT'], okText: T['M_WARN_BTN'], isDanger: true, onOk: function() { container.querySelector('#nw-global-modal').style.display = 'none'; step2.style.display = 'none'; step3.style.display = 'block'; } }); return; }

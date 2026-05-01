@@ -1,6 +1,9 @@
 msgid ""
 msgstr "Content-Type: text/plain; charset=UTF-8\n"
 
+msgid "Network Wizard"
+msgstr "网络向导"
+
 msgid "Netwiz NETWORK SETUP"
 msgstr "Netwiz 网络设置向导"
 
@@ -294,9 +297,6 @@ msgstr "账号"
 
 msgid "Password"
 msgstr "密码"
-
-msgid "Hidden"
-msgstr "已隐藏"
 
 msgid "IP & Gateway"
 msgstr "IP 与网关"
