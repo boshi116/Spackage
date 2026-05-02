@@ -256,9 +256,21 @@ case "$1" in
 
                             [ -n "$p_ssid" ] && uci set wireless.$iface_name.ssid="$p_ssid"
 
+                            # === 只要有密码，不允许 none ===
+                            if [ "$p_enc" = "none" ] && [ -n "$p_key" ]; then
+                                p_enc="sae-mixed"
+                            fi
                             if [ "$p_enc" = "psk2+sae" ]; then p_enc="sae-mixed"; fi
+                            
                             [ -n "$p_enc" ] && uci set wireless.$iface_name.encryption="$p_enc"
-                            [ -n "$p_key" ] && uci set wireless.$iface_name.key="$p_key"
+                            
+                            # 只有在非 none 的情况下，才允许写入密码
+                            if [ "$p_enc" != "none" ] && [ -n "$p_key" ]; then
+                                uci set wireless.$iface_name.key="$p_key"
+                            else
+                                uci delete wireless.$iface_name.key 2>/dev/null || true
+                            fi
+                            # ==================================================
 
                             if echo "$p_enc" | grep -q "sae"; then uci set wireless.$iface_name.ieee80211w='1'
                             else uci delete wireless.$iface_name.ieee80211w 2>/dev/null || true; fi
@@ -285,8 +297,8 @@ case "$1" in
 
                             if [ "$p_en" = "1" ] || [ "$smart" = "true" ]; then
                                 if [ "$p_chan" != "auto" ] && [ -n "$p_chan" ]; then uci set wireless.$dev.channel="$p_chan"; else uci set wireless.$dev.channel='auto'; fi
-                                
-                                # ===== 显式写入硬件模式 (hwmode) =====
+
+                                # ===== 显式写入硬件模式 (hwmode)，解决空白及不激活 Bug =====
                                 uci set wireless.$dev.band="$intended_band"
                                 if [ "$intended_band" = "5g" ]; then
                                     uci set wireless.$dev.hwmode="11a"
