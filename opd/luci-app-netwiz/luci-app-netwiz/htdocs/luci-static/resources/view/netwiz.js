@@ -71,7 +71,7 @@ var T = {
     'MSG_SAFE_OFF': _('Safe mode disabled. Applying immediately without rollback protection...'),
     'LBL_BYPASS': _('Enable AP Wired Relay'),
     'WARN_BYPASS': _('<b style="font-size: 16px;">AP Wired Relay Enabled:</b><br>1. DHCP will be disabled. <b style="color: #059669;">Devices must use static IPs or get IPs from upstream.</b><br>2. Gateway MUST be the upstream router IP.<br>3. If LAN IP changes, ensure your client is in the same subnet to avoid <b style="color: #059669;">losing access</b>.'),
-    'WARN_MAIN': _('<b style="font-size: 16px;">Main Router Mode Enabled:</b><br>1. DHCP will be enabled. This device assigns IPs.<br>2. Gateway is usually left blank.<br>3. If LAN IP changes, ensure your client is in the same subnet to avoid <b style="color: #dc2626;">losing access</b>.'),
+    'WARN_MAIN': _('<b style="font-size: 16px;">Main Router Mode Enabled:</b><br>1. DHCP will be enabled. This device assigns IPs.<br>2. Gateway is usually left blank.<br>3. If LAN IP changes, ensure your client is in the same subnet to avoid <b style="color: #ef4444;">losing access</b>.'),
     'LBL_LAN_IP': _('Device LAN IP'),
     'LBL_LAN_GW': _('LAN Gateway'),
     'PH_LAN_GW': _('Blank for Main, required for AP Wired Relay'),
@@ -184,6 +184,7 @@ var T = {
     'TXT_ROAMING_ON': _('Roaming Enabled'),
     'TXT_CLICK_FIX': _('Click to Fix'),
     'TXT_CLICK_GOTO': _('Click to Settings'),
+    'MSG_WAN_AUTODETECT': _('WAN Blind-Switch: Unplug the WAN cable for 10 seconds and reconnect to auto-detect and switch the connection type.'),
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -216,7 +217,7 @@ return view.extend({
             '.nw-header { text-align: center; margin-bottom: 40px; background-color: #5e72e4; padding: 25px; border-radius: 16px; position: relative; width: 100%; max-width: 750px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(94, 114, 228, 0.15); z-index: 20; }',
             '.nw-main-title { font-size: 35px; font-weight: 600; margin-bottom: 10px; color: #ffffff; letter-spacing: 2px; }',
             '.nw-title-wrap { position: relative; display: inline-block; cursor: pointer; }',
-            '.nw-version-tag { position: absolute; top: 50%; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.1); color: #f8fafc; font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 6px; opacity: 0; pointer-events: none; transition: all 0.25s ease; font-family: monospace; z-index: 50; box-shadow: 0 4px 15px rgba(0,0,0,0.15); white-space: nowrap; border: 1px solid rgba(255,255,255,0.1); }',
+            '.nw-version-tag { position: absolute; top: 50%; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.1); color: #f8fafc; font-size: 14px; font-weight: 600; padding: 5px 12px; border-radius: 6px; opacity: 0; pointer-events: none; transition: all 0.25s ease; font-family: monospace; z-index: 50; box-shadow: 0 4px 15px rgba(0,0,0,0.15); white-space: nowrap; border: 1px solid rgba(255,255,255,0.1); }',
             '.nw-title-wrap:hover .nw-version-tag { opacity: 1; top: 145%; }',
             '.nw-version-dot { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.9); display: block; }',
             '.nw-header p { color: #ffffff; font-size: 16px; opacity: 0.9; margin: 0; letter-spacing: 1px; }',
@@ -245,23 +246,23 @@ return view.extend({
             '.nw-top-back:hover { background: #e2e8f0; color: #0f172a; transform: translateX(-3px); box-shadow: 2px 2px 8px rgba(0,0,0,0.05); }',
             '.nw-top-back svg { width: 20px; height: 20px; }',
             '.nw-step-title { text-align: center; margin-bottom: 30px; color: #111; font-weight: 600; font-size: 20px; }',
-            '.nw-form-area .nw-value { border: none !important; padding: 12px 0 !important; display: flex !important; flex-direction: column !important; width: 100% !important; margin: 0 !important; background: transparent !important; }',
+            '.nw-form-area .nw-value { border: none !important; padding-bottom: 12px !important; display: flex !important; flex-direction: column !important; width: 100% !important; margin: 0 !important; background: transparent !important; }',
             '.nw-form-area .nw-value-title { text-align: left !important; font-weight: 600 !important; color: #334155 !important; font-size: 14.5px !important; margin: 0 0 10px 4px !important; line-height: 1.2 !important; display: block !important; padding: 0 !important; width: auto !important; float: none !important; }',
             '.nw-form-area .nw-value-field { width: 100% !important; margin: 0 !important; padding: 0 !important; display: block !important; float: none !important; }',
-            '.nw-form-area input[type="text"], .nw-form-area input[type="password"], .nw-form-area select { appearance: none !important; width: 100% !important; box-sizing: border-box !important; padding: 14px 16px !important; border: 1px solid #cbd5e1 !important; border-radius: 8px !important; font-size: 15px !important; outline: none !important; background: #f8fafc !important; color: #0f172a !important; height: auto !important; min-height: 48px !important; line-height: normal !important; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02) !important; margin: 0 !important; transition: all 0.2s ease !important; display: block !important; }',
-            '.nw-form-area input:focus, .nw-form-area select:focus { border-color: #3b82f6 !important; background: #ffffff !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important; }',
+            '.nw-form-area input[type="text"], .nw-form-area input[type="password"], .nw-form-area select, .nw-form-area textarea { appearance: none !important; width: 100% !important; box-sizing: border-box !important; padding: 14px 16px !important; border: 1px solid #cbd5e1 !important; border-radius: 8px !important; font-size: 15px !important; outline: none !important; background: #f8fafc !important; color: #0f172a !important; height: auto !important; min-height: 48px !important; line-height: 1.5 !important; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02) !important; margin: 0 !important; transition: all 0.2s ease !important; display: block !important; font-family: inherit; resize: none; word-break: break-all; }',
+            '.nw-form-area input:focus, .nw-form-area select:focus, .nw-form-area textarea:focus { border-color: #3b82f6 !important; background: #ffffff !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important; }',
             '.nw-actions { margin-top: 35px; display: flex; justify-content: center; gap: 15px; }',
             '.nw-actions button { appearance: none !important; border-radius: 8px !important; padding: 12px 28px !important; font-weight: 600 !important; font-size: 15px !important; cursor: pointer !important; border: none !important; min-width: 120px !important; outline: none !important; height: auto !important; line-height: normal !important; margin: 0 !important; transition: all 0.25s ease !important; }',
             '.nw-actions .cbi-button-apply { background: #10b981 !important; color: white !important; }',
             '.nw-actions .cbi-button-apply:hover { background: #059669 !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(16, 185, 129, 0.35) !important; }',
-            '.nw-actions .cbi-button-reset { background: #f43f5e !important; color: #fff !important; }',
-            '.nw-actions .cbi-button-reset:hover { background: #e11d48 !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(244, 63, 94, 0.35) !important; }',
+            '.nw-actions .cbi-button-reset { background: #ef4444!important; color: #fff !important; }',
+            '.nw-actions .cbi-button-reset:hover { background: #ef4444 !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(244, 63, 94, 0.35) !important; }',
             '.nw-radio-group { display: flex; gap: 15px; align-items: stretch; margin: 0; padding: 0; width: 100%; }',
             '.nw-radio-btn { cursor: pointer; position: relative; display: block; flex: 1; margin: 0 !important; padding: 0 !important; }',
             '.nw-radio-btn input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }',
             '.nw-radio-btn-text { display: flex; align-items: center; justify-content: center; height: 100%; padding: 12px 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14.5px; color: #475569; background: #fff; transition: all 0.25s ease; position: relative; overflow: hidden; font-weight: normal; box-sizing: border-box; line-height: 1.3; text-align: center; }',
             '.nw-radio-btn:hover .nw-radio-btn-text { border-color: #3b82f6; color: #3b82f6; background: #f8fafc; }',
-            '.nw-radio-btn input[type="radio"]:checked + .nw-radio-btn-text { border-color: #3b82f6; color: #ff0000; font-weight: 600; box-shadow: 0 0 0 1px #3b82f6; background: #eff6ff; }',
+            '.nw-radio-btn input[type="radio"]:checked + .nw-radio-btn-text { border-color: #3b82f6; color: #ef4444; font-weight: 600; box-shadow: 0 0 0 1px #3b82f6; background: #eff6ff; }',
             '.nw-radio-btn-text::after { content: ""; position: absolute; right: 0; bottom: 0; width: 0; height: 0; border-bottom: 24px solid #3b82f6; border-left: 24px solid transparent; opacity: 0; transition: opacity 0.2s ease; }',
             '.nw-radio-btn-text::before { content: ""; position: absolute; right: 5px; bottom: 5px; width: 4px; height: 9px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); opacity: 0; transition: opacity 0.2s ease; z-index: 2; }',
             '.nw-radio-btn input[type="radio"]:checked + .nw-radio-btn-text::after, .nw-radio-btn input[type="radio"]:checked + .nw-radio-btn-text::before { opacity: 1; }',
@@ -282,7 +283,7 @@ return view.extend({
             '.nw-modal-btn-ok { background: #3b82f6 !important; color: white !important; }',
             '.nw-modal-btn-ok:hover { background: #2563eb !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(59, 130, 246, 0.35) !important; }',
             '.nw-modal-btn-danger { background: #ef4444 !important; color: white !important; }',
-            '.nw-modal-btn-danger:hover { background: #dc2626 !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(239, 68, 68, 0.35) !important; }',
+            '.nw-modal-btn-danger:hover { background: #ef4444 !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(239, 68, 68, 0.35) !important; }',
             '.nw-modal-btn-cancel { background: #f1f5f9 !important; color: #475569 !important; }',
             '.nw-modal-btn-cancel:hover { background: #e2e8f0 !important; transform: translateY(-2px) !important; box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1) !important; }',
             '.nw-hl { color: #facc15; font-weight: bold; margin-left: 6px; }',
@@ -297,7 +298,7 @@ return view.extend({
             '  .nw-wrapper { padding-top: 3vh; padding-bottom: 5vh; }',
             '  .nw-header { margin: -35px auto 15px !important; padding: 20px 15px !important; width: 100% !important; max-width: 320px !important; box-sizing: border-box !important; border-radius: 12px; }',
             '  .nw-main-title { font-size: 22px; line-height: 1.3; }',
-            '  .nw-header p { font-size: 13px; }',
+            '  .nw-header p { font-size: 14px; }',
             '  .nw-card-group { flex-direction: column; align-items: center; gap: 15px; margin-top: 0; }',
             '  .nw-card { width: 100% !important; max-width: 320px !important; padding: 25px 20px !important; text-align: center; box-sizing: border-box !important; margin: 0 auto !important; }',
             '  .nw-badge { margin-bottom: 15px; width: 48px; height: 48px; }',
@@ -376,7 +377,7 @@ return view.extend({
             '      </div>',
             '      <div id="fields-router" style="display: none;">',
             '        <div class="nw-step-title">{{TITLE_WAN}}</div>',
-            '        <div style="width: 100%; padding: 10px 0 15px 0;">',
+            '        <div style="width: 100%; padding-bottom:15px">',
             '          <div class="nw-value-title" style="margin-bottom: 12px; display: block;">{{LBL_CONN_TYPE}}</div>',
             '          <div class="nw-radio-group">',
             '            <label class="nw-radio-btn"><input type="radio" name="router_type" value="dhcp" checked> <span class="nw-radio-btn-text">{{OPT_DHCP}}</span></label>',
@@ -384,14 +385,17 @@ return view.extend({
             '          </div>',
             '        </div>',
             '        <div id="router-static-fields" style="display: none; margin-top: 5px; border-top: 1px dashed #e5e7eb; padding-top: 10px;">',
-            '          <div class="nw-value"><label class="nw-value-title">{{LBL_IP}}</label><div class="nw-value-field"><input type="text" id="router-ip" placeholder="{{PH_IP}}" autocomplete="new-password"></div></div>',
-            '          <div class="nw-value"><label class="nw-value-title">{{LBL_GW}}</label><div class="nw-value-field"><input type="text" id="router-gw" placeholder="{{PH_GW}}" autocomplete="new-password"></div></div>',
+            '          <div class="nw-value"><label class="nw-value-title">{{LBL_IP}}</label><div class="nw-value-field"><input type="text" id="router-ip" placeholder="{{PH_IP}}"></div></div>',
+            '          <div class="nw-value"><label class="nw-value-title">{{LBL_GW}}</label><div class="nw-value-field"><input type="text" id="router-gw" placeholder="{{PH_GW}}"></div></div>',
             '        </div>',
             '      </div>',
             '      <div id="fields-pppoe" style="display: none;">',
             '        <div class="nw-step-title">{{TITLE_PPPOE}}</div>',
-            '        <div class="nw-value"><label class="nw-value-title">{{LBL_USER}}</label><div class="nw-value-field"><input type="text" id="pppoe-user" placeholder="{{PH_USER}}" autocomplete="new-password"></div></div>',
-            '        <div class="nw-value"><label class="nw-value-title">{{LBL_PASS}}</label><div class="nw-value-field"><input type="text" id="pppoe-pass" placeholder="{{PH_PASS}}" autocomplete="new-password"></div></div>',
+            // 宽带账号
+            '        <div class="nw-value"><label class="nw-value-title">{{LBL_USER}}</label><div class="nw-value-field"><textarea id="pppoe-user" placeholder="{{PH_USER}}" rows="2"></textarea></div></div>',
+            // 宽带密码
+            '        <div class="nw-value"><label class="nw-value-title">{{LBL_PASS}}</label><div class="nw-value-field"><input type="text" id="pppoe-pass" placeholder="{{PH_PASS}}"></div></div>',
+            '        <div style="padding: 10px; border-radius: 8px; font-size: 14px; color: #ef4444; font-weight: 600;">{{MSG_WAN_AUTODETECT}}</div>',
             '      </div>',
             '      <div id="fields-wifi" style="display: none;">',
             '        <div class="nw-step-title">{{TITLE_WIFI}}</div>',
@@ -531,7 +535,7 @@ return view.extend({
             '              <div style="font-weight: 600; color: #059669; font-size: 16px;">{{LBL_WISP_EN}}</div>',
             '              <label class="nw-switch"><input type="checkbox" id="wisp-toggle"><span class="nw-slider"></span></label>',
             '           </div>',
-            '           <div style="font-size: 13px; color: #64748b; margin-bottom: 15px;">{{DESC_WISP}}</div>',
+            '           <div style="font-size: 14px; color: #64748b; margin-bottom: 15px;">{{DESC_WISP}}</div>',
             '           <div id="wisp-ui-panel" style="display:none; flex-direction:column; align-items:center; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">',
             '              <button id="btn-wisp-scan" class="cbi-button cbi-button-apply" style="width:100%; background:#0f172a !important;">{{BTN_SCAN}}</button>',
             '              <div id="wisp-selected-info" style="display:none;">',
@@ -561,12 +565,12 @@ return view.extend({
 
             '        <div id="lan-bypass-warning" style="display:none; background: #fef2f2; color: #ef4444; padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 15px; border: 1px solid #fecaca; line-height: 1.7; font-weight: bolder;">{{WARN_BYPASS}}</div>',
             '        <div id="lan-main-warning" style="background: #f0fdf4; color: #059669; padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 15px; border: 1px solid #bbf7d0; line-height: 1.7; font-weight: bolder;">{{WARN_MAIN}}</div>',
-            '        <div class="nw-value"><label class="nw-value-title">{{LBL_LAN_IP}}</label><div class="nw-value-field"><input type="text" id="lan-ip" placeholder="{{PH_IP}}" autocomplete="new-password"></div></div>',
-            '        <div class="nw-value"><label class="nw-value-title">{{LBL_LAN_GW}}</label><div class="nw-value-field"><input type="text" id="lan-gw" placeholder="{{PH_LAN_GW}}" autocomplete="new-password"></div></div>',
+            '        <div class="nw-value"><label class="nw-value-title">{{LBL_LAN_IP}}</label><div class="nw-value-field"><input type="text" id="lan-ip" placeholder="{{PH_IP}}"></div></div>',
+            '        <div class="nw-value"><label class="nw-value-title">{{LBL_LAN_GW}}</label><div class="nw-value-field"><input type="text" id="lan-gw" placeholder="{{PH_LAN_GW}}"></div></div>',
             '        <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0 0 0; border-top: 1px solid #f1f5f9; margin-top: 15px;">',
             '           <div style="flex: 1; padding-right: 15px; min-width: 0;">',
             '               <div style="font-weight: 600; color: #222; font-size: 15px; word-break: break-word; line-height: 1.3;">{{LBL_FORCE_APPLY}}</div>',
-            '               <div style="font-size: 12px; color: #64748b; margin-top: 4px; word-break: break-word; line-height: 1.4;">{{DESC_FORCE_APPLY}}</div>',
+            '               <div style="font-size: 14px; color: #64748b; margin-top: 4px; word-break: break-word; line-height: 1.4;">{{DESC_FORCE_APPLY}}</div>',
             '           </div>',
             '           <label class="nw-switch" style="flex-shrink: 0;"><input type="checkbox" id="lan-safe-toggle" checked><span class="nw-slider"></span></label>',
             '        </div>',
@@ -857,6 +861,18 @@ return view.extend({
                                         dev5g = wDevs.find(d => d['.name'] !== dev2g['.name']);
                                     }
 
+                                    console.log("============== [Netwiz 硬件嗅探] ==============");
+                                    console.log("检测到物理射频芯片数量:", wDevs.length);
+                                    if (window._isSingleChip) {
+                                        console.log("架构判断: 【单芯片处理中心】 (Single-Chip)");
+                                        console.log("目标核心:", wDevs[0]['.name']);
+                                    } else {
+                                        console.log("架构判断: 【多芯片独立阵列】 (Multi-Chip)");
+                                        console.log("2.4G 物理芯片:", dev2g ? dev2g['.name'] : "未挂载");
+                                        console.log("5G  物理芯片:", dev5g ? dev5g['.name'] : "未挂载");
+                                    }
+                                    console.log("===============================================");
+                                    
                                     var i2g = findMainIfaceForDev(dev2g ? dev2g['.name'] : 'none');
                                     var i5g = findMainIfaceForDev(dev5g ? dev5g['.name'] : 'none');
 
@@ -1297,14 +1313,18 @@ return view.extend({
                 // 防止系统自动触发时覆盖数据
                 if (!e.isTrusted) return;
 
-                // 备份现有的独立账号密码
+                // 备份现有的独立账号密码及漫游状态
+                var roam2gEl = container.querySelector('#wifi-2g-roaming');
+                var roam5gEl = container.querySelector('#wifi-5g-roaming');
                 window._backupSplit = {
                     s2: container.querySelector('#wifi-2g-ssid').value,
                     k2: container.querySelector('#wifi-2g-key').value,
                     e2: container.querySelector('#wifi-2g-enc').value,
+                    r2: roam2gEl ? roam2gEl.checked : false, // 备份 2.4G 漫游状态
                     s5: container.querySelector('#wifi-5g-ssid').value,
                     k5: container.querySelector('#wifi-5g-key').value,
-                    e5: container.querySelector('#wifi-5g-enc').value
+                    e5: container.querySelector('#wifi-5g-enc').value,
+                    r5: roam5gEl ? roam5gEl.checked : true   // 备份 5G 漫游状态
                 };
 
                 // 获取已开启频段的信息优先5G
@@ -1333,15 +1353,20 @@ return view.extend({
                 // 防止系统加载时覆盖底层数据
                 if (!e.isTrusted) return;
 
-                // 恢复之前备份的独立账号密码
+                // 恢复之前备份的独立账号密码及漫游状态
+                var targetRoam2g = false; // 2.4G 漫游默认安全关闭 (保护智能家居)
+                var targetRoam5g = true;  // 5G 漫游默认开启 (保障手机体验)
+                
                 if (window._backupSplit && (window._backupSplit.s2 || window._backupSplit.s5)) {
                     container.querySelector('#wifi-2g-ssid').value = window._backupSplit.s2;
                     container.querySelector('#wifi-2g-key').value = window._backupSplit.k2;
                     container.querySelector('#wifi-2g-enc').value = window._backupSplit.e2;
+                    targetRoam2g = window._backupSplit.r2; // 恢复历史状态
                     
                     container.querySelector('#wifi-5g-ssid').value = window._backupSplit.s5;
                     container.querySelector('#wifi-5g-key').value = window._backupSplit.k5;
                     container.querySelector('#wifi-5g-enc').value = window._backupSplit.e5;
+                    targetRoam5g = window._backupSplit.r5; // 恢复历史状态
                 } else {
                     // 无备份时自动生成独立名称
                     var baseSsid = container.querySelector('#wifi-smart-ssid').value;
@@ -1356,6 +1381,12 @@ return view.extend({
                     container.querySelector('#wifi-5g-key').value = baseKey;
                     container.querySelector('#wifi-5g-enc').value = baseEnc;
                 }
+                
+                // 应用漫游开关状态，并触发 change 事件以同步 UI (比如加密方式的降级警告)
+                var r2gEl = container.querySelector('#wifi-2g-roaming');
+                if (r2gEl) { r2gEl.checked = targetRoam2g; r2gEl.dispatchEvent(new Event('change')); }
+                var r5gEl = container.querySelector('#wifi-5g-roaming');
+                if (r5gEl) { r5gEl.checked = targetRoam5g; r5gEl.dispatchEvent(new Event('change')); }
             }
         });
 

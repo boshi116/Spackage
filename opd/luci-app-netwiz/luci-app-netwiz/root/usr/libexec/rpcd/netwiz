@@ -59,15 +59,28 @@ case "$1" in
                 exit 0
                 ;;
             confirm)
-                if [ -f /tmp/netwiz_rollback_time ] || [ -f /tmp/netwiz_target_ip ] || [ -f /etc/config/network.netwiz_bak ]; then
-                    rm -f /tmp/netwiz_rollback_time /tmp/netwiz_target_ip /etc/config/network.netwiz_bak /etc/config/dhcp.netwiz_bak
-                    log "前端已连接 拆除防失联回滚装置"
+                # 检查是否存在任何类型的备份或临时记录
+                if [ -f /tmp/netwiz_rollback_time ] || [ -f /tmp/netwiz_target_ip ] || \
+                   [ -f /etc/config/network.netwiz_bak ] || [ -f /etc/config/network.netwiz_wan_bak ]; then
+                    
+                    # 连通性确认成功：一键清理所有 LAN 备份、WAN 探测备份以及回滚计时器
+                    rm -f /tmp/netwiz_rollback_time \
+                          /tmp/netwiz_target_ip \
+                          /etc/config/network.netwiz_bak \
+                          /etc/config/dhcp.netwiz_bak \
+                          /etc/config/network.netwiz_wan_bak
+                    
+                    log "前端已连接：拆除防失联回滚装置并清空所有探测备份"
                 fi
                 echo '{"result":0}'
                 exit 0
                 ;;
             set_network)
                 set +e
+                
+                log "接收到前端下发的新配置，删除所有历史备份记录"
+                rm -f /etc/config/network.netwiz_wan_bak /etc/config/network.netwiz_bak /etc/config/dhcp.netwiz_bak
+                # ====================================================================
 
                 input=$(cat)
                 mode=$(echo "$input" | jsonfilter -e '@.mode')
@@ -226,7 +239,6 @@ case "$1" in
                             local p_mode=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.mode" || echo "auto")
                             local p_chan=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.channel" || echo "auto")
                             local p_bw=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.bandwidth" || echo "auto")
-                            # 正确提取前端传来的 roaming 状态
                             local p_roam=$(echo "$payload" | jsonfilter -e "@.${ui_prefix}.roaming" || echo "0")
 
                             uci set wireless.$iface_name=wifi-iface
@@ -251,7 +263,6 @@ case "$1" in
                             if echo "$p_enc" | grep -q "sae"; then uci set wireless.$iface_name.ieee80211w='1'
                             else uci delete wireless.$iface_name.ieee80211w 2>/dev/null || true; fi
 
-                            # 根据前端 p_roam 开关来决定是否写入漫游协议
                             if [ "$p_roam" = "1" ] && [ "$p_enc" != "none" ] && [ -n "$p_enc" ]; then
                                 uci set wireless.$iface_name.ieee80211r='1'
                                 uci set wireless.$iface_name.ieee80211k='1'
@@ -274,26 +285,43 @@ case "$1" in
 
                             if [ "$p_en" = "1" ] || [ "$smart" = "true" ]; then
                                 if [ "$p_chan" != "auto" ] && [ -n "$p_chan" ]; then uci set wireless.$dev.channel="$p_chan"; else uci set wireless.$dev.channel='auto'; fi
-                                uci delete wireless.$dev.hwmode 2>/dev/null || true
+                                
+                                # ===== 显式写入硬件模式 (hwmode) =====
                                 uci set wireless.$dev.band="$intended_band"
+                                if [ "$intended_band" = "5g" ]; then
+                                    uci set wireless.$dev.hwmode="11a"
+                                else
+                                    if [ "$p_mode" = "11b" ]; then
+                                        uci set wireless.$dev.hwmode="11b"
+                                    else
+                                        uci set wireless.$dev.hwmode="11g"
+                                    fi
+                                fi
 
                                 local current_ht=$(uci -q get wireless.$dev.htmode || echo "")
                                 local final_bw="40"
                                 if [ "$intended_band" = "5g" ]; then final_bw="80"; fi
                                 if [ "$p_bw" != "auto" ] && [ -n "$p_bw" ]; then final_bw="$p_bw"; fi
 
-                                if [ "$p_mode" != "auto" ] && [ -n "$p_mode" ]; then
-                                    if [ "$p_mode" = "11be" ]; then uci set wireless.$dev.htmode="EHT${final_bw}"
-                                    elif [ "$p_mode" = "11ax" ]; then uci set wireless.$dev.htmode="HE${final_bw}"
-                                    elif [ "$p_mode" = "11ac" ]; then uci set wireless.$dev.htmode="VHT${final_bw}"
-                                    elif [ "$p_mode" = "11n" ] || [ "$p_mode" = "11g" ]; then uci set wireless.$dev.htmode="HT${final_bw}"
-                                    else uci set wireless.$dev.htmode="HT20"; fi
+                                # =====  htmode ，防止旧协议参数冲突 =====
+                                if [ "$p_mode" = "11b" ]; then
+                                    # 纯 11b 模式下不能有 htmode 参数，否则底层驱动会报错冲突
+                                    uci delete wireless.$dev.htmode 2>/dev/null || true
                                 else
-                                    if echo "$current_ht" | grep -qEi "eht|he"; then
-                                        local prefix=$(echo "$current_ht" | grep -oEi "eht|he" | tr 'a-z' 'A-Z')
-                                        uci set wireless.$dev.htmode="${prefix}${final_bw}"
+                                    if [ "$p_mode" != "auto" ] && [ -n "$p_mode" ]; then
+                                        if [ "$p_mode" = "11be" ]; then uci set wireless.$dev.htmode="EHT${final_bw}"
+                                        elif [ "$p_mode" = "11ax" ]; then uci set wireless.$dev.htmode="HE${final_bw}"
+                                        elif [ "$p_mode" = "11ac" ]; then uci set wireless.$dev.htmode="VHT${final_bw}"
+                                        elif [ "$p_mode" = "11n" ] || [ "$p_mode" = "11g" ]; then uci set wireless.$dev.htmode="HT${final_bw}"
+                                        else uci set wireless.$dev.htmode="HT20"; fi
                                     else
-                                        uci set wireless.$dev.htmode="HE${final_bw}"
+                                        # auto 模式下保留原生协议头
+                                        if echo "$current_ht" | grep -qEi "eht|he|vht|ht"; then
+                                            local prefix=$(echo "$current_ht" | grep -oEi "eht|he|vht|ht" | tr 'a-z' 'A-Z')
+                                            uci set wireless.$dev.htmode="${prefix}${final_bw}"
+                                        else
+                                            uci set wireless.$dev.htmode="HE${final_bw}"
+                                        fi
                                     fi
                                 fi
                             fi
@@ -391,7 +419,6 @@ case "$1" in
                             if [ -n "$wan_zone" ]; then
                                 old_nets=$(uci -q get firewall.$wan_zone.network || echo "")
                                 if echo "$old_nets" | grep -q "wwan"; then
-                                    # 移除 wwan 并清理多余空格
                                     new_nets=$(echo "$old_nets" | sed 's/\bwwan\b//g' | xargs)
                                     uci set firewall.$wan_zone.network="$new_nets"
                                     uci commit firewall
