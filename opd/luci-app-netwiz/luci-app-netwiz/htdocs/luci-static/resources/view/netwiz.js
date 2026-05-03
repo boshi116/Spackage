@@ -70,8 +70,8 @@ var T = {
     'DESC_FORCE_APPLY': _('If enabled, the system will auto-revert if you lose connection within 120s.'),
     'MSG_SAFE_OFF': _('Safe mode disabled. Applying immediately without rollback protection...'),
     'LBL_BYPASS': _('Enable AP Wired Relay'),
-    'WARN_BYPASS': _('<b style="font-size: 16px;">AP Wired Relay Enabled:</b><br>1. DHCP will be disabled. <b style="color: #059669;">Devices must use static IPs or get IPs from upstream.</b><br>2. Gateway MUST be the upstream router IP.<br>3. If LAN IP changes, ensure your client is in the same subnet to avoid <b style="color: #059669;">losing access</b>.'),
-    'WARN_MAIN': _('<b style="font-size: 16px;">Main Router Mode Enabled:</b><br>1. DHCP will be enabled. This device assigns IPs.<br>2. Gateway is usually left blank.<br>3. If LAN IP changes, ensure your client is in the same subnet to avoid <b style="color: #ef4444;">losing access</b>.'),
+    'WARN_BYPASS': _('<b style="font-size: 16px;">AP Wired Relay Enabled:</b><br>1. DHCP will be disabled. <b style="color: #059669;">Devices must use static IPs or get IPs from upstream.</b><br>2. If LAN IP changes, ensure your client is in the same subnet to avoid <b style="color: #059669;">losing access</b>.'),
+    'WARN_MAIN': _('<b style="font-size: 16px;">Main Router Mode Enabled:</b><br>1. DHCP will be enabled. This device assigns IPs.<br>2. If LAN IP changes, ensure your client is in the same subnet to avoid <b style="color: #ef4444;">losing access</b>.'),
     'LBL_LAN_IP': _('Device LAN IP'),
     'LBL_LAN_GW': _('LAN Gateway'),
     'PH_LAN_GW': _('Blank for Main, required for AP Wired Relay'),
@@ -187,6 +187,8 @@ var T = {
     'MSG_WAN_AUTODETECT': _('WAN Blind-Switch: Unplug the WAN cable for 10 seconds and reconnect to auto-detect and switch the connection type (takes about 2 mins).'),
     'TXT_NEW_MOD': _('New Config'),
     'TXT_MODIFIED': _('Modified'),
+    'M_OPEN_WARN_TIT': _('Security Warning'),
+    'M_OPEN_WARN_MSG': _('You are setting up an Open Wi-Fi network without a password. Anyone nearby will be able to connect and access your network.<br><br>Are you sure you want to continue?'),
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -252,7 +254,7 @@ return view.extend({
             '.nw-form-area .nw-value-title { text-align: left !important; font-weight: 600 !important; color: #334155 !important; font-size: 14.5px !important; margin: 0 0 10px 4px !important; line-height: 1.2 !important; display: block !important; padding: 0 !important; width: auto !important; float: none !important; }',
             '.nw-form-area .nw-value-field { width: 100% !important; margin: 0 !important; padding: 0 !important; display: block !important; float: none !important; }',
             '.nw-form-area input[type="text"], .nw-form-area input[type="password"], .nw-form-area select, .nw-form-area textarea { appearance: none !important; width: 100% !important; box-sizing: border-box !important; padding: 14px 16px !important; border: 1px solid #cbd5e1 !important; border-radius: 8px !important; font-size: 15px !important; outline: none !important; background: #f8fafc !important; color: #0f172a !important; height: auto !important; min-height: 48px !important; line-height: 1.5 !important; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02) !important; margin: 0 !important; transition: all 0.2s ease !important; display: block !important; font-family: inherit; resize: none; word-break: break-all; }',
-            '.nw-form-area input:focus, .nw-form-area select:focus, .nw-form-area textarea:focus { border-color: #3b82f6 !important; background: #ffffff !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important; }',
+            '.nw-form-area input::placeholder, .nw-form-area textarea::placeholder { color: #94a3b8 !important; opacity: 1 !important; }',
             '.nw-actions { margin-top: 35px; display: flex; justify-content: center; gap: 15px; }',
             '.nw-actions button { appearance: none !important; border-radius: 8px !important; padding: 12px 28px !important; font-weight: 600 !important; font-size: 15px !important; cursor: pointer !important; border: none !important; min-width: 120px !important; outline: none !important; height: auto !important; line-height: normal !important; margin: 0 !important; transition: all 0.25s ease !important; }',
             '.nw-actions .cbi-button-apply { background: #10b981 !important; color: white !important; }',
@@ -797,6 +799,23 @@ return view.extend({
                             var wDevs = uci.sections('wireless', 'wifi-device') || [];
                             var wIfaces = uci.sections('wireless', 'wifi-iface') || [];
 
+                                    // ===== 硬件嗅探日志 =====
+                                    console.log("============== [Netwiz 硬件嗅探] ==============");
+                                    console.log("检测到物理射频芯片数量:", wDevs.length);
+                                    if (wDevs.length === 1) {
+                                        console.log("架构判断: 【单芯片处理中心】 (Single-Chip)");
+                                        console.log("目标核心:", wDevs[0]['.name']);
+                                    } else if (wDevs.length > 1) {
+                                        console.log("架构判断: 【多芯片独立阵列】 (Multi-Chip)");
+                                        var dNames = [];
+                                        for(var _i=0; _i<wDevs.length; _i++) dNames.push(wDevs[_i]['.name']);
+                                        console.log("阵列核心:", dNames.join(', '));
+                                    } else {
+                                        console.log("架构判断: 未检测到 Wi-Fi 芯片");
+                                    }
+                                    console.log("===============================================");
+                                    // ==================================
+                            
                             var smartToggle = container.querySelector('#wifi-smart-toggle');
                             var legacyToggle = container.querySelector('#legacy-b-toggle');
 
@@ -945,18 +964,6 @@ return view.extend({
                                     if(dev2g && dev5g && dev2g['.name'] === dev5g['.name']) {
                                         dev5g = wDevs.find(d => d['.name'] !== dev2g['.name']);
                                     }
-
-                                    console.log("============== [Netwiz 硬件嗅探] ==============");
-                                    console.log("检测到物理射频芯片数量:", wDevs.length);
-                                    if (window._isSingleChip) {
-                                        console.log("架构判断: 【单芯片处理中心】 (Single-Chip)");
-                                        console.log("目标核心:", wDevs[0]['.name']);
-                                    } else {
-                                        console.log("架构判断: 【多芯片独立阵列】 (Multi-Chip)");
-                                        console.log("2.4G 物理芯片:", dev2g ? dev2g['.name'] : "未挂载");
-                                        console.log("5G  物理芯片:", dev5g ? dev5g['.name'] : "未挂载");
-                                    }
-                                    console.log("===============================================");
                                     
                                     var i2g = findMainIfaceForDev(dev2g ? dev2g['.name'] : 'none');
                                     var i5g = findMainIfaceForDev(dev5g ? dev5g['.name'] : 'none');
@@ -1419,19 +1426,23 @@ return view.extend({
         };
         // ==========================================
 
-        // ===== 密码与加密方式智能联动 =====
+        // ===== 密码与加密方式双向联动 =====
         var syncEncryption = function(keyInputId, encSelectId) {
             var keyEl = container.querySelector(keyInputId);
             var encEl = container.querySelector(encSelectId);
             if (keyEl && encEl) {
+                // 1. 密码框输入 -> 影响下拉框 (原有逻辑)
                 keyEl.addEventListener('input', function() {
-                    // 如果输入了密码，且当前是无密码状态，自动切换到推荐加密 (psk2+sae)
                     if (this.value.length > 0 && encEl.value === 'none') {
                         encEl.value = 'psk2+sae'; 
-                    } 
-                    // 如果清空了密码，且当前不是无密码状态，自动切换回无密码 (none)
-                    else if (this.value.length === 0 && encEl.value !== 'none') {
+                    } else if (this.value.length === 0 && encEl.value !== 'none') {
                         encEl.value = 'none'; 
+                    }
+                });
+                // 2. 下拉框选择 -> 影响密码框 (新增防呆逻辑)
+                encEl.addEventListener('change', function() {
+                    if (this.value === 'none') {
+                        keyEl.value = ''; // 如果手动选了无密码，强行清空密码框，防止数据残留
                     }
                 });
             }
@@ -2060,8 +2071,38 @@ return view.extend({
                         
                         if (selectedMode === 'lan' && !isBypass && targetGw !== '') { openModal({ title: T['M_WARN_TIT'], msg: T['M_WARN_MSG'], cancelText: T['BTN_EDIT'], okText: T['M_WARN_BTN'], isDanger: true, onOk: function() { container.querySelector('#nw-global-modal').style.display = 'none'; step2.style.display = 'none'; step3.style.display = 'block'; setTimeout(function(){ smoothScrollToTop(650); }, 20); } }); return; }
                         
+                        // ===== Wi-Fi 无密码拦截 =====
+                        var hasOpenWifi = false;
+                        if (selectedMode === 'wifi') {
+                            var checkSmart = container.querySelector('#wifi-smart-toggle').checked && !window._isSingleChip;
+                            if (checkSmart) {
+                                if (container.querySelector('#wifi-smart-en').checked && container.querySelector('#wifi-smart-enc').value === 'none') hasOpenWifi = true;
+                            } else {
+                                if (container.querySelector('#wifi-2g-en').checked && container.querySelector('#wifi-2g-enc').value === 'none') hasOpenWifi = true;
+                                if (container.querySelector('#wifi-5g-en').checked && container.querySelector('#wifi-5g-enc').value === 'none') hasOpenWifi = true;
+                            }
+                        }
+
+                        if (hasOpenWifi) {
+                            openModal({ 
+                                title: T['M_OPEN_WARN_TIT'] || '⚠️ 无密码警告', 
+                                msg: T['M_OPEN_WARN_MSG'] || '您正在设置无密码的开放 Wi-Fi，附近任何人都可以随意连接并访问您的网络。<br><br>确定要继续吗？', 
+                                cancelText: T['BTN_EDIT'], 
+                                okText: T['M_WARN_BTN'], 
+                                isDanger: true, 
+                                onOk: function() { 
+                                    container.querySelector('#nw-global-modal').style.display = 'none'; 
+                                    step2.style.display = 'none'; 
+                                    step3.style.display = 'block'; 
+                                    setTimeout(function(){ smoothScrollToTop(650); }, 20); 
+                                } 
+                            }); 
+                            return; 
+                        }
+                        // ======================================
+
                         step2.style.display = 'none'; step3.style.display = 'block';
-                        setTimeout(function(){ smoothScrollToTop(650); }, 20); 
+                        setTimeout(function(){ smoothScrollToTop(650); }, 20);
                     } catch (err) {
                         openModal({ title: T['M_SYS_ERR'], msg: 'Data processing failed: ' + err, okText: T['M_CLOSE'] });
                     }
