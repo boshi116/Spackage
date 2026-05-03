@@ -124,6 +124,8 @@ jobs:
             git_clone https://github.com/Openwrt-Passwall/openwrt-passwall openwrt-passwall
             git_clone https://github.com/timsaya/luci-app-bandix luci-app-bandix
             git_clone https://github.com/timsaya/openwrt-bandix openwrt-bandix
+            git_clone https://github.com/timsaya/luci-app-bandix-plus luci-app-bandix-plus
+            git_clone https://github.com/timsaya/openwrt-bandix-plus openwrt-bandix-plus
             git_clone  https://github.com/huchd0/luci-app-netwiz luci-app-netwiz
             git_clone  https://github.com/tpxcer/luci-app-minigate luci-app-minigate
             git_clone  https://github.com/MayflyDestiny/luci-app-mosdns-panel luci-app-mosdns-panel
