@@ -232,8 +232,8 @@ return view.extend({
             '/* ====== Netwiz Elegant UI Styles ====== */',
             '/* --- 1. Base & Layout --- */',
             ' header { margin: -5px -5px 0; }',
-            '#maincontent, .main-right { overflow-y: scroll !important; }', 
-            '#netwiz-container { display: block !important; width: 100% !important; padding: 0 !important; margin: 0 auto !important; box-sizing: border-box !important; }',
+            '#maincontent, .main-right { overflow-y: auto !important; overflow-x: hidden !important; }', 
+            '#netwiz-container { display: block !important; width: 100% !important; min-height: 101vh !important; padding: 0 !important; margin: 0 auto !important; box-sizing: border-box !important; color: #64748b; }',
             '.nw-wrapper { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; width: 100% !important; max-width: 900px !important; margin: 0 auto !important; padding-bottom: 10vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; box-sizing: border-box !important; }',
             '.nw-header { display: block !important; width: 100% !important; max-width: 750px !important; margin: 0 auto 30px auto !important; text-align: center; background-color: #5e72e4; padding: 15px; border-radius: 16px; position: relative; box-sizing: border-box; box-shadow: 0 10px 25px rgba(94, 114, 228, 0.15); z-index: 20; }',
             '.nw-step { width: 100% !important; max-width: 800px !important; text-align: center; animation: slideUp 0.4s ease-out; margin: 0 auto !important; }',
@@ -256,7 +256,7 @@ return view.extend({
             '.nw-header p { color: #ffffff; font-size: 16px; opacity: 0.9; margin: 10px; letter-spacing: 1px; }',
             '.nw-title-wrap { position: relative; display: inline-block; cursor: pointer; }',
             '.nw-version-tag { position: absolute; top: 15px; left: 100%; margin-left: 1px; background: rgba(255, 255, 255, 0.15); color: #fff; font-size: 13px; font-weight: bold; padding: 3px 10px; border-radius: 8px; font-family: monospace; z-index: 50; border: 1px solid rgba(255, 255, 255, 0.3); white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.08); opacity: 0; pointer-events: none; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); transform: translateY(0px); }',
-            '.nw-title-wrap:hover .nw-version-tag { opacity: 1; top: 0px; transform: translateY(-5px); }',
+            '.nw-title-wrap:hover .nw-version-tag { opacity: 1; top: -7px; transform: translateY(-5px); }',
             '.nw-version-dot { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.9); display: block; }',
             '.nw-step-title { text-align: center; margin-bottom: 30px; color: #111; font-weight: 600; font-size: 20px; }',
             '.nw-setting-row-label, .nw-wisp-title { font-weight: 600; font-size: 16px; }',
@@ -266,7 +266,7 @@ return view.extend({
 
             '/* --- 4. Cards & Badges --- */',
             '.nw-card-group { display: flex; gap: 25px; justify-content: center; flex-wrap: wrap; margin-top: 20px; width: 100%; box-sizing: border-box; }',
-            '.nw-card { flex: 1; min-width: 170px; max-width: 220px; padding: 35px 20px; border-radius: 16px; cursor: pointer; backdrop-filter: blur(12px); border: 1px solid rgba(0,0,0,0.03); box-shadow: 0px 0px 15px 2px #b7b7b7; transition: all 0.25s ease; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }',
+            '.nw-card { flex: 1; min-width: 170px; max-width: 220px; padding: 35px 20px; border-radius: 16px; cursor: pointer; backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.5); box-shadow: 0px 0px 15px 2px #b7b7b7; transition: all 0.25s ease; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }',
             '.nw-card:hover { transform: translateY(-5px); }',
             '.nw-card[data-mode="pppoe"] { background: rgba(79, 150, 101, 0.85); }',
             '.nw-card[data-mode="wifi"] { background: rgba(245, 54, 92, 0.85); }', 
@@ -370,11 +370,14 @@ return view.extend({
             '.nw-note-title { font-weight: bold; color: #0f172a; margin-bottom: 8px; font-size: 14.5px; }',
             '.nw-confirm-mode-text { color: #fff; background: #0055bb; padding: 20px; border-radius: 12px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); margin-top: 15px; }',
             '.nw-current-mode-display { margin-top: 35px; background: #5e72e4; padding: 20px 35px; border-radius: 12px; display: inline-block; box-shadow: 0 8px 20px rgba(94, 114, 228, 0.3); text-align: center; min-width: 320px; }',
-            '.nw-wisp-modal-header, .nw-wiz-modal-header { padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }',
-            '.nw-wiz-modal-header { background: #5e72e4; border: none; }',
+            /* ===== 向导头部响应式排版 (PC端默认布局) ===== */
+            '.nw-wiz-header-responsive { display: flex; justify-content: space-between; align-items: center; padding: 15px 10px; }',
+            '.nw-wiz-step-wrap { flex: 1; display: flex; justify-content: flex-start; order: 1; }',
+            '.nw-wiz-title-responsive { flex: 2; margin: 0; padding: 0; text-align: center; font-size: 18px; letter-spacing: 0.5px; white-space: nowrap; color: #fff; order: 2; }',
+            '.nw-wiz-close-wrap { flex: 1; display: flex; justify-content: flex-end; order: 3; }',
             '.nw-wisp-modal-title, .nw-wiz-modal-title { margin: 0 20px; font-size: 16px; color: #eee; background: #0f172a; text-align: center; border-radius: 12px; }',
             '.nw-wiz-modal-title { background: transparent; font-size: 19px; font-weight: 600; margin: 0; padding: 0; letter-spacing: 0.5px; }',
-            '.nw-wisp-ui-panel { flex-direction: column; align-items: center; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; }',
+            '.nw-wisp-ui-panel { flex-direction: column; align-items: center; background: #000; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; }',
             '.nw-wisp-target-input { background: #e2e8f0 !important; color: #475569 !important; }',
             '.nw-wifi-tabs { display: flex; gap: 10px; margin-bottom: 15px; }',
             '.nw-tab-btn { flex: 1; padding: 10px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s; }',
@@ -414,6 +417,11 @@ return view.extend({
             '  .nw-radio-group { flex-wrap: wrap; gap: 12px; }',
             '  .nw-form-area input::placeholder, .nw-form-area textarea::placeholder, .nw-wiz-modal-box input::placeholder { font-size: 13px; }',
             '  .nw-version-tag {display: none; }',
+            /* ===== 手机端 Header 自动换行及重新排序 ===== */
+            '  .nw-wiz-header-responsive { flex-wrap: wrap; padding: 12px 15px !important; }',
+            '  .nw-wiz-title-responsive { flex: 1; text-align: center; font-size: 17px; order: 1; }',
+            '  .nw-wiz-close-wrap { flex: 0 0 auto; order: 2; }',
+            '  .nw-wiz-step-wrap { flex: 0 0 100%; justify-content: center; margin-top: 5px; order: 3; }',
             '}',
             '</style>',
             
@@ -423,7 +431,7 @@ return view.extend({
             '      <div class="nw-version-tag">{{APP_VERSION}} <div class="nw-version-dot" style="display: none;"></div></div>',
             '    </div>',
             '    <p>{{SUBTITLE}}</p>',
-            '    <div id="btn-reopen-wizard" style="margin-top: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); padding: 6px 18px; border-radius: 20px; font-size: 13.5px; font-weight: 500; color: #fff; transition: all 0.25s ease;">{{WIZ_REOPEN}}</div>',
+            '    <div id="btn-reopen-wizard" style="margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); padding: 6px 18px; border-radius: 20px; font-size: 13.5px; font-weight: 500; color: #fff; transition: all 0.25s ease;">{{WIZ_REOPEN}}</div>',
             '  </div>',
             '  <div id="nw-global-modal" style="display:none;">',
             '    <div class="nw-modal-box">',
@@ -439,9 +447,13 @@ return view.extend({
             // WISP 扫描结果
             '  <div id="wisp-scan-modal" class="nw-wisp-modal" style="display:none;">',
             '    <div class="nw-wisp-modal-box">',
-            '      <div class="nw-wisp-modal-header">',
-            '         <h3 class="nw-wisp-modal-title">{{MODAL_WISP_TITLE}}</h3>',
-            '         <span id="wisp-modal-close" class="nw-wisp-modal-close" style="font-size:24px; cursor:pointer; color:#94a3b8;">&times;</span>',
+            '      <div style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; background:#5e72e4;">',
+            '         <div style="flex:1;"></div>',
+            '         <h3 style="flex:2; margin:0; padding:0; text-align:center; font-size:16px; font-weight:600; color:#fff; background:transparent;">{{MODAL_WISP_TITLE}}</h3>',
+            '         <!-- 关闭按钮 -->',
+            '         <div style="flex:1; display:flex; justify-content:flex-end;">',
+            '            <span id="wisp-modal-close" class="nw-pointer" style="font-size:40px; cursor:pointer; color:#fff; line-height:1;">&times;</span>',
+            '         </div>',
             '      </div>',
             '      <div style="padding:0; overflow-y:auto; flex:1;">',
             '         <ul id="wisp-scan-list" style="list-style:none; padding:0; margin:0;"></ul>',
@@ -452,9 +464,23 @@ return view.extend({
             // ===== 快速向导悬浮层 =====
             '  <div id="nw-wizard-modal" class="nw-wisp-modal" style="display:none;">',
             '    <div class="nw-wiz-modal-box">',
-            '      <div class="nw-wiz-modal-header">',
-            '         <h3 class="nw-wiz-modal-title">{{WIZ_TITLE}}</h3>',
-            '         <span id="wiz-modal-close" class="nw-pointer" style="color: #fff; font-size: 26px; opacity: 0.8; line-height: 1;">&times;</span>',
+            '      <div class="nw-wiz-modal-header nw-wiz-header-responsive" style="background:#5e72e4;">',
+            '         <!-- 1 ➔ 2 ➔ 3 指示器 -->',
+            '         <div class="nw-wiz-step-wrap">',
+            '            <div id="wiz-step-indicator" style="display: flex; align-items: center; gap: 2px;">',
+            '               <div class="nw-step-dot" style="width:22px; height:22px; border-radius:50%; font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center; transition:all 0.3s; box-sizing:border-box;">1</div>',
+            '               <div class="nw-step-line" style="display:flex; align-items:center; justify-content:center; margin:0 2px; transition:all 0.3s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block; background: transparent !important;"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></div>',
+            '               <div class="nw-step-dot" style="width:22px; height:22px; border-radius:50%; font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center; transition:all 0.3s; box-sizing:border-box;">2</div>',
+            '               <div class="nw-step-line" style="display:flex; align-items:center; justify-content:center; margin:0 2px; transition:all 0.3s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block; background: transparent !important;"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></div>',
+            '               <div class="nw-step-dot" style="width:22px; height:22px; border-radius:50%; font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center; transition:all 0.3s; box-sizing:border-box;">3</div>',
+            '            </div>',
+            '         </div>',
+            '         <!-- 大标题 -->',
+            '         <h3 class="nw-wiz-modal-title nw-wiz-title-responsive">{{WIZ_TITLE}}</h3>',
+            '         <!-- 关闭按钮 -->',
+            '         <div class="nw-wiz-close-wrap">',
+            '            <span id="wiz-modal-close" class="nw-pointer" style="color: #fff; font-size: 40px; opacity: 0.8; line-height: 1;">&times;</span>',
+            '         </div>',
             '      </div>',
             '      <div style="padding: 30px 25px 15px; overflow-y: auto;">',
             '         <!-- Step 1: WAN -->',
@@ -600,7 +626,7 @@ return view.extend({
             '                 <label class="nw-switch nw-flex-shrink-0 nw-scale-switch" style="margin: 0;"><input type="checkbox" id="wifi-2g-en" checked><span class="nw-slider"></span></label>',
             '                 <label class="nw-value-title nw-m0 nw-pointer" style="display: inline-block !important; margin: 0 !important; line-height: 1 !important;">{{LBL_WIFI_2G_EN}}</label>',
             '              </div>',
-            '              <div class="nw-split-header-item" style="display: flex; align-items: center; justify-content: center; gap: 10px;">',
+            '              <div class="nw-split-header-item" style="display: flex; align-items: center; justify-content: center; gap: 2px;">',
             '                 <label class="nw-switch nw-flex-shrink-0 nw-scale-switch" style="margin: 0;"><input type="checkbox" id="wifi-5g-en" checked><span class="nw-slider"></span></label>',
             '                 <label class="nw-value-title nw-m0 nw-pointer" style="display: inline-block !important; margin: 0 !important; line-height: 1 !important;">{{LBL_WIFI_5G_EN}}</label>',
             '              </div>',
@@ -783,6 +809,45 @@ return view.extend({
         var wizHideCb = container.querySelector('#wiz-hide-checkbox');
         var currentWizStep = 1;
 
+        // 向导高亮
+        var updateWizSteps = function(step) {
+            var dots = container.querySelectorAll('.nw-step-dot');
+            dots.forEach(function(d, i) {
+                if (i + 1 === step) {
+                    // 1. 当前进行中的步骤
+                    d.style.background = '#ffffff';
+                    d.style.color = '#5e72e4';
+                    d.style.border = 'none';
+                    d.style.transform = 'scale(1.2)';
+                    d.style.boxShadow = '0 0 8px rgba(255,255,255,0.6)';
+                    d.style.opacity = '1';
+                } else if (i + 1 < step) {
+                    // 2. 已经完成的步骤
+                    d.style.background = 'rgba(255,255,255,0.25)';
+                    d.style.color = '#ffffff';
+                    d.style.border = 'none';
+                    d.style.transform = 'scale(1)';
+                    d.style.boxShadow = 'none';
+                    d.style.opacity = '1';
+                } else {
+                    // 3. 未来的步骤
+                    d.style.background = 'transparent';
+                    d.style.color = 'rgba(255,255,255,0.6)';
+                    d.style.border = '1px solid rgba(255,255,255,0.4)';
+                    d.style.transform = 'scale(1)';
+                    d.style.boxShadow = 'none';
+                    d.style.opacity = '0.8';
+                }
+            });
+            var lines = container.querySelectorAll('.nw-step-line');
+            lines.forEach(function(l, i) {
+                l.style.setProperty('background', 'transparent', 'important'); 
+                l.style.color = (i + 1 < step) ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.3)';
+            });
+        };
+        // 初始化界面时渲染一次
+        updateWizSteps(currentWizStep);
+
         // 1. 退出(X) 按钮此时勾选了“不再提示”，就执行静默写入。
         var closeWizard = function() {
             if (wizHideCb && wizHideCb.checked) {
@@ -805,6 +870,7 @@ return view.extend({
                 
                 // 2. 状态重置归零：回到第一步
                 currentWizStep = 1;
+                updateWizSteps(1); // 【更新点阵】
                 wArea1.style.display = 'block';
                 wArea2.style.display = 'none';
                 wArea3.style.display = 'none';
@@ -848,7 +914,7 @@ return view.extend({
                     openModal({ title: T['M_INC_TIT'], msg: T['M_INC_PPPOE'], okText: T['M_CLOSE'] }); 
                     return; 
                 }
-                wArea1.style.display = 'none'; wArea2.style.display = 'block'; wBtnPrev.style.display = 'block'; currentWizStep = 2;
+                wArea1.style.display = 'none'; wArea2.style.display = 'block'; wBtnPrev.style.display = 'block'; wArea1.style.display = 'none'; wArea2.style.display = 'block'; wBtnPrev.style.display = 'block'; currentWizStep = 2; updateWizSteps(2); // 【更新点阵】
             } else if (currentWizStep === 2) {
                 var isSkipWifi = skipWifiCb ? skipWifiCb.checked : false;
                 var ssid = container.querySelector('#wiz-wifi-ssid').value.trim();
@@ -858,17 +924,30 @@ return view.extend({
                     // 渲染最终确认视图
                     var wType2 = container.querySelector('input[name="wiz_wan_type"]:checked').value;
                     var htmlConfirm = "<div style='text-align:left; font-size:15px; color: #fff;'>";
-                    htmlConfirm += "<div style='margin-bottom:10px;'><b style='color:#facc15;'>WAN:</b> " + (wType2 === 'dhcp' ? T['OPT_DHCP'] : T['MODE_PPPOE_TITLE']) + "</div>";
-                    if (isSkipWifi) {
-                        htmlConfirm += "<div style='margin-bottom:10px;'><b style='color:#67e8f9;'>Wi-Fi:</b> <span style='color:#94a3b8; font-style:italic;'>" + T['TXT_NOT_CONFIGURED'] + "</span></div>";
+                    
+                    // --- 1. WAN  ---
+                    if (wType2 === 'pppoe') {
+                        var pppoeUser = container.querySelector('#wiz-pppoe-user').value.replace(/[\r\n\s]+/g, '');
+                        var pppoePass = container.querySelector('#wiz-pppoe-pass').value;
+                        htmlConfirm += "<div style='margin-bottom:8px; display:flex; align-items:center;'><b style='color:#facc15; margin-right:8px; flex-shrink:0;'>WAN:</b> <span>" + T['MODE_PPPOE_TITLE'] + "</span></div>";
+                        htmlConfirm += "<div style='margin-bottom:8px; display:flex; align-items:center;'><b style='color:#fde047; margin-right:8px; white-space:nowrap; flex-shrink:0;'>"+ T['M_ACCT'] +":</b> <span style='word-break:break-all; opacity:0.9;'>" + escapeHTML(pppoeUser) + "</span></div>";
+                        htmlConfirm += "<div style='margin-bottom:12px; display:flex; align-items:center;'><b style='color:#fde047; margin-right:8px; white-space:nowrap; flex-shrink:0;'>"+ T['M_PWD'] +":</b> <span style='word-break:break-all; opacity:0.9;'>" + escapeHTML(pppoePass) + "</span></div>";
                     } else {
-                        htmlConfirm += "<div style='margin-bottom:10px;'><b style='color:#67e8f9;'>Wi-Fi:</b> " + (ssid ? escapeHTML(ssid) : "<i>" + T['TXT_UNSET'] + "</i>") + "</div>";
-                        htmlConfirm += "<div><b style='color:#a7f3d0;'>"+ T['M_PWD'] +":</b> " + (key ? escapeHTML(key) : "<i>" + T['TXT_NO_PWD_OPEN'] + "</i>") + "</div>";
+                        htmlConfirm += "<div style='margin-bottom:12px; display:flex; align-items:center;'><b style='color:#facc15; margin-right:8px; flex-shrink:0;'>WAN:</b> <span>" + T['OPT_DHCP'] + "</span></div>";
                     }
+                    
+                    // --- 2. Wi-Fi  ---
+                    if (isSkipWifi) {
+                        htmlConfirm += "<div style='margin-bottom:0; display:flex; align-items:center;'><b style='color:#67e8f9; margin-right:8px; flex-shrink:0;'>Wi-Fi:</b> <span style='color:#94a3b8; font-style:italic;'>" + T['TXT_NOT_CONFIGURED'] + "</span></div>";
+                    } else {
+                        htmlConfirm += "<div style='margin-bottom:8px; display:flex; align-items:center;'><b style='color:#67e8f9; margin-right:8px; flex-shrink:0;'>Wi-Fi:</b> <span style='word-break:break-all;'>" + (ssid ? escapeHTML(ssid) : "<i>" + T['TXT_UNSET'] + "</i>") + "</span></div>";
+                        htmlConfirm += "<div style='margin-bottom:0; display:flex; align-items:center;'><b style='color:#a7f3d0; margin-right:8px; white-space:nowrap; flex-shrink:0;'>"+ T['M_PWD'] +":</b> <span style='word-break:break-all;'>" + (key ? escapeHTML(key) : "<i>" + T['TXT_NO_PWD_OPEN'] + "</i>") + "</span></div>";
+                    }
+                    
                     htmlConfirm += "</div>";
                     container.querySelector('#wiz-confirm-text').innerHTML = htmlConfirm;
 
-                    wArea2.style.display = 'none'; wArea3.style.display = 'block'; wBtnNext.style.display = 'none'; wBtnApply.style.display = 'block'; currentWizStep = 3;
+                    wArea2.style.display = 'none'; wArea3.style.display = 'block'; wBtnNext.style.display = 'none'; wBtnApply.style.display = 'block'; wArea2.style.display = 'none'; wArea3.style.display = 'block'; wBtnNext.style.display = 'none'; wBtnApply.style.display = 'block'; currentWizStep = 3; updateWizSteps(3); // 【更新点阵】
                 };
 
                 if (!isSkipWifi) {
@@ -897,8 +976,11 @@ return view.extend({
 
         // 5. 返回逻辑
         wBtnPrev.addEventListener('click', function() {
-            if (currentWizStep === 2) { wArea2.style.display = 'none'; wArea1.style.display = 'block'; wBtnPrev.style.display = 'none'; currentWizStep = 1;
-            } else if (currentWizStep === 3) { wArea3.style.display = 'none'; wArea2.style.display = 'block'; wBtnApply.style.display = 'none'; wBtnNext.style.display = 'block'; currentWizStep = 2; }
+            if (currentWizStep === 2) { 
+                wArea2.style.display = 'none'; wArea1.style.display = 'block'; wBtnPrev.style.display = 'none'; currentWizStep = 1; updateWizSteps(1); // 【新增更新点阵】
+            } else if (currentWizStep === 3) { 
+                wArea3.style.display = 'none'; wArea2.style.display = 'block'; wBtnApply.style.display = 'none'; wBtnNext.style.display = 'block'; currentWizStep = 2; updateWizSteps(2); // 【新增更新点阵】
+            }
         });
 
         // 6. 一键合并提交，分流双通道与单通道

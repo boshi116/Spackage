@@ -89,51 +89,55 @@ int set_socket_rcvbuf(int fd, int size) {
  */
 int logger(loglevel_t level, const char *format, ...) {
   va_list ap;
-  int r = 0;
   char message[1024];
-  int prefix_len = 0;
+  int prefix_len, body_written, ret;
+  size_t avail, body_len;
+  loglevel_t current_level;
 
-  /* Check log level from shared memory if available, otherwise use config */
-  loglevel_t current_level = config.verbosity;
-  if (status_shared) {
-    current_level = status_shared->current_log_level;
+  current_level = status_shared ? status_shared->current_log_level : config.verbosity;
+  if (current_level < level) {
+    return 0;
   }
 
-  if (current_level >= level) {
-    if (worker_id == SUPERVISOR_WORKER_ID) {
-      prefix_len = snprintf(message, sizeof(message), "[Supervisor] ");
-    } else {
-      prefix_len = snprintf(message, sizeof(message), "[Worker %d] ", worker_id);
-    }
-
-    if (prefix_len < 0)
-      return prefix_len;
-
-    /* Format the actual message after the prefix (if any) */
-    va_start(ap, format);
-    r = vsnprintf(message + prefix_len, sizeof(message) - prefix_len, format, ap);
-    va_end(ap);
-
-    if (r < 0)
-      return r;
-
-    /* Automatically add newline if format doesn't end with one */
-    if (format && strlen(format) > 0 && format[strlen(format) - 1] != '\n') {
-      if (r > (int)sizeof(message) - prefix_len - 2)
-        r = (int)sizeof(message) - prefix_len - 2;
-
-      message[prefix_len + r++] = '\n';
-      message[prefix_len + r] = '\0';
-    }
-
-    /* Output to stdout */
-    r = fputs(message, stdout);
-    fflush(stdout);
-
-    /* Store in status log buffer */
-    status_add_log_entry(level, message);
+  if (worker_id == SUPERVISOR_WORKER_ID) {
+    prefix_len = snprintf(message, sizeof(message), "[Supervisor] ");
+  } else {
+    prefix_len = snprintf(message, sizeof(message), "[Worker %d] ", worker_id);
   }
-  return r;
+  if (prefix_len < 0 || (size_t)prefix_len >= sizeof(message) - 2) {
+    return -1;
+  }
+  avail = sizeof(message) - (size_t)prefix_len;
+
+  va_start(ap, format);
+  body_written = vsnprintf(message + prefix_len, avail, format, ap);
+  va_end(ap);
+  if (body_written < 0) {
+    return body_written;
+  }
+
+  /* Clamp on truncation: vsnprintf returns the length it *would* have written. */
+  body_len = ((size_t)body_written >= avail) ? avail - 1 : (size_t)body_written;
+
+  /* Ensure the buffer ends with '\n'. Decision is based on the actual buffer
+   * content (not the format string), so a trailing '\n' lost to truncation is
+   * still appended back, while a '\n' already present is not duplicated. */
+  if (body_len == 0 || message[prefix_len + body_len - 1] != '\n') {
+    if ((size_t)prefix_len + body_len + 2 > sizeof(message)) {
+      body_len--; /* No room — sacrifice the last body char to fit '\n\0'. */
+    }
+    message[prefix_len + body_len++] = '\n';
+    message[prefix_len + body_len] = '\0';
+  }
+
+  /* Flush immediately, otherwise syslogd/journald timestamps drift and
+   * startup-time logs may not appear at all. */
+  ret = fputs(message, stdout);
+  fflush(stdout);
+
+  status_add_log_entry(level, message);
+
+  return ret;
 }
 
 void bind_to_upstream_interface(int sock, const char *ifname) {
