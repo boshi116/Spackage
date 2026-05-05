@@ -56,9 +56,19 @@ static char shm_path[256] = {0};
 int status_init(void) {
   int fd;
 
-  /* Create shared memory file in /tmp */
+  /* PID-keyed path: EEXIST can only be a stale leftover from a prior instance
+   * with the same PID (no live process can hold our PID in this namespace),
+   * so unlink-and-retry is safe. */
   snprintf(shm_path, sizeof(shm_path), "/tmp/rtp2httpd_status_%d", getpid());
   fd = open(shm_path, O_CREAT | O_RDWR | O_EXCL, 0600);
+  if (fd == -1 && errno == EEXIST) {
+    logger(LOG_WARN, "Stale shared memory file %s found, removing and retrying", shm_path);
+    if (unlink(shm_path) == -1 && errno != ENOENT) {
+      logger(LOG_ERROR, "Failed to unlink stale shared memory file: %s", strerror(errno));
+      return -1;
+    }
+    fd = open(shm_path, O_CREAT | O_RDWR | O_EXCL, 0600);
+  }
   if (fd == -1) {
     logger(LOG_ERROR, "Failed to create shared memory file: %s", strerror(errno));
     return -1;
@@ -72,14 +82,20 @@ int status_init(void) {
     return -1;
   }
 
-  /* Map shared memory */
-  status_shared = mmap(NULL, sizeof(status_shared_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-  if (status_shared == MAP_FAILED) {
-    logger(LOG_ERROR, "Failed to map shared memory: %s", strerror(errno));
+  /* Map shared memory.
+   * logger() probes status_shared with a NULL check, not a MAP_FAILED check,
+   * so we must reset to NULL before logging or any failure path that calls
+   * logger() will dereference (void*)-1. */
+  void *mapped = mmap(NULL, sizeof(status_shared_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (mapped == MAP_FAILED) {
+    int err = errno;
+    status_shared = NULL;
+    logger(LOG_ERROR, "Failed to map shared memory: %s", strerror(err));
     close(fd);
     unlink(shm_path);
     return -1;
   }
+  status_shared = mapped;
 
   /* Close file descriptor immediately after mmap()
    * Per POSIX: "closing the file descriptor does not unmap the region"
@@ -114,6 +130,7 @@ int status_init(void) {
           close(status_shared->worker_notification_pipes[j]);
       }
       munmap(status_shared, sizeof(status_shared_t));
+      status_shared = NULL;
       unlink(shm_path);
       return -1;
     }

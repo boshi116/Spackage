@@ -35,6 +35,7 @@ static int http_proxy_try_receive_response(http_proxy_session_t *session);
 static int http_proxy_parse_response_headers(http_proxy_session_t *session);
 static int http_proxy_append_raw_headers(http_proxy_session_t *session, char **dest, size_t *remaining, int *total_len,
                                          int filter_user_agent);
+static void http_proxy_pause_upstream(http_proxy_session_t *session);
 
 static const char *http_proxy_get_override_user_agent(void) {
   if (config.http_proxy_user_agent && config.http_proxy_user_agent[0] != '\0') {
@@ -75,7 +76,53 @@ void http_proxy_session_init(http_proxy_session_t *session) {
   session->bytes_received = 0;
   session->headers_received = 0;
   session->headers_forwarded = 0;
+  session->upstream_paused = 0;
   session->cleanup_done = 0;
+}
+
+/* Pause/resume are flag-only.  We deliberately avoid `poller_mod` because on
+ * kqueue (src/poller_kqueue.c) a mask without POLLER_IN/POLLER_OUT deletes
+ * the read AND write filters, silently losing HUP/EOF detection while
+ * paused.  Edge-triggered pollers will keep waking the worker for new data
+ * arrivals; the recv handler bails out via the HWM check when the queue is
+ * saturated.  This keeps the kernel TCP recv buffer the natural backstop:
+ * once it fills, the upstream sender's window closes naturally.
+ */
+static void http_proxy_pause_upstream(http_proxy_session_t *session) {
+  if (!session || session->upstream_paused)
+    return;
+  session->upstream_paused = 1;
+  connection_record_pause(session->conn);
+  connection_recompute_any_upstream_paused(session->conn);
+  logger(LOG_DEBUG, "HTTP Proxy: Paused upstream reads (queued=%zu limit=%zu)",
+         session->conn ? connection_queue_bytes(session->conn) : 0,
+         session->conn ? session->conn->queue_limit_bytes : 0);
+}
+
+void http_proxy_resume_upstream(http_proxy_session_t *session) {
+  if (!session || !session->upstream_paused)
+    return;
+  session->upstream_paused = 0;
+  connection_recompute_any_upstream_paused(session->conn);
+  logger(LOG_DEBUG, "HTTP Proxy: Resumed upstream reads");
+  /* Drain synchronously here: edge-triggered pollers won't deliver another
+   * EPOLLIN edge for bytes that arrived while paused, so anything still
+   * buffered in the kernel must come out in this call frame.  Loop exits
+   * on EAGAIN, HWM re-pause, EOF, or error. */
+  while (session->state == HTTP_PROXY_STATE_STREAMING && !session->upstream_paused) {
+    int ret = http_proxy_try_receive_response(session);
+    if (ret <= 0)
+      break;
+  }
+  /* EOF discovered mid-drain: no further upstream events will arrive, so
+   * close the upstream socket here and start the client drain. */
+  if (session->state == HTTP_PROXY_STATE_COMPLETE) {
+    if (session->socket >= 0) {
+      worker_cleanup_socket_from_epoll(session->epoll_fd, session->socket);
+      session->socket = -1;
+    }
+    connection_begin_drain_close(session->conn);
+  }
 }
 
 int http_proxy_parse_url(http_proxy_session_t *session, const char *url) {
@@ -762,6 +809,15 @@ static int http_proxy_try_receive_response(http_proxy_session_t *session) {
     }
 
     /* Phase 2: Zero-copy streaming - recv directly to buffer pool */
+
+    /* Pause upstream BEFORE recv when client queue is near limit.  Dropping
+     * bytes mid-stream would corrupt the response body, so we instead push
+     * backpressure into the upstream TCP receive buffer. */
+    if (connection_should_pause_upstream(session->conn)) {
+      http_proxy_pause_upstream(session);
+      return 0;
+    }
+
     buffer_ref_t *buf = buffer_pool_alloc();
     if (!buf) {
       logger(LOG_ERROR, "HTTP Proxy: Buffer pool exhausted");

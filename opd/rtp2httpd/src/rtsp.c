@@ -312,6 +312,51 @@ void rtsp_session_init(rtsp_session_t *session) {
   session->teardown_requested = 0;
   session->teardown_reconnect_done = 0;
   session->state_before_teardown = RTSP_STATE_INIT;
+
+  /* Initialize flow control state (TCP transport only) */
+  session->upstream_paused = 0;
+}
+
+/* Pause/resume are flag-only.  We deliberately avoid `poller_mod` because on
+ * kqueue (src/poller_kqueue.c) a mask without POLLER_IN/POLLER_OUT deletes
+ * the read AND write filters, silently losing HUP/EOF detection while
+ * paused.  The TCP socket also carries control-plane responses
+ * (PLAY/keepalive replies, TEARDOWN), and outbound work (state machine
+ * requests, keepalives) updates POLLER_OUT independently — keeping the read
+ * filter in place lets all of that continue to flow during pause, so the
+ * server's session timer keeps getting reset and never reclaims us.
+ * rtsp_handle_tcp_interleaved_data() bails out via the HWM check when the
+ * queue is saturated. */
+static void rtsp_pause_upstream(rtsp_session_t *session) {
+  if (!session || session->upstream_paused)
+    return;
+  if (session->transport_mode != RTSP_TRANSPORT_TCP)
+    return;
+  session->upstream_paused = 1;
+  connection_record_pause(session->conn);
+  connection_recompute_any_upstream_paused(session->conn);
+  logger(LOG_DEBUG, "RTSP TCP: Paused upstream reads (queued=%zu limit=%zu)",
+         session->conn ? connection_queue_bytes(session->conn) : 0,
+         session->conn ? session->conn->queue_limit_bytes : 0);
+}
+
+void rtsp_resume_upstream(rtsp_session_t *session) {
+  if (!session || !session->upstream_paused)
+    return;
+  session->upstream_paused = 0;
+  connection_recompute_any_upstream_paused(session->conn);
+  logger(LOG_DEBUG, "RTSP TCP: Resumed upstream reads");
+  /* Drain synchronously here: edge-triggered pollers won't deliver another
+   * EPOLLIN edge for bytes that arrived while paused.  The drain function
+   * loops internally and returns -1 on EOF/recv error — close the upstream
+   * here in that case so the session isn't orphaned waiting for an event. */
+  if (!session->conn)
+    return;
+  if (rtsp_handle_tcp_interleaved_data(session, session->conn) < 0) {
+    logger(LOG_DEBUG, "RTSP TCP: Upstream EOF during resume drain, closing");
+    rtsp_force_cleanup(session);
+    connection_begin_drain_close(session->conn);
+  }
 }
 
 /**
@@ -1751,6 +1796,14 @@ int rtsp_handle_tcp_interleaved_data(rtsp_session_t *session, connection_t *conn
    * per data arrival.  The inner recv loop may fill the small response buffer
    * before hitting EAGAIN; after processing we must loop back to recv more. */
   for (;;) {
+    /* Pause upstream BEFORE recv when client queue is near limit, so data
+     * accumulates in the upstream TCP receive buffer rather than being dropped
+     * at the application layer (which would tear holes in the RTP stream). */
+    if (connection_should_pause_upstream(conn)) {
+      rtsp_pause_upstream(session);
+      return total_forwarded;
+    }
+
     int hit_eagain = 0;
 
     /* Fill response buffer from socket */

@@ -62,11 +62,19 @@ typedef struct connection_s {
   size_t queue_buffers_highwater;
   uint64_t dropped_packets;
   uint64_t dropped_bytes;
+  /* Number of times an upstream TCP session attached to this connection paused
+   * its reads due to client-side backpressure (HWM crossed).  Pure pause
+   * counter — has no relation to dropped_packets.  UDP paths never increment
+   * this since they don't pause; their congestion shows up in dropped_packets. */
   uint32_t backpressure_events;
   int stream_registered;
   double queue_avg_bytes;
   int slow_active;
   int64_t slow_candidate_since;
+  /* Set when any TCP upstream session attached to this connection has paused
+   * its reads due to client-side backpressure.  Lets the per-write notify
+   * fast-path skip cheaply when no upstream is paused (the common case). */
+  int any_upstream_paused;
   /* r2h-token Set-Cookie flag: set cookie when token was provided via URL
      query */
   int should_set_r2h_cookie;
@@ -176,5 +184,50 @@ int connection_queue_zerocopy(connection_t *c, buffer_ref_t *buf_ref);
  * @return 0 on success, -1 on error
  */
 int connection_queue_file(connection_t *c, int file_fd, off_t file_offset, size_t file_size);
+
+/* Slot-equivalent bytes currently queued (each pending buffer counts as a full
+ * BUFFER_POOL_BUFFER_SIZE slot, matching the unit used by queue_limit_bytes). */
+static inline size_t connection_queue_bytes(const connection_t *c) {
+  return c->zc_queue.num_queued * BUFFER_POOL_BUFFER_SIZE;
+}
+
+/* Record one upstream-pause edge.  Called by per-transport pause helpers
+ * (http_proxy_pause_upstream, rtsp_pause_upstream) on the 0->1 transition. */
+static inline void connection_record_pause(connection_t *c) {
+  if (c)
+    c->backpressure_events++;
+}
+
+/**
+ * Returns true when the client send queue has reached the HWM and upstream
+ * reads should be paused.  Refreshes c->queue_limit_bytes from current pool
+ * state when the queue rises above the absolute-minimum-limit fast-path
+ * threshold, so the decision uses fresh inputs (active stream count, pool
+ * utilization) rather than whatever was cached at the last enqueue.
+ */
+int connection_should_pause_upstream(connection_t *c);
+
+/**
+ * Returns true when the client send queue has fallen back below the LWM and
+ * paused upstream reads should be resumed.  Refreshes c->queue_limit_bytes
+ * before deciding for the same reason as the pause helper.
+ */
+int connection_can_resume_upstream(connection_t *c);
+
+/**
+ * Recompute the connection-level `any_upstream_paused` bit by inspecting all
+ * attached upstream sessions.  Call after any individual upstream session
+ * toggles its own `upstream_paused` flag so the cheap per-write fast path in
+ * stream_on_client_drain() stays accurate.
+ */
+void connection_recompute_any_upstream_paused(connection_t *c);
+
+/**
+ * Mark the connection for orderly shutdown after upstream EOF/error: switch
+ * to CONN_CLOSING and re-arm the full event mask so the worker keeps draining
+ * any queued bytes to the client before tearing down.  No-op if the
+ * connection is already CONN_CLOSING.
+ */
+void connection_begin_drain_close(connection_t *c);
 
 #endif /* CONNECTION_H */
