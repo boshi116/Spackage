@@ -9,13 +9,17 @@ import os
 import tempfile
 import time
 
+import pytest
 
 from helpers import (
+    MockRTSPServer,
     R2HProcess,
     extract_catchup_source,
     find_free_port,
     http_get,
     http_request,
+    make_m3u_rtsp_config,
+    stream_get,
 )
 
 
@@ -991,3 +995,90 @@ rtp://239.0.0.2:1234$SD
             assert text.count("TestCh") >= 2
         finally:
             r2h.stop()
+
+
+# ---------------------------------------------------------------------------
+# M3U-configured service + request query merge mechanism
+# ---------------------------------------------------------------------------
+
+
+_STREAM_TIMEOUT = 20.0
+
+
+class TestM3UQueryMerge:
+    """Generic query-merge mechanism for M3U-configured services."""
+
+    @pytest.mark.parametrize(
+        "param_name,configured_value,request_value",
+        [
+            pytest.param("r2h-ifname", "configured_iface", "request_iface", id="r2h-ifname"),
+            pytest.param("r2h-ifname-fcc", "configured_fcc_iface", "request_fcc_iface", id="r2h-ifname-fcc"),
+        ],
+    )
+    def test_request_overrides_configured_via_merged_url_log(
+        self, r2h_binary, param_name, configured_value, request_value
+    ):
+        """request-side r2h-ifname / r2h-ifname-fcc must win over the configured
+        value. Both are stripped from the upstream URI, so we observe the merge
+        result via the rtp2httpd debug log."""
+        r2h_port = find_free_port()
+        rtsp = MockRTSPServer(num_packets=500)
+        rtsp.start()
+        try:
+            config = make_m3u_rtsp_config(
+                r2h_port, rtsp.port, "MergeWinsLog_%s" % param_name, "?%s=%s" % (param_name, configured_value)
+            )
+            r2h = R2HProcess(r2h_binary, r2h_port, config_content=config, capture_log=True)
+            r2h.start()
+            try:
+                # Bogus interface names — rtp2httpd logs a bind error but the
+                # request still goes through; we only inspect the merged URL.
+                stream_get(
+                    "127.0.0.1",
+                    r2h_port,
+                    "/MergeWinsLog_%s?%s=%s" % (param_name, param_name, request_value),
+                    read_bytes=4096,
+                    timeout=_STREAM_TIMEOUT,
+                )
+
+                log = r2h.read_log()
+                merged_lines = [line for line in log.splitlines() if "merged URL:" in line]
+                assert merged_lines, "expected a 'merged URL:' debug log line; got log:\n%s" % log
+                merged_line = merged_lines[-1]
+                assert "%s=%s" % (param_name, request_value) in merged_line, merged_line
+                assert "%s=%s" % (param_name, configured_value) not in merged_line, merged_line
+            finally:
+                r2h.stop()
+        finally:
+            rtsp.stop()
+
+    def test_merged_url_overflow_returns_500(self, r2h_binary):
+        """When the merged URL exceeds HTTP_URL_BUFFER_SIZE, the merge layer
+        must return NULL and the request must surface as HTTP 500 — never
+        silently fall back to the unmerged configured URL."""
+        r2h_port = find_free_port()
+        rtsp = MockRTSPServer(num_packets=500)
+        rtsp.start()
+        try:
+            # ~600 bytes per side guarantees the merged URL exceeds 1024.
+            configured_pad = "padconfigured=" + ("a" * 600)
+            request_pad = "padrequest=" + ("b" * 600)
+            config = make_m3u_rtsp_config(r2h_port, rtsp.port, "OverflowMerge", "?" + configured_pad)
+            r2h = R2HProcess(r2h_binary, r2h_port, config_content=config, capture_log=True)
+            r2h.start()
+            try:
+                status, _, _ = stream_get(
+                    "127.0.0.1",
+                    r2h_port,
+                    "/OverflowMerge?playseek=20240101120000-20240101130000&" + request_pad,
+                    read_bytes=4096,
+                    timeout=_STREAM_TIMEOUT,
+                )
+                assert status == 500, status
+                # Pin the failure to the merge-overflow path — distinguishes it
+                # from any unrelated 500 (e.g. RTSP teardown).
+                assert "Merged RTSP URL too long" in r2h.read_log()
+            finally:
+                r2h.stop()
+        finally:
+            rtsp.stop()

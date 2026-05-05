@@ -10,11 +10,61 @@
 #include <string.h>
 #include <time.h>
 
-/* Constants for time calculations */
-#define SECONDS_PER_HOUR 3600
-#define SECONDS_PER_DAY 86400
-#define MAX_TIMEZONE_OFFSET_SECONDS (TIMEZONE_MAX_OFFSET_HOURS * SECONDS_PER_HOUR)
-#define MIN_TIMEZONE_OFFSET_SECONDS (TIMEZONE_MIN_OFFSET_HOURS * SECONDS_PER_HOUR)
+#define MAX_TIMEZONE_OFFSET_SECONDS (TIMEZONE_MAX_OFFSET_HOURS * 3600)
+#define MIN_TIMEZONE_OFFSET_SECONDS (TIMEZONE_MIN_OFFSET_HOURS * 3600)
+
+int timezone_parse_utc_offset(const char *str, int *tz_offset_seconds, const char **endptr_out) {
+  if (!str || !tz_offset_seconds) {
+    return -1;
+  }
+
+  *tz_offset_seconds = 0;
+  if (endptr_out) {
+    *endptr_out = str;
+  }
+
+  if (strncmp(str, "UTC", 3) != 0) {
+    return -1;
+  }
+
+  str += 3;
+  if (endptr_out) {
+    *endptr_out = str;
+  }
+
+  if (*str == '\0') {
+    return 0;
+  }
+
+  /* Bare "UTC" followed by anything other than +/- means the offset spec ended. */
+  if (*str != '+' && *str != '-') {
+    return 0;
+  }
+
+  int sign = (*str == '+') ? 1 : -1;
+  str++;
+
+  char *endptr;
+  long offset_hours = strtol(str, &endptr, 10);
+  if (endptr == str) {
+    return -1;
+  }
+
+  if (offset_hours < 0 || offset_hours > abs(TIMEZONE_MAX_OFFSET_HOURS)) {
+    return -1;
+  }
+
+  int seconds = (int)(sign * offset_hours * 3600);
+  if (seconds < MIN_TIMEZONE_OFFSET_SECONDS || seconds > MAX_TIMEZONE_OFFSET_SECONDS) {
+    return -1;
+  }
+
+  *tz_offset_seconds = seconds;
+  if (endptr_out) {
+    *endptr_out = endptr;
+  }
+  return 0;
+}
 
 /*
  * Parse timezone information from User-Agent header
@@ -47,50 +97,15 @@ int timezone_parse_from_user_agent(const char *user_agent, int *tz_offset_second
 
   tz_marker += 3; /* Skip "TZ/" */
 
-  /* Check for UTC+offset or UTC-offset format */
-  if (strncmp(tz_marker, "UTC", 3) == 0) {
-    tz_marker += 3; /* Skip "UTC" */
-
-    /* Check for offset */
-    if (*tz_marker == '+' || *tz_marker == '-') {
-      int sign = (*tz_marker == '+') ? 1 : -1;
-      tz_marker++;
-
-      /* Parse offset hours */
-      int offset_hours = 0;
-      if (sscanf(tz_marker, "%d", &offset_hours) == 1) {
-        /* Validate offset range */
-        if (offset_hours < 0 || offset_hours > abs(TIMEZONE_MAX_OFFSET_HOURS)) {
-          logger(LOG_ERROR, "Timezone: Invalid offset hours %d (must be 0-%d)", offset_hours,
-                 abs(TIMEZONE_MAX_OFFSET_HOURS));
-          return -1;
-        }
-
-        *tz_offset_seconds = sign * offset_hours * SECONDS_PER_HOUR;
-
-        /* Double-check final offset is in valid range */
-        if (*tz_offset_seconds < MIN_TIMEZONE_OFFSET_SECONDS || *tz_offset_seconds > MAX_TIMEZONE_OFFSET_SECONDS) {
-          logger(LOG_ERROR, "Timezone: Calculated offset %d seconds out of range [%d, %d]", *tz_offset_seconds,
-                 MIN_TIMEZONE_OFFSET_SECONDS, MAX_TIMEZONE_OFFSET_SECONDS);
-          *tz_offset_seconds = 0;
-          return -1;
-        }
-
-        logger(LOG_DEBUG, "Timezone: Parsed timezone offset: UTC%+d (%d seconds)", sign * offset_hours,
-               *tz_offset_seconds);
-        return 0;
-      }
-    } else {
-      /* Just "UTC" with no offset */
-      logger(LOG_DEBUG, "Timezone: Parsed timezone: UTC (0 seconds)");
-      return 0;
-    }
+  if (timezone_parse_utc_offset(tz_marker, tz_offset_seconds, NULL) != 0) {
+    logger(LOG_INFO, "Timezone: Failed to parse timezone from User-Agent");
+    *tz_offset_seconds = 0;
+    return -1;
   }
 
-  /* Failed to parse timezone */
-  logger(LOG_INFO, "Timezone: Failed to parse timezone from User-Agent");
-  *tz_offset_seconds = 0;
-  return -1;
+  logger(LOG_DEBUG, "Timezone: Parsed timezone offset: UTC%+d (%d seconds)", *tz_offset_seconds / 3600,
+         *tz_offset_seconds);
+  return 0;
 }
 
 /*
@@ -323,8 +338,13 @@ int timezone_convert_time_with_offset(const char *input_time, int tz_offset_seco
       return -1;
     }
 
-    /* Apply timezone conversion and additional offset */
-    timestamp -= tz_offset_seconds;
+    /* The GMT suffix marks the value as already in UTC, so any caller-supplied
+     * tz_offset_seconds (UA TZ or r2h-seek-mode TZ) must be ignored — same
+     * contract as ISO-8601 with a Z / ±HH:MM suffix. r2h-seek-offset still
+     * applies because it is a deliberate per-request shift, not a TZ override. */
+    if (!has_gmt_suffix) {
+      timestamp -= tz_offset_seconds;
+    }
     timestamp += additional_offset_seconds;
 
     /* Convert back to yyyyMMddHHmmss format */
@@ -342,10 +362,8 @@ int timezone_convert_time_with_offset(const char *input_time, int tz_offset_seco
     /* Add GMT suffix back if original had it */
     if (has_gmt_suffix) {
       snprintf(output_time, output_size, "%sGMT", temp_time);
-      logger(LOG_DEBUG,
-             "Timezone: yyyyMMddHHmmssGMT '%s' (TZ offset %d) + seek offset %d "
-             "= '%s'",
-             input_time, -tz_offset_seconds, additional_offset_seconds, output_time);
+      logger(LOG_DEBUG, "Timezone: yyyyMMddHHmmssGMT '%s' (treated as UTC) + seek offset %d = '%s'", input_time,
+             additional_offset_seconds, output_time);
     } else {
       strncpy(output_time, temp_time, output_size - 1);
       output_time[output_size - 1] = '\0';
@@ -378,21 +396,22 @@ int timezone_convert_time_with_offset(const char *input_time, int tz_offset_seco
       return -1;
     }
 
-    if (has_timezone) {
-      timestamp -= timezone_offset;
-    } else {
+    /* Self-contained TZ inputs (Z or ±HH:MM) round-trip in their own frame —
+     * only apply the per-request offset, never the caller TZ. Same contract
+     * as timezone_convert_iso8601_with_offset's full ISO branch. */
+    if (!has_timezone) {
       timestamp -= tz_offset_seconds;
     }
     timestamp += additional_offset_seconds;
 
-    struct tm *utc_time = gmtime(&timestamp);
-    if (!utc_time) {
-      logger(LOG_ERROR, "Timezone: Failed to convert basic ISO 8601 timestamp to UTC");
+    struct tm *display_time = gmtime(&timestamp);
+    if (!display_time) {
+      logger(LOG_ERROR, "Timezone: Failed to convert basic ISO 8601 timestamp");
       return -1;
     }
 
-    struct tm utc_time_copy = *utc_time;
-    if (timezone_format_time_yyyyMMddHHmmss(&utc_time_copy, basic_time, sizeof(basic_time)) != 0) {
+    struct tm display_time_copy = *display_time;
+    if (timezone_format_time_yyyyMMddHHmmss(&display_time_copy, basic_time, sizeof(basic_time)) != 0) {
       return -1;
     }
 
@@ -402,10 +421,8 @@ int timezone_convert_time_with_offset(const char *input_time, int tz_offset_seco
       return -1;
     }
 
-    logger(LOG_DEBUG,
-           "Timezone: basic ISO 8601 '%s' (TZ offset %d) + seek offset %d = "
-           "'%s'",
-           input_time, has_timezone ? timezone_offset : -tz_offset_seconds, additional_offset_seconds, output_time);
+    logger(LOG_DEBUG, "Timezone: basic ISO 8601 '%s' (TZ offset %d) + seek offset %d = '%s'", input_time,
+           has_timezone ? timezone_offset : -tz_offset_seconds, additional_offset_seconds, output_time);
     return 0;
   }
 
@@ -644,6 +661,8 @@ int timezone_parse_to_utc(const char *input_time, int tz_offset_seconds, int add
   /* Format 2: yyyyMMddHHmmss or yyyyMMddHHmmssGMT */
   if ((input_len == 14 && digit_count == 14) ||
       (input_len == 17 && digit_count == 14 && strcmp(input_time + 14, "GMT") == 0)) {
+    int has_gmt_suffix = (input_len == 17);
+
     if (sscanf(input_time, "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &min, &sec) != 6) {
       return -1;
     }
@@ -662,7 +681,11 @@ int timezone_parse_to_utc(const char *input_time, int tz_offset_seconds, int add
     if (timestamp == -1)
       return -1;
 
-    timestamp -= tz_offset_seconds;
+    /* GMT suffix is a self-contained UTC marker — same contract as
+     * ISO-8601 Z / ±HH:MM. Skip the caller-supplied tz_offset_seconds. */
+    if (!has_gmt_suffix) {
+      timestamp -= tz_offset_seconds;
+    }
     timestamp += additional_offset_seconds;
     *out_utc = timestamp;
     return 0;

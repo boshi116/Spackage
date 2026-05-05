@@ -7,6 +7,7 @@ Covers two distinct layers:
 """
 
 import re
+import time
 
 import pytest
 
@@ -588,6 +589,36 @@ class TestHTTPPathTemplateTimezone:
         finally:
             upstream.stop()
 
+    def test_seek_mode_is_noop_for_http_template(self, shared_r2h):
+        """r2h-seek-mode is documented as RTSP-only — it must NOT shift HTTP
+        URL-template placeholders, even when the seek time is "recent" enough
+        for the RTSP clock= path to fire. Regression guard for the prior bug
+        where the recent-clock recompute mutated begin_tm_utc shared with the
+        URL-template path.
+        """
+        # Pick a recent-ish time in CST so range(UTC+8/3600) would normally
+        # interpret it as 8h earlier in UTC. The HTTP path must ignore that
+        # and render placeholders from the original begin_str unchanged.
+        ts_utc = int(time.time()) - 1500  # 25 min ago
+        cst_str = time.strftime("%Y%m%d%H%M%S", time.gmtime(ts_utc + 8 * 3600))
+        # The HTTP template uses local time (no UA TZ): the rendered path
+        # equals the input string verbatim.
+        expected_path = "/path/%s/file.m3u8" % cst_str
+        upstream = _make_upstream(expected_path)
+        upstream.start()
+        try:
+            url = (
+                "/http/127.0.0.1:%d/path/${(b)yyyyMMddHHmmss}/file.m3u8?playseek=%s&r2h-seek-mode=range(UTC%%2B8/3600)"
+            ) % (upstream.port, cst_str)
+            status, _, _ = http_get("127.0.0.1", shared_r2h.port, url, timeout=_TIMEOUT)
+            assert status == 200
+            assert _get_upstream_path(upstream) == expected_path, (
+                "r2h-seek-mode leaked into HTTP template: got %s, expected %s"
+                % (_get_upstream_path(upstream), expected_path)
+            )
+        finally:
+            upstream.stop()
+
     def test_lutc_with_timezone(self, shared_r2h):
         """{lutc} should return current time as ISO8601 UTC."""
         upstream = _make_upstream()
@@ -1041,6 +1072,39 @@ class TestRTSPPathTemplate:
         finally:
             rtsp.stop()
 
+    def test_template_expands_when_recent_clock_path_fires(self, shared_r2h):
+        """${...} placeholders in the RTSP URL must still expand even when
+        the recent-clock path fires (r2h-seek-mode=range + begin within the
+        window). Regression guard for a bug where the recent-clock branch
+        forwarded a NULL parse_result to the URL resolver, leaving
+        placeholders unresolved in the DESCRIBE URI."""
+        rtsp = MockRTSPServer(num_packets=500)
+        rtsp.start()
+        try:
+            start_ts = int(time.time()) - 1500  # 25 min ago, within 1h window
+            # UTC-format yyyyMMddHHmmss + no UA TZ + range(3600): begin_tm_utc
+            # echoes the same string back via ${(b)yyyyMMddHHmmss}, and the
+            # recent-clock path also fires (verified via PLAY Range header).
+            utc_str = time.strftime("%Y%m%d%H%M%S", time.gmtime(start_ts))
+            url = ("/rtsp/127.0.0.1:%d/path/${(b)yyyyMMddHHmmss}/stream?playseek=%s&r2h-seek-mode=range(3600)") % (
+                rtsp.port,
+                utc_str,
+            )
+
+            stream_get("127.0.0.1", shared_r2h.port, url, read_bytes=4096, timeout=_STREAM_TIMEOUT)
+
+            uri = _get_describe_uri(rtsp)
+            assert "${" not in uri, "Template placeholder left unresolved in DESCRIBE URI: %s" % uri
+            assert ("/path/%s/stream" % utc_str) in uri, (
+                "Begin template should be substituted in DESCRIBE URI, got: %s" % uri
+            )
+            # Cross-check the recent-clock path actually fired.
+            play_reqs = [r for r in rtsp.requests_detailed if r["method"] == "PLAY"]
+            expected_clock = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(start_ts))
+            assert play_reqs[0]["headers"].get("Range") == "clock=%s-" % expected_clock
+        finally:
+            rtsp.stop()
+
 
 # ===================================================================
 # Query-append mode (non-template URLs)
@@ -1279,8 +1343,9 @@ class TestHTTPQueryAppendTimezoneAndFormat:
         finally:
             upstream.stop()
 
-    def test_gmt_suffix_with_tz_conversion(self, shared_r2h):
-        """yyyyMMddHHmmssGMT with TZ/UTC+8 should convert and keep GMT suffix."""
+    def test_gmt_suffix_ignores_ua_tz(self, shared_r2h):
+        """yyyyMMddHHmmssGMT is a self-contained UTC marker; UA TZ must NOT
+        shift the value, mirroring the ISO-8601 `Z` suffix contract."""
         upstream = _make_upstream("/stream")
         upstream.start()
         try:
@@ -1294,7 +1359,30 @@ class TestHTTPQueryAppendTimezoneAndFormat:
             )
 
             path = _get_upstream_path(upstream)
-            assert _extract_query_param(path, "playseek") == "20240101040000GMT-20240101050000GMT"
+            assert _extract_query_param(path, "playseek") == "20240101120000GMT-20240101130000GMT"
+        finally:
+            upstream.stop()
+
+    def test_gmt_suffix_with_ua_tz_still_applies_seek_offset(self, shared_r2h):
+        """GMT suffix overrides UA TZ, but r2h-seek-offset is a deliberate
+        per-request shift and must still apply (it is not a TZ override)."""
+        upstream = _make_upstream("/stream")
+        upstream.start()
+        try:
+            url = (
+                "/http/127.0.0.1:%d/stream?playseek=20240101120000GMT-20240101130000GMT&r2h-seek-offset=3600"
+            ) % upstream.port
+            http_get(
+                "127.0.0.1",
+                shared_r2h.port,
+                url,
+                timeout=_TIMEOUT,
+                headers={"User-Agent": "TestPlayer/1.0 TZ/UTC+8"},
+            )
+
+            path = _get_upstream_path(upstream)
+            # 12:00 GMT (UA TZ ignored) + 3600s = 13:00 GMT, NOT 05:00 GMT.
+            assert _extract_query_param(path, "playseek") == "20240101130000GMT-20240101140000GMT"
         finally:
             upstream.stop()
 
@@ -2383,8 +2471,9 @@ class TestRTSPQueryAppendOffsetAndFormat:
         finally:
             rtsp.stop()
 
-    def test_gmt_suffix_with_tz_conversion(self, shared_r2h):
-        """yyyyMMddHHmmssGMT with TZ/UTC+8 should convert and keep GMT suffix."""
+    def test_gmt_suffix_ignores_ua_tz(self, shared_r2h):
+        """yyyyMMddHHmmssGMT is a self-contained UTC marker; UA TZ must NOT
+        shift the value in RTSP either, mirroring the ISO-8601 `Z` contract."""
         rtsp = MockRTSPServer(num_packets=500)
         rtsp.start()
         try:
@@ -2399,7 +2488,70 @@ class TestRTSPQueryAppendOffsetAndFormat:
             )
 
             uri = _get_describe_uri(rtsp)
-            assert _extract_query_param(uri, "playseek") == "20240101040000GMT-20240101050000GMT"
+            assert _extract_query_param(uri, "playseek") == "20240101120000GMT-20240101130000GMT"
+        finally:
+            rtsp.stop()
+
+    def test_iso8601_z_ignores_range_mode_tz(self, shared_r2h):
+        """Companion to the UA-TZ self-contained-TZ tests above: when the seek
+        input is ISO-8601 with an embedded `Z` suffix, neither UA TZ NOR
+        r2h-seek-mode=range(<TZ>) may shift the parsed instant. Exercises
+        the recent-clock path (PLAY Range: clock=...) since range(<TZ>) is
+        the only entry point for the explicit-TZ recompute branch."""
+        rtsp = MockRTSPServer(num_packets=500)
+        rtsp.start()
+        try:
+            start_ts = int(time.time()) - 1500  # 25 min ago, within 1h window
+            iso_str = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(start_ts))
+            # range(UTC+9) AND a UA TZ that disagrees with both the range TZ
+            # and the embedded `Z` — the `Z` wins regardless.
+            url = "/rtsp/127.0.0.1:%d/stream?playseek=%s&r2h-seek-mode=range(UTC%%2B9/3600)" % (rtsp.port, iso_str)
+
+            stream_get(
+                "127.0.0.1",
+                shared_r2h.port,
+                url,
+                read_bytes=4096,
+                timeout=_STREAM_TIMEOUT,
+                headers={"User-Agent": "TestPlayer/1.0 TZ/UTC+8"},
+            )
+
+            play_reqs = [r for r in rtsp.requests_detailed if r["method"] == "PLAY"]
+            expected_clock = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(start_ts))
+            assert play_reqs[0]["headers"].get("Range") == "clock=%s-" % expected_clock, (
+                "Embedded `Z` must take precedence over both range(<TZ>) and UA TZ — "
+                "got Range header %r" % play_reqs[0]["headers"].get("Range")
+            )
+        finally:
+            rtsp.stop()
+
+    def test_gmt_suffix_ignores_range_mode_tz(self, shared_r2h):
+        """Companion to test_gmt_suffix_ignores_ua_tz: same self-contained-TZ
+        contract on the recent-clock path. range(<TZ>) is the only entry
+        point for the explicit-TZ recompute branch, so it's the only way
+        to fully prove the GMT suffix is authoritative everywhere."""
+        rtsp = MockRTSPServer(num_packets=500)
+        rtsp.start()
+        try:
+            start_ts = int(time.time()) - 1500  # 25 min ago, within 1h window
+            gmt_str = time.strftime("%Y%m%d%H%M%S", time.gmtime(start_ts)) + "GMT"
+            url = "/rtsp/127.0.0.1:%d/stream?playseek=%s&r2h-seek-mode=range(UTC%%2B9/3600)" % (rtsp.port, gmt_str)
+
+            stream_get(
+                "127.0.0.1",
+                shared_r2h.port,
+                url,
+                read_bytes=4096,
+                timeout=_STREAM_TIMEOUT,
+                headers={"User-Agent": "TestPlayer/1.0 TZ/UTC+8"},
+            )
+
+            play_reqs = [r for r in rtsp.requests_detailed if r["method"] == "PLAY"]
+            expected_clock = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(start_ts))
+            assert play_reqs[0]["headers"].get("Range") == "clock=%s-" % expected_clock, (
+                "GMT suffix must take precedence over both range(<TZ>) and UA TZ — "
+                "got Range header %r" % play_reqs[0]["headers"].get("Range")
+            )
         finally:
             rtsp.stop()
 
@@ -3141,5 +3293,40 @@ class TestSeekValueFormats:
             assert full_path.startswith(expected_path)
             # The playseek param should be converted (basic ISO → basic ISO)
             assert "playseek=20240101T120000-20240101T130000" in full_path
+        finally:
+            upstream.stop()
+
+    def test_basic_iso8601_with_tz_offset_preserves_bytes_in_query_append(self, shared_r2h):
+        """Basic ISO 8601 input with an embedded `±HH:MM` suffix is self-contained;
+        the query-append converter must round-trip the bytes verbatim."""
+        expected_path = "/stream/live.m3u8"
+        upstream = _make_upstream(expected_path)
+        upstream.start()
+        try:
+            url = (
+                "/http/127.0.0.1:%d/stream/live.m3u8?playseek=20240101T200000%%2B08:00-20240101T210000%%2B08:00"
+            ) % upstream.port
+            status, _, _ = http_get("127.0.0.1", shared_r2h.port, url, timeout=_TIMEOUT)
+            assert status == 200
+            full_path = _get_upstream_path(upstream)
+            assert "playseek=20240101T200000+08:00-20240101T210000+08:00" in full_path, full_path
+        finally:
+            upstream.stop()
+
+    def test_basic_iso8601_with_tz_offset_and_seek_offset_shifts_clock_in_original_tz(self, shared_r2h):
+        """`r2h-seek-offset` against a self-contained `±HH:MM` input shifts the
+        clock within the original TZ frame, preserving the suffix."""
+        expected_path = "/stream/live.m3u8"
+        upstream = _make_upstream(expected_path)
+        upstream.start()
+        try:
+            url = (
+                "/http/127.0.0.1:%d/stream/live.m3u8"
+                "?playseek=20240101T200000%%2B08:00-20240101T210000%%2B08:00&r2h-seek-offset=3600"
+            ) % upstream.port
+            status, _, _ = http_get("127.0.0.1", shared_r2h.port, url, timeout=_TIMEOUT)
+            assert status == 200
+            full_path = _get_upstream_path(upstream)
+            assert "playseek=20240101T210000+08:00-20240101T220000+08:00" in full_path, full_path
         finally:
             upstream.stop()

@@ -3,6 +3,9 @@ E2E tests for miscellaneous RTSP features.
 
 Covers HEAD requests, unreachable server handling, r2h-duration
 (stream duration query), and timeout handling.
+
+Note: r2h-seek-mode opt-in semantics, recent-clock playback, and
+configured-service query-merge precedence live in test_rtsp_seek_mode.py.
 """
 
 import json
@@ -76,10 +79,6 @@ def _get_status_clients(port: int, timeout: float = 3.0) -> list[dict]:
             except json.JSONDecodeError:
                 pass
     return []
-
-
-def _format_basic_utc(ts: int) -> str:
-    return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(ts))
 
 
 @pytest.fixture(scope="module")
@@ -413,113 +412,6 @@ class TestRTSPStartSeek:
                 read_bytes=4096,
                 timeout=_STREAM_TIMEOUT,
             )
-
-            play_reqs = [r for r in rtsp.requests_detailed if r["method"] == "PLAY"]
-            assert len(play_reqs) > 0, "Expected PLAY request"
-            assert "Range" not in play_reqs[0]["headers"]
-        finally:
-            rtsp.stop()
-
-
-class TestRTSPRecentPlayseek:
-    """Recent RTSP playseek should use PLAY Range clock headers."""
-
-    @staticmethod
-    def _build_seek_query(param_name: str, start_str: str, end_str: str) -> str:
-        if param_name == "custom_seek":
-            return "custom_seek=%s-%s&r2h-seek-name=custom_seek" % (start_str, end_str)
-        return "%s=%s-%s" % (param_name, start_str, end_str)
-
-    @pytest.mark.parametrize("param_name", ["playseek", "Playseek", "tvdr", "custom_seek"])
-    def test_recent_playseek_uses_clock_range(self, shared_r2h, param_name):
-        rtsp = MockRTSPServer(num_packets=500)
-        rtsp.start()
-        try:
-            start_ts = int(time.time()) - 1800
-            end_ts = start_ts + 300
-            start_str = _format_basic_utc(start_ts)
-            end_str = _format_basic_utc(end_ts)
-            query = self._build_seek_query(param_name, start_str, end_str)
-            url = "/rtsp/127.0.0.1:%d/stream?%s" % (
-                rtsp.port,
-                query,
-            )
-
-            stream_get(
-                "127.0.0.1",
-                shared_r2h.port,
-                url,
-                read_bytes=4096,
-                timeout=_STREAM_TIMEOUT,
-            )
-
-            describe_reqs = [r for r in rtsp.requests_detailed if r["method"] == "DESCRIBE"]
-            assert len(describe_reqs) > 0, "Expected DESCRIBE"
-            assert "%s=" % param_name not in describe_reqs[0]["uri"]
-            assert "r2h-seek-name=" not in describe_reqs[0]["uri"]
-
-            play_reqs = [r for r in rtsp.requests_detailed if r["method"] == "PLAY"]
-            assert len(play_reqs) > 0, "Expected PLAY request"
-            play_headers = play_reqs[0]["headers"]
-            assert play_headers.get("Range") == "clock=%s-" % start_str
-            assert end_str not in play_headers["Range"]
-        finally:
-            rtsp.stop()
-
-    def test_recent_playseek_ignores_r2h_start(self, shared_r2h):
-        rtsp = MockRTSPServer(num_packets=500)
-        rtsp.start()
-        try:
-            start_ts = int(time.time()) - 1200
-            start_str = _format_basic_utc(start_ts)
-            url = "/rtsp/127.0.0.1:%d/stream?playseek=%s-%s&r2h-start=120.5" % (
-                rtsp.port,
-                start_str,
-                _format_basic_utc(start_ts + 120),
-            )
-
-            stream_get(
-                "127.0.0.1",
-                shared_r2h.port,
-                url,
-                read_bytes=4096,
-                timeout=_STREAM_TIMEOUT,
-            )
-
-            play_reqs = [r for r in rtsp.requests_detailed if r["method"] == "PLAY"]
-            assert len(play_reqs) > 0, "Expected PLAY request"
-            play_range = play_reqs[0]["headers"].get("Range", "")
-            assert play_range == "clock=%s-" % start_str
-            assert "npt=" not in play_range
-            assert "120.5" not in play_range
-        finally:
-            rtsp.stop()
-
-    @pytest.mark.parametrize("param_name", ["playseek", "Playseek", "tvdr", "custom_seek"])
-    def test_boundary_playseek_is_forwarded(self, shared_r2h, param_name):
-        rtsp = MockRTSPServer(num_packets=500)
-        rtsp.start()
-        try:
-            start_ts = int(time.time()) - 3600
-            start_str = _format_basic_utc(start_ts)
-            end_str = _format_basic_utc(start_ts + 120)
-            query = self._build_seek_query(param_name, start_str, end_str)
-            url = "/rtsp/127.0.0.1:%d/stream?%s" % (
-                rtsp.port,
-                query,
-            )
-
-            stream_get(
-                "127.0.0.1",
-                shared_r2h.port,
-                url,
-                read_bytes=4096,
-                timeout=_STREAM_TIMEOUT,
-            )
-
-            describe_reqs = [r for r in rtsp.requests_detailed if r["method"] == "DESCRIBE"]
-            assert len(describe_reqs) > 0, "Expected DESCRIBE"
-            assert "%s=%s-%s" % (param_name, start_str, end_str) in describe_reqs[0]["uri"]
 
             play_reqs = [r for r in rtsp.requests_detailed if r["method"] == "PLAY"]
             assert len(play_reqs) > 0, "Expected PLAY request"

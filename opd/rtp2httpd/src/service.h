@@ -8,7 +8,12 @@
 
 /* ========== HTTP/SERVICE BUFFER SIZE CONFIGURATION ========== */
 
-/* HTTP URL working buffer - for URL manipulation */
+/* HTTP URL working buffer - for URL manipulation. The query-merge path in
+ * service_create_with_query_merge() builds into this same buffer and then
+ * re-parses through service_create_from_*_url(), and the RTSP layer
+ * (RTSP_SERVER_URL_SIZE / RTSP_SERVER_PATH_SIZE / RTSP_URL_COPY_SIZE in
+ * rtsp.h) is sized to match. Keep all four in sync to avoid silent
+ * mid-pipeline truncation. */
 #ifndef HTTP_URL_BUFFER_SIZE
 #define HTTP_URL_BUFFER_SIZE 1024
 #endif
@@ -44,6 +49,17 @@ typedef enum {
   SERVICE_SOURCE_EXTERNAL = 1 /* From external M3U URL */
 } service_source_t;
 
+/* Seek mode enumeration - controls RTSP recent-clock optimization opt-in */
+typedef enum {
+  SEEK_MODE_PASSTHROUGH = 0, /* Default: never use Range: clock= path */
+  SEEK_MODE_RANGE = 1        /* Opt-in: enable Range: clock= path when in window */
+} seek_mode_t;
+
+/* Default recency window when r2h-seek-mode=range is given without seconds */
+#define SEEK_MODE_DEFAULT_WINDOW_SECONDS 3600
+/* Upper bound on a configurable window — 24 hours */
+#define SEEK_MODE_MAX_WINDOW_SECONDS 86400
+
 /**
  * Service configuration structure
  * Represents a single media service (multicast RTP/UDP or RTSP stream)
@@ -56,18 +72,22 @@ typedef struct service_s {
   struct addrinfo *addr;
   struct addrinfo *msrc_addr;
   struct addrinfo *fcc_addr;
-  int fcc_type;            /* FCC protocol type */
-  uint16_t fec_port;       /* FEC multicast port (0 if not configured) */
-  char *rtp_url;           /* Full RTP URL for SERVICE_MRTP */
-  char *rtsp_url;          /* Full RTSP URL for SERVICE_RTSP */
-  char *http_url;          /* Full HTTP URL for SERVICE_HTTP */
-  char *seek_param_name;   /* Name of seek parameter (e.g., "playseek", "tvdr") */
-  char *seek_param_value;  /* Value of seek parameter for time range */
-  int seek_offset_seconds; /* Additional offset in seconds from r2h-seek-offset
-                              parameter */
-  char *user_agent;        /* User-Agent header for timezone detection */
-  char *ifname;            /* Per-service upstream interface override (from r2h-ifname) */
-  char *ifname_fcc;        /* Per-service FCC interface override (from r2h-ifname-fcc) */
+  int fcc_type;                    /* FCC protocol type */
+  uint16_t fec_port;               /* FEC multicast port (0 if not configured) */
+  char *rtp_url;                   /* Full RTP URL for SERVICE_MRTP */
+  char *rtsp_url;                  /* Full RTSP URL for SERVICE_RTSP */
+  char *http_url;                  /* Full HTTP URL for SERVICE_HTTP */
+  char *seek_param_name;           /* Name of seek parameter (e.g., "playseek", "tvdr") */
+  char *seek_param_value;          /* Value of seek parameter for time range */
+  int seek_offset_seconds;         /* Additional offset in seconds from r2h-seek-offset
+                                      parameter */
+  seek_mode_t seek_mode;           /* Seek mode from r2h-seek-mode parameter */
+  int seek_mode_tz_explicit;       /* 1 if range(...) explicitly specified a TZ */
+  int seek_mode_tz_offset_seconds; /* TZ offset from range(TZ/...) when explicit */
+  int seek_mode_window_seconds;    /* Recency window from range(.../seconds) */
+  char *user_agent;                /* User-Agent header for timezone detection */
+  char *ifname;                    /* Per-service upstream interface override (from r2h-ifname) */
+  char *ifname_fcc;                /* Per-service FCC interface override (from r2h-ifname-fcc) */
   struct service_s *next;
 } service_t;
 
@@ -125,18 +145,24 @@ service_t *service_create_from_rtp_url(const char *http_url);
 service_t *service_create_from_http_url(const char *http_url);
 
 /**
- * Extract seek parameters (r2h-seek-name, r2h-seek-offset, and the seek
- * parameter itself) from a URL query string, removing them in-place.
+ * Extract seek parameters (r2h-seek-name, r2h-seek-offset, r2h-seek-mode, and
+ * the seek parameter itself) from a URL query string, removing them in-place.
  *
  * @param query_start Pointer to the '?' in the URL (modified in-place)
  * @param out_seek_param_name Output: malloc'd seek parameter name (caller frees)
  * @param out_seek_param_value Output: malloc'd seek parameter value (caller
  * frees)
  * @param out_seek_offset_seconds Output: seek offset in seconds
+ * @param out_seek_mode Output: parsed seek mode (default SEEK_MODE_PASSTHROUGH)
+ * @param out_seek_mode_tz_explicit Output: 1 if range(...) explicitly gave a TZ
+ * @param out_seek_mode_tz_offset_seconds Output: TZ offset when explicit
+ * @param out_seek_mode_window_seconds Output: recency window in seconds
  * @return 0 on success, -1 on failure
  */
 int service_extract_seek_params(char *query_start, char **out_seek_param_name, char **out_seek_param_value,
-                                int *out_seek_offset_seconds);
+                                int *out_seek_offset_seconds, seek_mode_t *out_seek_mode,
+                                int *out_seek_mode_tz_explicit, int *out_seek_mode_tz_offset_seconds,
+                                int *out_seek_mode_window_seconds);
 
 /**
  * Analyze a seek parameter once and reuse the result across RTSP/HTTP flows.
@@ -144,11 +170,16 @@ int service_extract_seek_params(char *query_start, char **out_seek_param_name, c
  * @param seek_param_value Extracted seek parameter value
  * @param seek_offset_seconds Additional seek offset in seconds
  * @param user_agent User-Agent header for timezone detection
+ * @param seek_mode Seek mode from r2h-seek-mode parameter
+ * @param seek_mode_tz_explicit 1 if range(...) explicitly specified a TZ
+ * @param seek_mode_tz_offset_seconds TZ offset when explicit
+ * @param seek_mode_window_seconds Recency window in seconds (only meaningful for RANGE)
  * @param parse_result Output parse result structure
  * @return 0 on success, -1 on invalid parameters
  */
 int service_parse_seek_value(const char *seek_param_value, int seek_offset_seconds, const char *user_agent,
-                             seek_parse_result_t *parse_result);
+                             seek_mode_t seek_mode, int seek_mode_tz_explicit, int seek_mode_tz_offset_seconds,
+                             int seek_mode_window_seconds, seek_parse_result_t *parse_result);
 
 /**
  * Convert a parsed seek value to upstream UTC query form.
@@ -171,20 +202,25 @@ int service_convert_seek_value(const seek_parse_result_t *parse_result, char *ou
 int service_format_recent_seek_range(const seek_parse_result_t *parse_result, char *output, size_t output_size);
 
 /**
- * Create service from configured service with query parameter merging
- * If the request URL contains query parameters, they are merged with the
- * configured service's URL and a new service is created.
- * If no query parameters in request, returns NULL (use original service).
+ * Create a new service derived from a configured service, applying any
+ * request-side query parameters with request-wins precedence over
+ * M3U-configured r2h-* control parameters.
  *
- * This function works for both RTP and RTSP services based on expected_type.
- * For RTSP services, it merges query params with rtsp_url.
- * For RTP services, it merges query params with url.
+ * Always returns a freshly allocated service on success: a deep clone of the
+ * configured service when the request carries no query string, otherwise a
+ * service rebuilt from the merged URL. Works for RTP, RTSP, and HTTP services
+ * based on expected_type, merging into rtsp_url / http_url / rtp_url
+ * accordingly.
  *
- * @param configured_service The configured service (RTP or RTSP)
+ * @param configured_service The configured service (RTP, RTSP, or HTTP)
  * @param request_url The HTTP request URL (may contain query params)
- * @param expected_type Expected service type (SERVICE_MRTP or SERVICE_RTSP)
- * @return Pointer to newly allocated service structure or NULL if no merge
- * needed/on failure
+ * @param expected_type Expected service type (SERVICE_MRTP, SERVICE_RTSP, or
+ *                      SERVICE_HTTP)
+ * @return Newly allocated service on success; NULL strictly on failure (e.g.
+ *         merged URL exceeds HTTP_URL_BUFFER_SIZE, allocation failure, type
+ *         mismatch). Callers must treat NULL as a hard error and must not fall
+ *         back to the configured service, otherwise the user's overrides would
+ *         be silently dropped.
  */
 service_t *service_create_with_query_merge(service_t *configured_service, const char *request_url,
                                            service_type_t expected_type);
