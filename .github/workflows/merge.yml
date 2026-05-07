@@ -4,7 +4,7 @@ on:
     paths:
       - '.github/workflows/merge.yml'
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */13 * * *'
   workflow_dispatch:
 
 jobs:
