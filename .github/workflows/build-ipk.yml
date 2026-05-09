@@ -1,6 +1,6 @@
 name: 自动打包IPK插件
 on:
-  workflow_dispatch:   # 手动点击运行
+  workflow_dispatch:
   push:
     paths:
       - '.github/workflows/build-ipk.yml'
@@ -24,10 +24,11 @@ jobs:
           gcc-multilib gettext git libncurses5-dev libssl-dev \
           python3-setuptools rsync swig unzip zlib1g-dev file wget
 
-      - name: 下载 OpenWrt SDK (x86_64 通用)
+      - name: 下载 OpenWrt SDK (x86_64)
         run: |
           wget https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
           tar -xJf openwrt-sdk-*.tar.xz
+          # 修复：自动找到解压目录并重命名
           mv openwrt-sdk-* sdk
           rm -f openwrt-sdk-*.tar.xz
 
@@ -37,32 +38,28 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-          # 把 opd 目录下所有插件复制到 SDK 包目录
           mkdir -p package/community
-          cp -rf ../opd/* package/community/
+          cp -rf ../opd/* package/community/ 2>/dev/null || true
 
-          # 编译所有包
           make defconfig
           make package/community/compile -j$(nproc) V=s
 
-          # 收集所有 ipk
           mkdir -p ../ipk-packages
           find bin/packages/ -name "*.ipk" | xargs -I {} cp {} ../ipk-packages/
 
-      - name: 上传 IPK 包 (Actions 临时文件)
+      - name: 上传 IPK 包
         uses: actions/upload-artifact@v4
         with:
           name: openwrt-ipk-packages
           path: ipk-packages/
 
-      - name: 发布到 GitHub Releases (永久保存)
+      - name: 发布到 Releases
         uses: softprops/action-gh-release@v2
         with:
           files: ipk-packages/*.ipk
           tag_name: auto-build-${{ github.sha }}
           name: 自动编译 IPK 插件包
           body: |
-            自动编译时间：${{ github.event.head_commit.timestamp }}
-            包含所有 opd 插件的 .ipk 安装包
+            编译时间：${{ github.event.head_commit.timestamp }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
