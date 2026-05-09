@@ -26,7 +26,7 @@ msgid "LAN Settings"
 msgstr "區域網路設定"
 
 msgid "Change device LAN IP, or switch to AP Wired Relay mode."
-msgstr "修改設備的區域網路 IP，或切換至旁路由（AP有線中繼）模式。"
+msgstr "修改設備區域網 IP，或切換至旁路由（AP有線中繼）模式，一鍵下發IPv6。"
 
 msgid "Reading underlying config..."
 msgstr "正在讀取底層設定..."
@@ -352,8 +352,8 @@ msgstr "正在等待路由器放棄修改並恢復網絡..."
 msgid "Wi-Fi Settings"
 msgstr "Wi-Fi 設定"
 
-msgid "Configure wireless network, SSID, and password."
-msgstr "設定無線網路名稱、密碼及加密方式。"
+msgid "Set Wi-Fi name, password, enable Wireless Relay (WISP) and Seamless Roaming."
+msgstr "設置WiFi帳號、密碼，開啟無線中繼 (WISP)，開啟路由間無縫漫遊。"
 
 msgid "Configure Wi-Fi"
 msgstr "設定 Wi-Fi"
@@ -816,3 +816,48 @@ msgstr "已過期"
 
 msgid "Terminal Device & IP Binding"
 msgstr "終端裝置與 IP 綁定"
+
+msgid "Managing"
+msgstr "當前訪問"
+
+msgid "Pending"
+msgstr "待生效"
+
+msgid "Device Type (By IP)"
+msgstr "設備類型（按IP）"
+
+msgid "Device Type (Built-in)"
+msgstr "設備類型（內置）"
+
+msgid "Custom Groups"
+msgstr "自定義組"
+
+msgid "Filter by IP Subnet"
+msgstr "按 IP 網段歸類"
+
+msgid "Checked: Classify device types by IP subnet\nUnchecked: Classify device types by built-in names"
+msgstr "打勾: 按 IP 網段劃分設備類型\n取消: 按設備名稱識別設備類型"
+
+msgid "Group Name"
+msgstr "分組名稱"
+
+msgid "Group "
+msgstr "分組 "
+
+msgid "❌ Save Failed!\nReason: RPC interface unresponsive ({err})\nPlease run this command in router SSH to restart the service: /etc/init.d/rpcd restart"
+msgstr "❌ 保存失敗！\n原因: 接口無響應 ({err})\n請在路由器 SSH 終端執行此命令重啟服務: /etc/init.d/rpcd restart"
+
+msgid "❌ Subnet Conflict: IP ranges between groups cannot overlap!\nConflicting groups: "
+msgstr "❌ 網段衝突：不同分組間的 IP 範圍不能有重疊！\n衝突組："
+
+msgid "❌ Save Failed: Group names cannot be duplicated!\nDuplicate name: "
+msgstr "❌ 保存失敗：分組名稱不能重複！\n重複名稱："
+
+msgid "❌ Save Failed: IPs must be between 2-254 and format must be valid!"
+msgstr "❌ 保存失敗：IP 必須在 2-254 之間，且存在格式錯誤！"
+
+msgid "❌ IP pool reached the end (254). Cannot auto-append. Please arrange subnets manually!"
+msgstr "❌ IP 段已分配到末尾 (達到254)，無法繼續自動追加，請手動整理網段！"
+
+msgid "Visiting"
+msgstr "正在訪問"
