@@ -110,8 +110,8 @@ var T = {
     'STRAT_DEPT_DESC': _('Assign free IPs automatically from the selected Target Group\'s specific IP range'),
     'TIT_MGR_DEPTS': _('Department Network Segments'),
     'BTN_ADD_DEPT': _('+ Add New Department'),
-    'ERR_DEPT_OVERLAP': _('❌ Subnet Conflict: IP ranges between groups cannot overlap!\nConflicting groups: '),
-    'ERR_DEPT_NAME_DUP': _('❌ Save Failed: Group names cannot be duplicated!\nDuplicate name: '),
+    'ERR_DEPT_OVERLAP': _('❌ Subnet Conflict: IP ranges between groups cannot overlap!') + '\n' + _('Conflicting groups: {groups}'),
+    'ERR_DEPT_NAME_DUP': _('❌ Save Failed: Group names cannot be duplicated!') + '\n' + _('Duplicate name: {name}'),
     'ERR_DEPT_INVALID': _('❌ Save Failed: IPs must be between 2-254 and format must be valid!'),
     'ERR_DEPT_POOL_FULL': _('❌ IP pool reached the end (254). Cannot auto-append. Please arrange subnets manually!'),
     'ERR_DEPT_FULL': _('❌ The IP pool for the selected department is full! Please expand the range.'),
@@ -138,7 +138,13 @@ var T = {
     'ERR_DMZ_OCCUPIED_2': _(' ] is currently the DMZ.\nPlease disable its DMZ first!'),
     'ERR_FW_SAVE_FAIL': _('❌ Save failed!\n\nReason: RPC Error ({err}).\nPlease run `/etc/init.d/rpcd restart` in SSH and try again!'),
     'ERR_SAVE_FAIL_SHORT': _('❌ Save failed!\nReason: {err}\nPlease run `/etc/init.d/rpcd restart` in SSH'),
-    'ERR_IP_FORMAT': _('❌ Invalid IP format! Please enter a valid IPv4 address (e.g., 192.168.1.50)')
+    'ERR_IP_FORMAT': _('❌ Invalid IP format! Please enter a valid IPv4 address (e.g., 192.168.1.50)'),
+    'TIP_V6_COPY': _('Public IPv6 (Click to copy):'),
+    'MSG_V6_COPIED': _('IPv6 address copied successfully:'),
+    'BTN_EXPORT_DEPTS': _('Export Config'),
+    'BTN_IMPORT_DEPTS': _('Import Config'),
+    'MSG_IMPORT_SUCCESS': _('✅ Import successful!') + '\n' + _('Please verify and click [Save] below to apply.'),
+    'ERR_IMPORT_FAIL': _('❌ Import failed!') + '\n' + _('Invalid or corrupted file format. Please select a valid JSON backup file.')
 };
 
 var callDeviceList = rpc.declare({ object: 'netwiz_dev', method: 'get_list', params: ['show_conns'], expect: { '': {} } });
@@ -148,6 +154,10 @@ var callDeviceUnbind = rpc.declare({ object: 'netwiz_dev', method: 'unbind', par
 var callApplyDhcp = rpc.declare({ object: 'netwiz_dev', method: 'apply_dhcp', expect: { result: 0 } });
 var callGetDepts = rpc.declare({ object: 'netwiz_dev', method: 'get_depts', expect: { depts: [] } });
 var callSaveDepts = rpc.declare({ object: 'netwiz_dev', method: 'save_depts', params: ['data'], expect: { result: 0 } });
+var callV6KeepAlive = rpc.declare({ object: 'netwiz_dev', method: 'v6_keep_alive', params: ['mac'], expect: { result: 0 } });
+
+var callGetSmartRanges = rpc.declare({ object: 'netwiz_dev', method: 'get_smart_ranges', expect: { ranges: {} } });
+var callSaveSmartRanges = rpc.declare({ object: 'netwiz_dev', method: 'save_smart_ranges', params: ['data'], expect: { result: 0 } });
 
 return view.extend({
     handleSaveApply: null,
@@ -167,25 +177,17 @@ return view.extend({
         var htmlTemplate = [
             '<link rel="stylesheet" type="text/css" href="' + L.resource('view/netwiz.css') + '?v=' + Date.now() + '">',
             '<style>',
-            '  .nd-cb-back svg { width: 22px; height: 22px; }',
-            '  .nd-cb-refresh svg { width: 15px; height: 15px; }',
             '  .nd-card-name svg { width: 18px; height: 18px; margin-right: 2px; vertical-align: sub; }',
             '  .nd-lease-info svg { width: 12px; height: 12px; margin-right: 2px; vertical-align: baseline; }',
             '  .btn-bind svg { width: 15px; height: 15px; margin-right: 4px; vertical-align: sub; }',
-            '  .nd-batch-bar { padding-right: 55px !important; }',
-            '  .nd-batch-close-btn { position: absolute; right: 10px; top: 30%; transform: translateY(-50%); font-size: 32px; color: #94a3b8; cursor: pointer; line-height: 1; z-index: 100; transition: color 0.2s; user-select: none; font-family: Arial, sans-serif; font-weight: normal; }',
             '  .nd-batch-close-btn:hover { color: #ef4444; }',
             '  .dept-color::-webkit-color-swatch-wrapper { padding: 0; }',
             '  .dept-color::-webkit-color-swatch { border: none; border-radius: 4px; }',
             '  .nd-ip-num::-webkit-outer-spin-button, .nd-ip-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }',
             '  .nd-ip-num { -moz-appearance: textfield; }',
-            '  .nd-dept-mgr-wrap { max-height: 400px; overflow-y: auto; overflow-x: hidden; padding: 5px 5px 10px 0; }',
-            '  .nd-btn-add-dept { width: 100%; padding: 14px; margin: 15px 0 5px 0; border: 2px dashed #cbd5e1; background: #f8fafc; color: #64748b; font-weight: bold; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 14.5px; display: flex; align-items: center; justify-content: center; }',
-            '  .nd-btn-add-dept:hover { border-color: #94a3b8; color: #475569; background: #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }',
-            '  .nd-modal-actions { display: flex; gap: 15px; width: 100%; margin-top: 25px; padding-top: 15px; border-top: 1px solid #f1f5f9; }',
             '  .nd-dept-row-inner { display: flex; align-items: center; gap: 10px; width: 100%; }',
             '  .nd-dept-col-name { display: flex; flex: 1 1 160px; gap: 6px; }', 
-            '  .nd-dept-col-ip { display: flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 8px; flex: 0 0 auto; }',
+            '  .nd-dept-col-ip { display: flex; align-items: center; justify-content: center; background: #fff; border-radius: 6px; padding: 2px 8px; flex: 0 0 auto; }',
             '  .nd-dept-col-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }',
 
             '  @media screen and (max-width: 768px) {',
@@ -195,6 +197,15 @@ return view.extend({
             '    .nd-dept-col-name { grid-column: 1 / 2; grid-row: 1 / 2; }',
             '    .nd-dept-col-actions { grid-column: 2 / 3; grid-row: 1 / 2; }',
             '    .nd-dept-col-ip { grid-column: 1 / 3; grid-row: 2 / 3; width: 100%; box-sizing: border-box; }',
+            '    .nd-dept-ctrl-bar { flex-direction: column; align-items: flex-end; gap: 12px; padding-top: 0; }',
+            '    .nd-dept-io-group { width: 100%; justify-content: center; gap: 15px; }',
+            '    .nd-dept-io-group .nd-btn { flex: 0 0 auto; min-width: 110px; padding: 6px 12px !important;}',
+            '    .nd-dept-ctrl-bar #btn-add-dept { width: auto; padding: 8px 20px; font-size: 14px; align-self: flex-end; }',
+            '    .dept-row { padding: 8px 10px !important; margin-bottom: 8px !important; }',
+            '    .nd-dept-row-inner { gap: 6px !important; }',
+            '    .dept-row .nd-input { min-height: 36px !important; padding: 4px 8px !important; font-size: 13.5px !important; }',
+            '    .nd-dept-col-ip { padding: 0px 4px !important; }',
+            '    .nd-dept-col-actions .d-color, .nd-dept-col-actions .d-del { height: 36px !important; width: 36px !important; flex: 0 0 36px !important; min-width: 36px !important; max-width: 36px !important; }',
             '  }',
             '</style>',
             '<div class="nw-wrapper">',
@@ -208,7 +219,7 @@ return view.extend({
 
             '   <div class="nd-control-bar">',
             '      <div class="nd-cb-back" id="dev-back" title="{{BTN_HOME}}">',
-            '         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>',
+            '         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 22px; height: 22px;"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>',
             '      </div>',
             '      <div class="nd-cb-title-wrap">',
             '          <div class="nd-cb-title">{{DEV_TITLE}}</div>',
@@ -223,7 +234,7 @@ return view.extend({
             '              </div>',
             '          </label>',
             '          <div class="nd-cb-refresh" id="dev-refresh" title="{{BTN_RESCAN}}">',
-            '             <svg class="nd-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path></svg> <span class="nd-refresh-txt">{{BTN_REFRESH}}</span>',
+            '             <svg class="nd-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 15px; height: 15px;"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path></svg> <span class="nd-refresh-txt">{{BTN_REFRESH}}</span>',
             '          </div>',
             '      </div>',
             '   </div>',
@@ -243,8 +254,8 @@ return view.extend({
 
             '   <div id="nd-list-container" class="nd-list" style="display: none;"></div>',
             
-            '   <div id="nd-batch-bar" class="nd-batch-bar">',
-            '       <div id="nd-batch-close" class="nd-batch-close-btn" title="{{BTN_CANCEL}}">&times;</div>',
+            '   <div id="nd-batch-bar" class="nd-batch-bar" style="padding-right: 55px;">',
+            '       <div id="nd-batch-close" class="nd-batch-close-btn" title="{{BTN_CANCEL}}" style="position: absolute; right: 10px; top: 30%; transform: translateY(-50%); font-size: 32px; color: #94a3b8; cursor: pointer; line-height: 1; z-index: 100; transition: color 0.2s; user-select: none; font-family: Arial, sans-serif; font-weight: normal;">&times;</div>',
             '       <div class="nd-batch-info">{{TXT_SELECTED}} <span id="nd-batch-count" style="color:#3b82f6;">0</span> {{TXT_ITEMS}}</div>',
             '       <div class="nd-batch-actions">',
             '           <button id="btn-batch-unbind" class="nd-btn nd-btn-red nd-btn-sm">{{BTN_BATCH_UNBIND}}</button>',
@@ -258,9 +269,15 @@ return view.extend({
             '       <div id="nd-m-title" class="nd-modal-title"></div>',
             '       <div id="nd-m-content" style="color:#475569; font-size:15px; margin-bottom:10px; text-align:left; line-height:1.2;"></div>',
             
-            '       <div id="nd-m-dept-mgr" class="nd-dept-mgr-wrap" style="display:none;">',
+            '       <div id="nd-m-dept-mgr" class="nd-dept-mgr-wrap" style="display:none; max-height: 400px; overflow-y: auto; overflow-x: hidden; padding: 5px 5px 10px 0;">',
+            '           <div class="nd-dept-ctrl-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 5px 12px 5px; margin-top: -5px; border-bottom: 1px dashed #cbd5e1; position: sticky; top: -5px; background: #fff; z-index: 10; gap: 10px;">',
+            '               <div class="nd-dept-io-group" style="display: flex; gap: 10px;">',
+            '                   <button id="btn-import-depts" class="nd-btn nd-btn-gray" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">📂 {{BTN_IMPORT_DEPTS}}</button>',
+            '                   <button id="btn-export-depts" class="nd-btn nd-btn-gray" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">💾 {{BTN_EXPORT_DEPTS}}</button>',
+            '               </div>',
+            '               <button id="btn-add-dept" class="nd-btn nd-btn-blue" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(59,130,246,0.2);">+ {{BTN_ADD_DEPT}}</button>',
+            '           </div>',
             '           <div id="dept-list-container"></div>',
-            '           <button id="btn-add-dept" class="nd-btn-add-dept">{{BTN_ADD_DEPT}}</button>',
             '       </div>',
 
             '       <div id="nd-m-fw-panel" style="display:none; text-align:left;">',
@@ -320,7 +337,7 @@ return view.extend({
             '                   <label class="nd-input-label">{{LBL_SEL_STRAT}}</label>',
             '                   <div class="nd-strategy-grid" style="display:grid; grid-template-columns:1fr; gap:12px;">',
             '                       <div class="nd-strategy-card active" data-val="keep">',
-            '                           <div style="font-size:15px;">🛡️ {{STRAT_KEEP_TITLE}}</div>',
+            '                       <div style="font-size:15px;">🛡️ {{STRAT_KEEP_TITLE}}</div>',
             '                           <div style="font-size:12.5px; font-weight:normal; opacity:0.8;">{{STRAT_KEEP_DESC}}</div>',
             '                       </div>',
             '                       <div class="nd-strategy-card" data-val="smart">',
@@ -350,14 +367,14 @@ return view.extend({
             '                   </div>',
             '               </div>',
             '               <div id="nd-batch-smart-desc" style="display:none; font-size:13px; color:#64748b; background:#f8fafc; padding:0 3px; border-radius:10px; margin-bottom:5px; border:1px dashed #cbd5e1;">',
-            '                   <div class="nd-smart-row"><div class="nd-smart-label">🏷️ {{LBL_OTHERS}}</div> <div class="nd-smart-inputs"><span class="nd-ip-prefix"></span><input type="number" id="sm-oth-s" class="nd-input-sm" value="50"> <span class="nd-smart-dash">-</span> <input type="number" id="sm-oth-e" class="nd-input-sm" value="99"></div></div>',
-            '                   <div class="nd-smart-row"><div class="nd-smart-label">📱 {{LBL_MOBILE}}</div> <div class="nd-smart-inputs"><span class="nd-ip-prefix"></span><input type="number" id="sm-mob-s" class="nd-input-sm" value="100"> <span class="nd-smart-dash">-</span> <input type="number" id="sm-mob-e" class="nd-input-sm" value="149"></div></div>',
-            '                   <div class="nd-smart-row"><div class="nd-smart-label">💻 {{LBL_PC}}</div> <div class="nd-smart-inputs"><span class="nd-ip-prefix"></span><input type="number" id="sm-pc-s" class="nd-input-sm" value="150"> <span class="nd-smart-dash">-</span> <input type="number" id="sm-pc-e" class="nd-input-sm" value="199"></div></div>',
-            '                   <div class="nd-smart-row" style="margin-bottom:0; border-bottom:none; padding-bottom:0;"><div class="nd-smart-label">💡 {{LBL_IOT}}</div> <div class="nd-smart-inputs"><span class="nd-ip-prefix"></span><input type="number" id="sm-iot-s" class="nd-input-sm" value="200"> <span class="nd-smart-dash">-</span> <input type="number" id="sm-iot-e" class="nd-input-sm" value="250"></div></div>',
+            '                   <div class="nd-smart-row"><div class="nd-smart-label">📱 {{LBL_MOBILE}}</div> <div class="nd-smart-inputs"><span class="nd-ip-prefix"></span><input type="number" id="sm-mob-s" class="nd-input-sm" value="30"> <span class="nd-smart-dash">-</span> <input type="number" id="sm-mob-e" class="nd-input-sm" value="69"></div></div>',
+            '                   <div class="nd-smart-row"><div class="nd-smart-label">💻 {{LBL_PC}}</div> <div class="nd-smart-inputs"><span class="nd-ip-prefix"></span><input type="number" id="sm-pc-s" class="nd-input-sm" value="70"> <span class="nd-smart-dash">-</span> <input type="number" id="sm-pc-e" class="nd-input-sm" value="109"></div></div>',
+            '                   <div class="nd-smart-row"><div class="nd-smart-label">💡 {{LBL_IOT}}</div> <div class="nd-smart-inputs"><span class="nd-ip-prefix"></span><input type="number" id="sm-iot-s" class="nd-input-sm" value="110"> <span class="nd-smart-dash">-</span> <input type="number" id="sm-iot-e" class="nd-input-sm" value="149"></div></div>',
+            '                   <div class="nd-smart-row" style="margin-bottom:0; border-bottom:none; padding-bottom:0;"><div class="nd-smart-label">🏷️ {{LBL_OTHERS}}</div> <div class="nd-smart-inputs"><span class="nd-ip-prefix"></span><input type="number" id="sm-oth-s" class="nd-input-sm" value="150"> <span class="nd-smart-dash">-</span> <input type="number" id="sm-oth-e" class="nd-input-sm" value="199"></div></div>',
             '               </div>',
             '           </div>',
             '       </div>',
-            '       <div class="nd-modal-actions">',
+            '       <div class="nd-modal-actions" style="display: flex; gap: 15px; width: 100%; margin-top: 25px; padding-top: 15px; border-top: 1px solid #f1f5f9;">',
             '           <button id="nd-m-cancel" class="nd-btn nd-btn-gray" style="flex:1;">{{BTN_CANCEL}}</button>',
             '           <button id="nd-m-ok" class="nd-btn nd-btn-blue" style="flex:1;">{{BTN_OK}}</button>',
             '       </div>',
@@ -453,7 +470,7 @@ return view.extend({
         }
 
         var savedStrategy = localStorage.getItem('nw_batch_strategy') || 'keep';
-        var savedRanges = JSON.parse(localStorage.getItem('nw_smart_ranges') || '{"os":50,"oe":99,"ms":100,"me":149,"ps":150,"pe":199,"is":200,"ie":250}');
+        var savedRanges = {ms:30, me:69, ps:70, pe:109, is:110, ie:149, os:150, oe:199};
         var basePrefix = '192.168.1.';
         
         var smartFilterByIp = localStorage.getItem('nw_smart_filter') !== 'false'; 
@@ -470,10 +487,10 @@ return view.extend({
         }
 
         var rangeInputs = [
-            {s: '#sm-oth-s', e: '#sm-oth-e'},
             {s: '#sm-mob-s', e: '#sm-mob-e'},
             {s: '#sm-pc-s', e: '#sm-pc-e'},
-            {s: '#sm-iot-s', e: '#sm-iot-e'}
+            {s: '#sm-iot-s', e: '#sm-iot-e'},
+            {s: '#sm-oth-s', e: '#sm-oth-e'}
         ];
         function autoCascadeRanges() {
             var prevEnd = 1; 
@@ -516,10 +533,10 @@ return view.extend({
             if(batchTagSelect) batchTagSelect.innerHTML = html;
         }
 
-        function renderDeptManager() {
+        function renderDeptManager(overrideDepts) {
             var c = modalOverlay.querySelector('#dept-list-container');
             c.innerHTML = '';
-            var tempDepts = JSON.parse(JSON.stringify(globalDepartments));
+            var tempDepts = overrideDepts ? overrideDepts : JSON.parse(JSON.stringify(globalDepartments));
             
             function renderRow(d, idx) {
                 var el = document.createElement('div');
@@ -589,9 +606,63 @@ return view.extend({
                 if (newEnd > 254) newEnd = 254;
 
                 var newId = 'dept_' + Math.random().toString(36).substring(2,8);
-                c.appendChild(renderRow({id: newId, icon: '🏷️', name: '', start: newStart, end: newEnd, color: '#64748b'}, currentRows.length));
-                c.scrollTop = c.scrollHeight;
+                var newRow = renderRow({id: newId, icon: '🏷️', name: '', start: newStart, end: newEnd, color: '#64748b'}, currentRows.length);
+                if (c.firstChild) {
+                    c.insertBefore(newRow, c.firstChild);
+                } else {
+                    c.appendChild(newRow);
+                }
+                c.scrollTop = 0;
             };
+
+            // ================= 导入导出 =================
+            modalOverlay.querySelector('#btn-export-depts').onclick = function() {
+                var currentData = saveDepartmentsFromDOM();
+                if (currentData === false) return; // 如果有错误（重叠或留空），退出
+                
+                var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentData, null, 2));
+                var dlNode = document.createElement('a');
+                dlNode.setAttribute("href", dataStr);
+                var dateStr = new Date().toISOString().slice(0,10).replace(/-/g,"");
+                dlNode.setAttribute("download", "netwiz_groups_" + dateStr + ".json");
+                
+                document.body.appendChild(dlNode);
+                dlNode.click();
+                document.body.removeChild(dlNode);
+            };
+
+            modalOverlay.querySelector('#btn-import-depts').onclick = function() {
+                var fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = '.json';
+                fileInput.style.display = 'none'; // 保持隐藏
+                
+                fileInput.onchange = function(e) {
+                    var file = e.target.files[0];
+                    if (!file) return;
+                    
+                    var reader = new FileReader();
+                    reader.onload = function(evt) {
+                        try {
+                            var importedData = JSON.parse(evt.target.result);
+                            if (!Array.isArray(importedData)) throw new Error('Not an array');
+                            
+                            // 导入成功
+                            renderDeptManager(importedData);
+                            alert(T['MSG_IMPORT_SUCCESS']);
+                        } catch (err) {
+                            alert(T['ERR_IMPORT_FAIL']);
+                        }
+                    };
+                    reader.readAsText(file);
+                };
+                
+                document.body.appendChild(fileInput); 
+                fileInput.click(); 
+                document.body.removeChild(fileInput);
+            };
+            // ================================================================
+
         }
 
         function saveDepartmentsFromDOM() {
@@ -617,7 +688,7 @@ return view.extend({
                 }
                 
                 if (nameSet[d.name]) {
-                    alert(T['ERR_DEPT_NAME_DUP'] + ' [' + d.name + ']');
+                    alert(T['ERR_DEPT_NAME_DUP'].replace('{name}', '[' + d.name + ']'));
                     return false;
                 }
                 nameSet[d.name] = true;
@@ -628,7 +699,7 @@ return view.extend({
             for(var i=0; i<newDepts.length; i++) {
                 for(var j=i+1; j<newDepts.length; j++) {
                     if (Math.max(newDepts[i].start, newDepts[j].start) <= Math.min(newDepts[i].end, newDepts[j].end)) {
-                        alert(T['ERR_DEPT_OVERLAP'] + ' [' + newDepts[i].name + '] & [' + newDepts[j].name + ']');
+                        alert(T['ERR_DEPT_OVERLAP'].replace('{groups}', '[' + newDepts[i].name + '] & [' + newDepts[j].name + ']'));
                         return false; 
                     }
                 }
@@ -857,13 +928,16 @@ return view.extend({
                         if (activeStrategy === 'smart') {
                             autoCascadeRanges(); 
                             var nr = {
-                                os: parseInt(modalOverlay.querySelector('#sm-oth-s').value), oe: parseInt(modalOverlay.querySelector('#sm-oth-e').value),
                                 ms: parseInt(modalOverlay.querySelector('#sm-mob-s').value), me: parseInt(modalOverlay.querySelector('#sm-mob-e').value),
                                 ps: parseInt(modalOverlay.querySelector('#sm-pc-s').value), pe: parseInt(modalOverlay.querySelector('#sm-pc-e').value),
-                                is: parseInt(modalOverlay.querySelector('#sm-iot-s').value), ie: parseInt(modalOverlay.querySelector('#sm-iot-e').value)
+                                is: parseInt(modalOverlay.querySelector('#sm-iot-s').value), ie: parseInt(modalOverlay.querySelector('#sm-iot-e').value),
+                                os: parseInt(modalOverlay.querySelector('#sm-oth-s').value), oe: parseInt(modalOverlay.querySelector('#sm-oth-e').value)
                             };
-                            localStorage.setItem('nw_smart_ranges', JSON.stringify(nr));
-                            savedRanges = nr;
+                            
+                            if (JSON.stringify(nr) !== JSON.stringify(savedRanges)) {
+                                savedRanges = nr;
+                                callSaveSmartRanges(JSON.stringify(nr)).catch(function(e){ console.error('Save smart ranges fail', e); });
+                            }
                         }
                         var resBatch = { strategy: activeStrategy, startSuffix: batchSuffixInput.value.trim(), ranges: savedRanges, dept: batchDeptId };
                         if (options.onOk) options.onOk(resBatch);
@@ -953,6 +1027,31 @@ return view.extend({
         var selectedDevices = [];
         var currentFilter = 'all';
 
+        // 全局心跳消息队列与状态锁
+        window.nwKeepAliveQueue = window.nwKeepAliveQueue || [];
+        window.nwIsProcessingQueue = window.nwIsProcessingQueue || false;
+
+        function processKeepAliveQueue() {
+            // 队列空了，或处理中，就退出
+            if (window.nwKeepAliveQueue.length === 0 || window.nwIsProcessingQueue) return;
+            
+            window.nwIsProcessingQueue = true; // 上锁
+            var mac = window.nwKeepAliveQueue.shift(); // 取出队列第一个 MAC
+
+            // 发送请求给路由器后端
+            callV6KeepAlive(mac).then(function() {
+                sessionStorage.setItem('nw_v6_hb_' + mac, 'sent'); // 成功后标记为已发送
+            }).catch(function() {
+                // 失败忽略，不阻塞队伍
+            }).finally(function() {
+                // 延时 200 毫秒
+                setTimeout(function() {
+                    window.nwIsProcessingQueue = false; // 解锁
+                    processKeepAliveQueue();            // 处理下一个
+                }, 200); 
+            });
+        }
+
         function isSelectable(dev) {
             var isSys = dev.is_gw === 'true' || dev.is_gw === true || dev.is_local === 'true' || dev.is_local === true;
             var isVisitor = dev.is_visitor === 'true' || dev.is_visitor === true;
@@ -1008,7 +1107,6 @@ return view.extend({
             globalDepartments.forEach(function(d) { deptCounts[d.id] = 0; });
 
             globalDevices.forEach(function(d) {
-                // 测算部门
                 var dept = getDeviceDept(d);
                 if (dept) {
                     deptCounts[dept.id]++;
@@ -1210,6 +1308,69 @@ return view.extend({
                     connHtml = '<div style="font-size:12px; color:'+connColor+'; font-family:monospace; margin-top:2px; font-weight:bold;">⚡ ' + dev.conn_count + ' ' + T['LBL_CONN_COUNT'] + '</div>';
                 }
 
+                // 只保留 2 或 3 开头的公网 IP，屏蔽 fd/fe 等内网 IP
+                var ipv6Html = '';
+                if (dev.ipv6 && dev.ipv6.trim() !== '') {
+                    var v6List = dev.ipv6.trim().split(' ');
+                    var publicV6List = v6List.filter(function(v) { 
+                        var firstChar = v.charAt(0).toLowerCase();
+                        return firstChar === '2' || firstChar === '3'; 
+                    });
+
+                    // 显示徽章
+                    if (publicV6List.length > 0) {
+                        var memKey = 'nw_v6_mem_' + dev.mac; // L1 记忆钥匙
+                        var hbKey = 'nw_v6_hb_' + dev.mac;   // Session 心跳钥匙
+                        var currentPrefix = publicV6List[0].split(':').slice(0, 4).join(':'); // 提取真实前缀
+                        
+                        var radarShortV6 = publicV6List.find(function(v) { return v.indexOf('::') !== -1 && v.length < 25; });
+                        var localShortV6 = localStorage.getItem(memKey);
+                        var isBackendPc = (dev.is_pc_v6 === true || dev.is_pc_v6 === 'true');
+
+                        // 全局队列
+                        var triggerKeepAlive = function() {
+                            var hasSent = sessionStorage.getItem(hbKey);
+                            // 只要这个会话没发过，且没在排队
+                            if (!hasSent && window.nwKeepAliveQueue.indexOf(dev.mac) === -1) { 
+                                sessionStorage.setItem(hbKey, 'pending'); // 占位
+                                window.nwKeepAliveQueue.push(dev.mac);    // 进排队
+                                processKeepAliveQueue();                  // 处理
+                            }
+                        };
+
+                        // 真实 > L1缓存 > L2预测拼凑
+                        if (radarShortV6) {
+                            localStorage.setItem(memKey, radarShortV6);
+                            triggerKeepAlive();
+                            
+                        } else if (localShortV6 && localShortV6.indexOf(currentPrefix) === 0) {
+                            publicV6List.unshift(localShortV6); 
+                            triggerKeepAlive();
+                            
+                        } else if (isBackendPc) {
+                            var ipToUse = (dev.bound_ip && dev.bound_ip !== 'Unknown IP') ? dev.bound_ip : ((dev.ip !== 'Unknown IP') ? dev.ip : '');
+                            if (ipToUse) {
+                                var ipv4Suffix = ipToUse.split('.').pop(); 
+                                var predictedV6 = currentPrefix + '::' + parseInt(ipv4Suffix, 10); 
+                                
+                                publicV6List.unshift(predictedV6); 
+                                localStorage.setItem(memKey, predictedV6); 
+                                triggerKeepAlive(); 
+                            }
+                        }
+
+                        // 展示
+                        var showV6 = publicV6List.find(function(v) { return v.indexOf('::') !== -1 && v.length < 25; }) || publicV6List[0];
+                        var moreV6 = publicV6List.length >= 2 ? (' +' + publicV6List.length) : '';
+                        
+                        var allV6Str = publicV6List.join('\n');
+                        var titleStr = T['TIP_V6_COPY'] + '\n' + allV6Str;
+                        
+                        // 复制ipv6
+                        ipv6Html = '<div class="nd-ipv6-badge" data-v6="' + showV6 + '" title="' + titleStr + '" style="font-size:11px; color:#64748b; font-family:monospace; margin-top:3px; display:flex; align-items:center; gap:4px; cursor:pointer;"><span style="background:#10b981; padding:4px 5px; border-radius:4px; font-weight:bold; color:#fff; border:1px solid #e2e8f0; line-height:1;">IPv6</span> <span style="overflow:hidden; text-overflow:ellipsis; max-width:120px; white-space:nowrap;">' + showV6 + '</span><span style="color:#3b82f6; font-weight:bold;">' + moreV6 + '</span></div>';
+                    }
+                }
+
                 var actions = "";
                 if (isGw || isLocal) {
                     actions = '<span style="color:#f00; font-size:16.5px; font-weight:bold; padding: 10px;">' + T['TXT_SYS_RESERVED'] + '</span>';
@@ -1251,12 +1412,17 @@ return view.extend({
                     '               ' + statusBadgesHtml, 
                     '           </div>',
                     '       </div>',
-                    '       <div class="nd-card-mac btn-fw-mac" title="' + T['TIP_MAC_CTRL'] + '" data-mac="'+dev.mac+'" data-ip="'+(dev.bound_ip || dev.ip)+'" style="margin-left:50px;">' + (dev.mac).toUpperCase() + ' <span style="font-size:15px; margin-left:2px;">👈</span></div>',
+                    '       <div class="nd-card-mac btn-fw-mac" title="' + T['TIP_MAC_CTRL'] + '" data-mac="'+dev.mac+'" data-ip="'+(dev.bound_ip || dev.ip)+'" style="margin-left:50px; display:flex; align-items:center;">' + (dev.mac).toUpperCase() + ' <span style="font-size:1.2em; color:#94a3b8; margin-left:4px; vertical-align:middle;">👈</span></div>',
                     '   </div>',
                     '   <div class="nd-card-mid">',
-                    '       <div class="nd-card-ip">' + ipText + '</div>',
-                    '       <div class="nd-lease-info"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ' + leaseText + '</div>',
-                    '       ' + connHtml,
+                    '       <div style="display:flex; flex-direction:column; align-items:flex-start; min-width:0;">',
+                    '           <div class="nd-card-ip">' + ipText + '</div>',
+                    '           ' + ipv6Html,
+                    '       </div>',
+                    '       <div style="display:flex; flex-direction:column; align-items:flex-end;">',
+                    '           <div class="nd-lease-info"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ' + leaseText + '</div>',
+                    '           ' + connHtml,
+                    '       </div>',
                     '   </div>',
                     '   <div class="nd-card-right">' + actions + '</div>',
                     '</div>'
@@ -1265,6 +1431,28 @@ return view.extend({
 
             listEl.innerHTML = html;
             
+            container.querySelectorAll('.nd-ipv6-badge').forEach(function(badge) {
+                badge.addEventListener('click', function(e) {
+                    e.stopPropagation(); // 阻止点击事件穿透
+                    var v6text = this.getAttribute('data-v6');
+                    
+                    if (navigator.clipboard && window.isSecureContext) {
+                        navigator.clipboard.writeText(v6text).then(function() {
+                            alert('✅ ' + T['MSG_V6_COPIED'] + '\n\n' + v6text);
+                        });
+                    } else {
+                        var textArea = document.createElement("textarea");
+                        textArea.value = v6text;
+                        textArea.style.position = "fixed";
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        try { document.execCommand('copy'); alert('✅ ' + T['MSG_V6_COPIED'] + '\n\n' + v6text); } catch (err) {}
+                        document.body.removeChild(textArea);
+                    }
+                });
+            });
+
             container.querySelectorAll('.nd-card-checkbox input').forEach(function(cb) {
                 cb.addEventListener('change', function() { 
                     var mac = this.getAttribute('data-mac');
@@ -1569,11 +1757,20 @@ return view.extend({
             var showConnsCbEl = document.querySelector('#cb-show-conns');
             var isShowConns = showConnsCbEl ? showConnsCbEl.checked : false;
 
-            Promise.all([callDeviceList(isShowConns), callGetDepts()]).then(function(results) {
+            Promise.all([callDeviceList(isShowConns), callGetDepts(), callGetSmartRanges()]).then(function(results) {
                 loadingEl.style.display = 'none';
                 
                 var resList = results[0];
                 var resDepts = results[1];
+                var resSmart = results[2];
+
+                // 使用者设定过，就用设定值
+                if (resSmart && resSmart.ranges) {
+                    var parsedR = typeof resSmart.ranges === 'string' ? JSON.parse(resSmart.ranges || '{}') : resSmart.ranges;
+                    if (Object.keys(parsedR).length > 0) {
+                        savedRanges = parsedR;
+                    }
+                }
 
                 globalDepartments = [];
                 if (Array.isArray(resDepts)) {

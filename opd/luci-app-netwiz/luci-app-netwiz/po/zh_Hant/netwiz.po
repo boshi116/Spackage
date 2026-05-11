@@ -844,11 +844,17 @@ msgstr "分組 "
 msgid "❌ Save Failed!\nReason: RPC interface unresponsive ({err})\nPlease run this command in router SSH to restart the service: /etc/init.d/rpcd restart"
 msgstr "❌ 保存失敗！\n原因: 接口無響應 ({err})\n請在路由器 SSH 終端執行此命令重啟服務: /etc/init.d/rpcd restart"
 
-msgid "❌ Subnet Conflict: IP ranges between groups cannot overlap!\nConflicting groups: "
-msgstr "❌ 網段衝突：不同分組間的 IP 範圍不能有重疊！\n衝突組："
+msgid "❌ Subnet Conflict: IP ranges between groups cannot overlap!"
+msgstr "❌ 網段衝突：不同分組間的 IP 範圍不能有重疊！"
 
-msgid "❌ Save Failed: Group names cannot be duplicated!\nDuplicate name: "
-msgstr "❌ 保存失敗：分組名稱不能重複！\n重複名稱："
+msgid "Conflicting groups: {groups}"
+msgstr "衝突組：{groups}"
+
+msgid "❌ Save Failed: Group names cannot be duplicated!"
+msgstr "❌ 儲存失敗：分組名稱不能重複！"
+
+msgid "Duplicate name: {name}"
+msgstr "重複名稱：{name}"
 
 msgid "❌ Save Failed: IPs must be between 2-254 and format must be valid!"
 msgstr "❌ 保存失敗：IP 必須在 2-254 之間，且存在格式錯誤！"
@@ -905,7 +911,7 @@ msgid "Instantly cut off internet access. LAN communication remains normal."
 msgstr "立即斷開該設備訪問互聯網的權限。局域網內互通正常。"
 
 msgid "🛡️ LAN Isolation (Anti-snooping)"
-msgstr "🛡️ 局域網隔離 (接入下級交換機的設備失效)"
+msgstr "🛡️ 局域網隔離 (接下級交換機的設備失效)"
 
 msgid "Block internal network access for this device to prevent scanning and privacy leaks."
 msgstr "隔離該設備通過本路由器內網訪問權限，阻止內網掃描，防護隱私洩露。"
@@ -957,3 +963,27 @@ msgstr "連接"
 
 msgid "❌ Invalid IP format! Please enter a valid IPv4 address (e.g., 192.168.1.50)"
 msgstr "❌ IP格式錯誤！請輸入合法的IPv4位址 (例如: 192.168.1.50)")
+
+msgid "Public IPv6 (Click to copy):"
+msgstr "公網 IPv6 (點擊即可複製):"
+
+msgid "IPv6 address copied successfully:"
+msgstr "IPv6 位址已成功複製："
+
+msgid "Export Config"
+msgstr "匯出配置"
+
+msgid "Import Config"
+msgstr "匯入配置"
+
+msgid "✅ Import successful!"
+msgstr "✅ 匯入成功！"
+
+msgid "Please verify and click [Save] below to apply."
+msgstr "請檢查無誤後，點擊下方【儲存】按鈕生效。"
+
+msgid "❌ Import failed!"
+msgstr "❌ 匯入失敗！"
+
+msgid "Invalid or corrupted file format. Please select a valid JSON backup file."
+msgstr "檔案格式錯誤或已損壞，請選擇正確的 JSON 備份檔。"
