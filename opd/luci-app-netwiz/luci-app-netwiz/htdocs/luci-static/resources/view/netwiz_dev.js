@@ -26,11 +26,10 @@ var T = {
     'LBL_ROW_CUSTOM': _('Custom Groups'),
     'TAB_DEPT_OTHER': _('Uncategorized'),
     'LBL_SMART_FILTER': _('Filter by IP Subnet'),
-    'TIP_SMART_FILTER': _('Checked: Classify device types by IP subnet\nUnchecked: Classify device types by built-in names'),
+    'TIP_SMART_FILTER': _('Checked: Classify device types by IP subnet') + '\n' + _('Unchecked: Classify device types by built-in names'),
     'PH_DEPT_NAME': _('Group Name'),
     'TXT_GROUP_PREFIX': _('Group '),
-    'ERR_SAVE_RPC': _('❌ Save Failed!\nReason: RPC interface unresponsive ({err})\nPlease run this command in router SSH to restart the service: /etc/init.d/rpcd restart'),
-
+    'ERR_SAVE_RPC': _('❌ Save Failed!') + '\n' + _('Reason: RPC interface unresponsive ({err})') + '\n' + _('Please run this command in router SSH to restart the service: /etc/init.d/rpcd restart'),
     'LBL_SELECT_ALL': _('Select all available devices'),
     'TXT_SELECTED': _('Selected'),
     'TXT_ITEMS': _('items'),
@@ -95,12 +94,12 @@ var T = {
     'MSG_SCAN_FAIL': _('❌ Scan failed: Cannot retrieve underlying data'),
     'ERR_POOL_FULL': _('❌ The IP pool for this type is full. Please expand the range or choose another strategy!'),
     'ERR_IP_EMPTY': _('IP address cannot be empty!'),
-    'ERR_IP_CONFLICT': _('❌ IP Conflict Blocked!\n\nThe IP [{ip}] is occupied by device [{name}].\nPlease modify the strategy or enter a free IP!'),
+    'ERR_IP_CONFLICT': _('❌ IP Conflict Blocked!') + '\n\n' + _('The IP [{ip}] is occupied by device [{name}].') + '\n' + _('Please modify the strategy or enter a free IP!'),
     'TIP_NO_CHANGE': _('💡 Tip: The device is already fixed at this IP. No changes needed!'),
     'TIP_ALL_UNBOUND': _('💡 Tip: The {count} selected devices are all [Unbound]. No unbind action needed!'),
     'ERR_SUF_RANGE': _('Starting suffix must be between 2 and 254!'),
-    'ERR_POOL_INSUFF': _('❌ IP pool insufficient!\nOnly {avail} IPs left from .{suf}, but {count} devices selected.'),
-    'ERR_CAT_FAIL': _('❌ [{name}] assignment failed!\nSelected {req} devices, but only {avail} IPs available in the preset range.\nPlease expand the IP range for this category!'),
+    'ERR_POOL_INSUFF': _('❌ IP pool insufficient!') + '\n' + _('Only {avail} IPs left from .{suf}, but {count} devices selected.'),
+    'ERR_CAT_FAIL': _('❌ [{name}] assignment failed!') + '\n' + _('Selected {req} devices, but only {avail} IPs available in the preset range.') + '\n' + _('Please expand the IP range for this category!'),
     'TIP_BATCH_NO_CHANGE': _('💡 Smart block: According to your strategy, the {count} selected devices are already fixed with unchanged IPs. No need to rewrite rules!'),
     'TXT_INFINITE': _('Infinite'),
     'TXT_EXPIRED': _('Expired'),
@@ -134,10 +133,10 @@ var T = {
     'LBL_FW_DMZ_DESC': _('Forward all WAN ports to this device. Only one device allowed.'),
     'TIP_MAC_CTRL': _('Click to control access'),
     'ERR_DMZ_NO_IP': _('❌ Cannot enable DMZ: Device has no valid IP or is offline!'),
-    'ERR_DMZ_OCCUPIED_1': _('❌ Denied! Only one DMZ host allowed.\n\nDevice [ '),
-    'ERR_DMZ_OCCUPIED_2': _(' ] is currently the DMZ.\nPlease disable its DMZ first!'),
-    'ERR_FW_SAVE_FAIL': _('❌ Save failed!\n\nReason: RPC Error ({err}).\nPlease run `/etc/init.d/rpcd restart` in SSH and try again!'),
-    'ERR_SAVE_FAIL_SHORT': _('❌ Save failed!\nReason: {err}\nPlease run `/etc/init.d/rpcd restart` in SSH'),
+    'ERR_DMZ_OCCUPIED_1': _('❌ Denied! Only one DMZ host allowed.') + '\n\n' + _('Device [ '),
+    'ERR_DMZ_OCCUPIED_2': _(' ] is currently the DMZ.') + '\n' + _('Please disable its DMZ first!'),
+    'ERR_FW_SAVE_FAIL': _('❌ Save failed!') + '\n\n' + _('Reason: RPC Error ({err}).') + '\n' + _('Please run `/etc/init.d/rpcd restart` in SSH and try again!'),
+    'ERR_SAVE_FAIL_SHORT': _('❌ Save failed!') + '\n' + _('Reason: {err}') + '\n' + _('Please run `/etc/init.d/rpcd restart` in SSH'),
     'ERR_IP_FORMAT': _('❌ Invalid IP format! Please enter a valid IPv4 address (e.g., 192.168.1.50)'),
     'TIP_V6_COPY': _('Public IPv6 (Click to copy):'),
     'MSG_V6_COPIED': _('IPv6 address copied successfully:'),
@@ -270,7 +269,7 @@ return view.extend({
             '       <div id="nd-m-content" style="color:#475569; font-size:15px; margin-bottom:10px; text-align:left; line-height:1.2;"></div>',
             
             '       <div id="nd-m-dept-mgr" class="nd-dept-mgr-wrap" style="display:none; max-height: 400px; overflow-y: auto; overflow-x: hidden; padding: 5px 5px 10px 0;">',
-            '           <div class="nd-dept-ctrl-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 5px 12px 5px; margin-top: -5px; border-bottom: 1px dashed #cbd5e1; position: sticky; top: -5px; background: #fff; z-index: 10; gap: 10px;">',
+            '           <div class="nd-dept-ctrl-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 5px 12px 5px; margin-top: -6px; border-bottom: 1px dashed #cbd5e1; position: sticky; top: -6px; background: #fff; z-index: 10; gap: 10px;">',
             '               <div class="nd-dept-io-group" style="display: flex; gap: 10px;">',
             '                   <button id="btn-import-depts" class="nd-btn nd-btn-gray" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">📂 {{BTN_IMPORT_DEPTS}}</button>',
             '                   <button id="btn-export-depts" class="nd-btn nd-btn-gray" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">💾 {{BTN_EXPORT_DEPTS}}</button>',
@@ -470,7 +469,10 @@ return view.extend({
         }
 
         var savedStrategy = localStorage.getItem('nw_batch_strategy') || 'keep';
-        var savedRanges = {ms:30, me:69, ps:70, pe:109, is:110, ie:149, os:150, oe:199};
+        var defaultSmartRanges = {ms:30, me:69, ps:70, pe:109, is:110, ie:149, os:150, oe:199};
+        var cachedRangesStr = localStorage.getItem('nw_smart_ranges');
+        var savedRanges = cachedRangesStr ? JSON.parse(cachedRangesStr) : JSON.parse(JSON.stringify(defaultSmartRanges));
+        var needFetchSmart = !cachedRangesStr;
         var basePrefix = '192.168.1.';
         
         var smartFilterByIp = localStorage.getItem('nw_smart_filter') !== 'false'; 
@@ -738,7 +740,13 @@ return view.extend({
             var activeRadio = modalOverlay.querySelector('input[name="single_strategy"]:checked');
             if(!activeRadio) return;
             var val = activeRadio.value;
-            var usedIps = globalDevices.map(function(d){return d.bound_ip || d.ip;});
+            
+            var usedIps = [];
+            globalDevices.forEach(function(d) {
+                if (d.mac === currentSingleDev.mac) return; 
+                if (d.ip && d.ip !== 'Unknown IP') usedIps.push(d.ip);
+                if (d.bound_ip && d.bound_ip !== 'Unknown IP') usedIps.push(d.bound_ip);
+            });
 
             if (val === 'keep') {
                 mInpIp.value = currentOriginalIp;
@@ -936,7 +944,11 @@ return view.extend({
                             
                             if (JSON.stringify(nr) !== JSON.stringify(savedRanges)) {
                                 savedRanges = nr;
-                                callSaveSmartRanges(JSON.stringify(nr)).catch(function(e){ console.error('Save smart ranges fail', e); });
+                                localStorage.setItem('nw_smart_ranges', JSON.stringify(nr)); 
+                                needFetchSmart = false; 
+
+                                var dataToSend = (JSON.stringify(nr) === JSON.stringify(defaultSmartRanges)) ? "{}" : JSON.stringify(nr);
+                                callSaveSmartRanges(dataToSend).catch(function(e){ console.error('Save smart ranges fail', e); });
                             }
                         }
                         var resBatch = { strategy: activeStrategy, startSuffix: batchSuffixInput.value.trim(), ranges: savedRanges, dept: batchDeptId };
@@ -1027,29 +1039,35 @@ return view.extend({
         var selectedDevices = [];
         var currentFilter = 'all';
 
-        // 全局心跳消息队列与状态锁
+        // 全局并发控制
         window.nwKeepAliveQueue = window.nwKeepAliveQueue || [];
-        window.nwIsProcessingQueue = window.nwIsProcessingQueue || false;
+        window.nwActiveCount = window.nwActiveCount || 0; // 当前正在执行的任务数
+        var MAX_CONCURRENT = 10; // 并发数：10
 
         function processKeepAliveQueue() {
-            // 队列空了，或处理中，就退出
-            if (window.nwKeepAliveQueue.length === 0 || window.nwIsProcessingQueue) return;
-            
-            window.nwIsProcessingQueue = true; // 上锁
-            var mac = window.nwKeepAliveQueue.shift(); // 取出队列第一个 MAC
+            // 如果队列空了，或者并发数已经达到上限，就退出等待
+            if (window.nwKeepAliveQueue.length === 0 || window.nwActiveCount >= MAX_CONCURRENT) return;
 
-            // 发送请求给路由器后端
-            callV6KeepAlive(mac).then(function() {
-                sessionStorage.setItem('nw_v6_hb_' + mac, 'sent'); // 成功后标记为已发送
-            }).catch(function() {
-                // 失败忽略，不阻塞队伍
-            }).finally(function() {
-                // 延时 200 毫秒
-                setTimeout(function() {
-                    window.nwIsProcessingQueue = false; // 解锁
-                    processKeepAliveQueue();            // 处理下一个
-                }, 200); 
-            });
+            // 没到并发上限，且队列里还有任务，执行
+            while (window.nwKeepAliveQueue.length > 0 && window.nwActiveCount < MAX_CONCURRENT) {
+                window.nwActiveCount++; // 占位：活跃任务数 +1
+                var mac = window.nwKeepAliveQueue.shift(); // 取出 MAC
+
+                // 锁定当前的 mac，防止污染
+                (function(currentMac) {
+                    callV6KeepAlive(currentMac).then(function() {
+                        sessionStorage.setItem('nw_v6_hb_' + currentMac, 'sent'); 
+                    }).catch(function() {
+                        // 失败忽略
+                    }).finally(function() {
+                        // 延时 200 毫秒后释放槽位
+                        setTimeout(function() {
+                            window.nwActiveCount--; // 释放活跃任务数 -1
+                            processKeepAliveQueue(); // 继续
+                        }, 200); 
+                    });
+                })(mac);
+            }
         }
 
         function isSelectable(dev) {
@@ -1562,12 +1580,34 @@ return view.extend({
             });
         }
 
-        function runSequential(tasks) {
-            var result = Promise.resolve();
-            tasks.forEach(function(task) {
-                result = result.then(function() { return task(); });
+        // 并发任务池
+        function runWithConcurrency(tasks, limit) {
+            return new Promise(function(resolve, reject) {
+                if (tasks.length === 0) return resolve();
+                var index = 0;
+                var activeCount = 0;
+
+                function next() {
+                    // 所有任务发完，且没执行的任务，结束
+                    if (index >= tasks.length && activeCount === 0) {
+                        resolve();
+                        return;
+                    }
+                    // 有任务，继续
+                    while (activeCount < limit && index < tasks.length) {
+                        activeCount++;
+                        var task = tasks[index++];
+                        task().then(function() {
+                            activeCount--;
+                            next(); // 完成一個，上一個
+                        }).catch(function(err) {
+                            activeCount--;
+                            next(); // 即使失败下一個
+                        });
+                    }
+                }
+                next();
             });
-            return result;
         }
 
         btnBatchUnbind.addEventListener('click', function() {
@@ -1597,7 +1637,7 @@ return view.extend({
                         return function() { return callDeviceUnbind(dev.mac, true); };
                     });
 
-                    runSequential(tasks).then(function() {
+                    runWithConcurrency(tasks, 10).then(function() {  // 批量释放并发数：10
                         return callApplyDhcp(); 
                     }).then(function() {
                         setTimeout(loadDevices, 1500);
@@ -1620,8 +1660,16 @@ return view.extend({
                 okText: T['BTN_START_ASSIGN'],
                 onOk: function(data) {
                     var strategy = data.strategy;
-                    var usedIps = globalDevices.map(function(d) { return d.bound_ip || d.ip; });
                     var dept_id = data.dept;
+                    
+                    var usedIps = [];
+                    var selectedMacs = selectedDevices.map(function(d) { return d.mac; });
+                    globalDevices.forEach(function(d) {
+                        if (selectedMacs.indexOf(d.mac) === -1) { 
+                            if (d.ip && d.ip !== 'Unknown IP') usedIps.push(d.ip);
+                            if (d.bound_ip && d.bound_ip !== 'Unknown IP') usedIps.push(d.bound_ip);
+                        }
+                    });
                     
                     if (strategy === 'seq') {
                         var suf = parseInt(data.startSuffix, 10);
@@ -1676,16 +1724,19 @@ return view.extend({
 
                     selectedDevices.forEach(function(dev) {
                         var assignIp = dev.bound_ip || dev.ip; 
+                        var existingIp = dev.bound_ip || dev.ip;
+                        var exSuf = -1;
+                        if (existingIp && existingIp !== 'Unknown IP' && existingIp.indexOf(basePrefix) === 0) {
+                            exSuf = parseInt(existingIp.split('.').pop(), 10);
+                        }
 
                         if (strategy === 'keep') {
                             var devPrefix = assignIp.substring(0, assignIp.lastIndexOf('.') + 1);
-                            if (devPrefix !== basePrefix) {
+                            if (devPrefix !== basePrefix || usedIps.indexOf(assignIp) !== -1) {
                                 assignIp = getAvailableIpInRange(basePrefix, 50, 250, usedIps);
-                                usedIps.push(assignIp);
                             }
                         } else if (strategy === 'seq') {
                             assignIp = getNextAvailableIp(currentIp, usedIps);
-                            usedIps.push(assignIp); 
                             currentIp = getNextAvailableIp(assignIp, usedIps); 
                         } else if (strategy === 'smart') {
                             var devType = getDeviceType(dev);
@@ -1694,17 +1745,28 @@ return view.extend({
                             else if (devType === 'pc') { sStart = data.ranges.ps; sEnd = data.ranges.pe; }
                             else if (devType === 'iot') { sStart = data.ranges.is; sEnd = data.ranges.ie; }
                             
-                            var smartIp = getAvailableIpInRange(basePrefix, sStart, sEnd, usedIps);
-                            if (smartIp) {
-                                assignIp = smartIp;
-                                usedIps.push(assignIp);
+                            // 原 IP 已经处于该分类的目标网段，且未被抢占，保留
+                            if (exSuf >= sStart && exSuf <= sEnd && usedIps.indexOf(existingIp) === -1) {
+                                assignIp = existingIp; 
+                            } else {
+                                var smartIp = getAvailableIpInRange(basePrefix, sStart, sEnd, usedIps);
+                                if (smartIp) assignIp = smartIp;
                             }
                         } else if (strategy === 'dept') {
                             var tgt2 = globalDepartments.find(function(d){ return d.id === dept_id; });
-                            if(tgt2) {
-                                var dip = getAvailableIpInRange(basePrefix, tgt2.start, tgt2.end, usedIps);
-                                if (dip) { assignIp = dip; usedIps.push(assignIp); }
+                            if (tgt2) {
+                                // 原 IP 若在自定义组网段内，保留
+                                if (exSuf >= tgt2.start && exSuf <= tgt2.end && usedIps.indexOf(existingIp) === -1) {
+                                    assignIp = existingIp;
+                                } else {
+                                    var dip = getAvailableIpInRange(basePrefix, tgt2.start, tgt2.end, usedIps);
+                                    if (dip) assignIp = dip;
+                                }
                             }
+                        }
+
+                        if (assignIp && usedIps.indexOf(assignIp) === -1) {
+                            usedIps.push(assignIp);
                         }
 
                         var isCurrentlyStatic = dev.is_static === true || dev.is_static === 'true';
@@ -1735,7 +1797,7 @@ return view.extend({
 
                     if (lastAssignedGlobal) localStorage.setItem('nw_last_ip', lastAssignedGlobal);
 
-                    runSequential(tasks).then(function() {
+                    runWithConcurrency(tasks, 10).then(function() {  // 批量绑定并发数：10
                         return callApplyDhcp(); 
                     }).then(function() {
                         setTimeout(loadDevices, 1500);
@@ -1757,19 +1819,27 @@ return view.extend({
             var showConnsCbEl = document.querySelector('#cb-show-conns');
             var isShowConns = showConnsCbEl ? showConnsCbEl.checked : false;
 
-            Promise.all([callDeviceList(isShowConns), callGetDepts(), callGetSmartRanges()]).then(function(results) {
+            // 本地有缓存，直接返回
+            var pSmart = needFetchSmart ? callGetSmartRanges() : Promise.resolve(null);
+
+            Promise.all([callDeviceList(isShowConns), callGetDepts(), pSmart]).then(function(results) {
                 loadingEl.style.display = 'none';
                 
                 var resList = results[0];
                 var resDepts = results[1];
                 var resSmart = results[2];
 
-                // 使用者设定过，就用设定值
+                // 发起请求且拿到了数据，写入本地缓存
                 if (resSmart && resSmart.ranges) {
                     var parsedR = typeof resSmart.ranges === 'string' ? JSON.parse(resSmart.ranges || '{}') : resSmart.ranges;
-                    if (Object.keys(parsedR).length > 0) {
+                    if (parsedR && Object.keys(parsedR).length > 0) {
                         savedRanges = parsedR;
+                    } else {
+                        // 为空，使用默认值
+                        savedRanges = JSON.parse(JSON.stringify(defaultSmartRanges));
                     }
+                    localStorage.setItem('nw_smart_ranges', JSON.stringify(savedRanges)); 
+                    needFetchSmart = false; 
                 }
 
                 globalDepartments = [];
