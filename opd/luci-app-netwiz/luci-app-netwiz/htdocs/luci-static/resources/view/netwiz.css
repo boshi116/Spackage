@@ -201,7 +201,7 @@ input:checked + .nw-slider:before { transform: translateX(20px); }
 #nw-global-modal .nw-modal-box, .nd-modal-box { padding: 35px 15px; text-align: center; max-width: 440px; box-sizing: border-box; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4); }
 .nw-wisp-modal-box { max-width: 400px; max-height: 80vh; }
 .nw-wiz-modal-box { max-width: 460px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4); }
-.nw-spinner, .nd-spinner { width: 36px; height: 36px; border: 4px solid #f1f5f9; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px; }
+.nw-spinner, .nd-spinner { width: 36px; height: 36px; border: 4px solid #f1f5f9; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 10px auto 15px; }
 
 .nd-modal-title { font-size: 18px; color: #0f172a; margin: 0 0 15px 0 !important; font-weight: 600; border: none !important; }
 .nd-input-group { text-align: left; margin-bottom: 15px; }
@@ -245,7 +245,7 @@ input:checked + .nw-slider:before { transform: translateX(20px); }
 .nw-adv-panel { background: rgba(241, 245, 249, 0.5); border-radius: 10px; padding: 15px; margin-top: 12px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 5px rgba(0,0,0,0.02); }
 .nw-note-box { background-color: #f8fafc; padding: 12px; font-size: 13px; margin-top: 15px; border: 1px solid #e2e8f0; line-height: 1.6; color: #475569; border-radius: 10px; }
 .nw-note-title { font-weight: bold; color: #0f172a; margin-bottom: 6px; font-size: 14px; }
-.nw-confirm-mode-text { color: #fff; background: #0055bb; padding: 18px; border-radius: 10px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); margin-top: 12px; }
+.nw-confirm-mode-text { color: #fff; background: #0055bb; padding: 18px 4px; border-radius: 10px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); margin-top: 12px; }
 .nw-roam-desc { font-size: 13.5px; color: #64748b; line-height: 1.5; word-break: break-word; }
 .nw-roam-warn { font-size: 13px; color: #ef4444; margin-top: 5px; font-weight: 600; background: #fef2f2; padding: 5px 8px; border-radius: 6px; border: 1px solid #fecaca; line-height: 1.4; }
 .nw-warn-bypass, .nw-warn-main { padding: 10px; border-radius: 8px; font-size: 13.5px; margin-bottom: 12px; border: 1px solid; line-height: 1.6; font-weight: bolder; }
@@ -391,7 +391,7 @@ input:checked + .nw-slider:before { transform: translateX(20px); }
 }
 
 .nw-confirm-board {
-    padding: 30px 25px !important;
+    padding: 30px 4px !important;
     text-align: center !important;
     box-sizing: border-box !important;
 }
@@ -460,7 +460,7 @@ input:checked + .nw-slider:before { transform: translateX(20px); }
     z-index: 9999999 !important; 
 }
 
-/* ======== 防主题劫持：强制向导弹窗按钮横排 ======== */
+/* ======== 防主题劫持：强制向导的弹窗按钮横排 ======== */
 .nw-wiz-modal-box div:has(> .nw-u-btn-red):has(> .nw-u-btn-green) {
     display: flex !important;
     flex-direction: row !important;
@@ -486,9 +486,6 @@ input:checked + .nw-slider:before { transform: translateX(20px); }
     display: none !important;
 }
 
-/* =========================================================
-   新增：修复开关挤压与绿色激活状态 (完全不影响原有布局)
-========================================================= */
 .nd-control-bar label.nw-switch {
     width: auto !important; height: auto !important; flex-shrink: 0 !important; 
     overflow: visible !important; display: flex !important; align-items: center !important; margin: 0 !important;
@@ -496,15 +493,12 @@ input:checked + .nw-slider:before { transform: translateX(20px); }
 .nd-control-bar label.nw-switch > span { white-space: nowrap !important; }
 .nd-control-bar label.nw-switch > div { width: 42px !important; height: 22px !important; flex-shrink: 0 !important; }
 
-/* 关键：开关开启时变成绿色！ */
+/* 开关开启时变成绿色！ */
 .nd-control-bar input:checked + .nw-slider { background-color: #10b981 !important; }
 .btn-fw:active { transform: scale(0.95); opacity: 0.8; }
 
 #nd-modal-overlay .nd-modal-box { max-width: 460px !important; padding: 0 0 !important; }
 
-/* =========================================================
-   新增：让 MAC 地址变成点击入口特效
-========================================================= */
 .nd-card-mac.btn-fw-mac {
     cursor: pointer !important;
     transition: all 0.2s ease !important;
@@ -520,9 +514,20 @@ input:checked + .nw-slider:before { transform: translateX(20px); }
     transform: scale(0.95) !important;
 }
 
+.nd-card-warning { border: 2px solid #ff4d4f !important; background-color: #fff1f0 !important; box-shadow: 0 4px 12px rgba(255, 77, 79, 0.2) !important; margin-top: 15px !important; }
+@keyframes blink-warning { 0% { opacity: 1; } 50% { opacity: 0.1; } 100% { opacity: 1; } 
+
+}
+
+/* 呼吸灯闪烁动画 */
+@keyframes blink-warning {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
 /* =========================================================
-   12. 手机端响应式适配 (Mobile) 
-   (已将原文件中的两段 @media 完美合并，并剔除了错误代码)
+   12. 手机端响应式适配
 ========================================================= */
 @media screen and (max-width: 768px) {
     #maincontent, .main, .main-right { padding-bottom: 40px !important; height: auto !important; overflow: visible !important; }
@@ -618,7 +623,6 @@ input:checked + .nw-slider:before { transform: translateX(20px); }
     .nd-batch-actions { width: 100% !important; justify-content: space-between !important; display: flex !important; gap: 10px !important; }
     .nd-batch-actions button { flex: 1 !important; }
 
-    /* 手机端智能分段：隐藏前缀以腾出空间，并继承电脑端的同行排版 */
     .nd-smart-row { padding: 10px 4px !important; }
     .nd-smart-label { font-size: 13px !important; }
     .nd-input-sm { width: 60px !important; flex: 0 0 60px !important; font-size: 13.5px !important; padding: 6px 0 !important; }

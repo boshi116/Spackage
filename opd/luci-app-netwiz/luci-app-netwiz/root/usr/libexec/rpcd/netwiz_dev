@@ -20,9 +20,32 @@ delete_fw_rule() {
     done
 }
 
+# --- 高级应用喚醒函數 ---
+wakeup_apps() {
+    local proxy_apps="openclash passwall shadowsocksr bypass vssr homeproxy mihomo"
+    local dns_apps="adguardhome smartdns mosdns"
+    
+    # 1. 喚醒 DNS 类
+    for app in $dns_apps; do
+        if [ -x "/etc/init.d/$app" ] && /etc/init.d/$app enabled >/dev/null 2>&1; then
+            logger -t Netwiz "⚡ Re-linking DNS app: $app"
+            /etc/init.d/$app restart >/dev/null 2>&1
+        fi
+    done
+
+    # 2. 喚醒 代理/加速
+    for app in $proxy_apps; do
+        if [ -x "/etc/init.d/$app" ] && /etc/init.d/$app enabled >/dev/null 2>&1; then
+            logger -t Netwiz "🚀 Re-linking Proxy app: $app"
+            /etc/init.d/$app restart >/dev/null 2>&1
+        fi
+    done
+}
+# ------------------------------
+
 case "$1" in
     list)
-        echo '{ "get_list": { "show_conns": "boolean" }, "bind": { "mac": "string", "ip": "string", "name": "string", "dept": "string", "no_reload": "boolean" }, "unbind": { "mac": "string", "no_reload": "boolean" }, "apply_dhcp": {}, "get_depts": {}, "save_depts": { "data": "string" }, "get_smart_ranges": {}, "save_smart_ranges": { "data": "string" }, "v6_keep_alive": { "mac": "string" }, "fw_set": { "mac": "string", "ip": "string", "blk_en": "boolean", "iso_en": "boolean", "dmz_en": "boolean" } }'
+        echo '{ "get_list": { "show_conns": "boolean" }, "bind": { "mac": "string", "ip": "string", "name": "string", "dept": "string", "no_reload": "boolean" }, "unbind": { "mac": "string", "no_reload": "boolean" }, "apply_dhcp": {}, "get_depts": {}, "save_depts": { "data": "string" }, "get_smart_ranges": {}, "save_smart_ranges": { "data": "string" }, "v6_keep_alive": { "mac": "string" }, "reset_all": {}, "fw_set": { "mac": "string", "ip": "string", "blk_en": "boolean", "iso_en": "boolean", "dmz_en": "boolean" } }'
         exit 0
         ;;
     call)
@@ -108,7 +131,7 @@ case "$1" in
                                 if(ipv6_map[mac]=="") ipv6_map[mac] = v6_ip;
                                 else if(index(ipv6_map[mac], v6_ip) == 0) ipv6_map[mac] = ipv6_map[mac] " " v6_ip;
                                 all_macs[mac]=1;
-                                if(state_str ~ /REACHABLE|DELAY|PROBE|STALE|router/) arp_online[mac]=1;
+                                if(state_str ~ /REACHABLE|DELAY|PROBE|router/) arp_online[mac]=1;
                             }
                         }
                     }
@@ -128,7 +151,7 @@ case "$1" in
                                 } else {
                                     arp_ip[mac] = f[1];
                                 }
-                                if(state_str ~ /REACHABLE|DELAY|PROBE|STALE|0x2/) arp_online[mac]=1;
+                                if(state_str ~ /REACHABLE|DELAY|PROBE|0x2/) arp_online[mac]=1;
                                 all_macs[mac]=1;
                             }
                         }
@@ -320,13 +343,62 @@ case "$1" in
                         f_dmz = (fw_dmz[mac]==1) ? "true" : "false";
 
                         if(!first) printf ", ";
+             
                         is_pc_flag = (is_pc_v6_map[mac] == 1) ? "true" : "false";
              
-                        printf "{\"mac\": \"%s\", \"ip\": \"%s\", \"bound_ip\": \"%s\", \"dept\": \"%s\", \"name\": \"%s\", \"online\": %s, \"is_static\": %s, \"is_gw\": %s, \"is_local\": %s, \"is_visitor\": %s, \"lease\": \"%s\", \"conn_count\": %d, \"fw_block\": %s, \"fw_isolate\": %s, \"fw_dmz\": %s, \"ipv6\": \"%s\", \"is_pc_v6\": %s}", mac, ip, b_ip, b_dept, name, (is_online?"true":"false"), is_static, is_gw, is_local, is_visitor, l_time, c_count, f_blk, f_iso, f_dmz, v6_val, is_pc_flag;
+                        # 判断是否未知新设备
+                        # 1. 在线; 2. 未绑定靜态IP; 3.设备名为 Unknown
+                        is_new_unknown = "false";
+                        if (is_online == 1 && is_static_mac[mac] != 1 && name == "Unknown" && is_local == "false" && is_gw == "false") {
+                            is_new_unknown = "true";
+                        }
+             
+                        printf "{\"mac\": \"%s\", \"ip\": \"%s\", \"bound_ip\": \"%s\", \"dept\": \"%s\", \"name\": \"%s\", \"online\": %s, \"is_static\": %s, \"is_gw\": %s, \"is_local\": %s, \"is_visitor\": %s, \"lease\": \"%s\", \"conn_count\": %d, \"fw_block\": %s, \"fw_isolate\": %s, \"fw_dmz\": %s, \"ipv6\": \"%s\", \"is_pc_v6\": %s, \"is_new_unknown\": %s}", mac, ip, b_ip, b_dept, name, (is_online?"true":"false"), is_static, is_gw, is_local, 
+is_visitor, l_time, c_count, f_blk, f_iso, f_dmz, v6_val, is_pc_flag, is_new_unknown;
                         first=0;
                     }
                     printf "]}";
                 }')
+                # --- 靜默清理 ---
+                (
+                    NOW=$(date +%s)
+                    EXP_TIME=2592000 # 30 天
+
+                    # 1. 活躍時间戳
+                    cat /proc/net/arp 2>/dev/null | grep -v IP | awk '{print $4}' | while read mac; do
+                        [ -z "$mac" ] || [ "$mac" = "00:00:00:00:00:00" ] && continue
+                        MAC_SAFE=$(echo "$mac" | tr -d ':' | tr 'a-z' 'A-Z')
+                        uci -q set netwiz.seen_${MAC_SAFE}="netwiz_dev"
+                        uci -q set netwiz.seen_${MAC_SAFE}.ts="$NOW"
+                    done
+                    uci commit netwiz
+
+                    # 2. 30 天没上线
+                    uci -q show netwiz | grep '=netwiz_dev' | grep 'seen_' | while read line; do
+                        sec=$(echo "$line" | cut -d'=' -f1 | cut -d'.' -f2)
+                        mac_safe=$(echo "$sec" | cut -d'_' -f2)
+                        
+                        mac_lower=$(echo "$mac_safe" | tr 'A-Z' 'a-z')
+                        
+                        ts=$(uci -q get netwiz."$sec".ts)
+                        
+                        if [ -n "$ts" ] && [ $((NOW - ts)) -gt $EXP_TIME ]; then
+                            # 殭屍设备，清理防火牆和 DMZ 规则 
+                            delete_fw_rule "nw_blk_${mac_lower}" "rule"
+                            delete_fw_rule "nw_iso_${mac_lower}" "rule"
+                            delete_fw_rule "nw_dmz_${mac_lower}" "redirect"
+
+                            # 刪除時间戳
+                            uci -q delete netwiz."$sec"
+                            logger -t Netwiz "🧹 Garbage Collection: Cleared old rules for $mac_safe"
+                        fi
+                    done
+                    uci commit firewall
+                    uci commit netwiz  # 時間戳写入
+                    /etc/init.d/firewall reload >/dev/null 2>&1
+                ) &
+                # ----------------------------------------------------
+
                 echo "$json_data"
                 exit 0
                 ;;
@@ -341,12 +413,22 @@ case "$1" in
 
                 [ -z "$mac" ] && exit 0
 
-                delete_fw_rule "nw_blk_${mac_clean}" "rule"
+               delete_fw_rule "nw_blk_${mac_clean}" "rule"
                 if [ "$blk_en" = "true" ] || [ "$blk_en" = "1" ]; then
+                    # 阻断外网转发
                     uci add firewall rule >/dev/null
                     uci set firewall.@rule[-1].name="nw_blk_${mac_clean}"
                     uci set firewall.@rule[-1].src="lan"
                     uci set firewall.@rule[-1].dest="wan"
+                    uci set firewall.@rule[-1].src_mac="$mac"
+                    uci set firewall.@rule[-1].family="any"
+                    uci set firewall.@rule[-1].target="DROP"
+                    uci set firewall.@rule[-1].enabled="1"
+
+                    # 阻断透明代理劫持和路由器 DNS
+                    uci add firewall rule >/dev/null
+                    uci set firewall.@rule[-1].name="nw_blk_${mac_clean}_in"
+                    uci set firewall.@rule[-1].src="lan"
                     uci set firewall.@rule[-1].src_mac="$mac"
                     uci set firewall.@rule[-1].family="any"
                     uci set firewall.@rule[-1].target="DROP"
@@ -384,22 +466,44 @@ case "$1" in
                 fi
 
                 uci commit firewall
-                /etc/init.d/firewall reload </dev/null >/dev/null 2>&1 &
                 
-                if [ "$blk_en" = "true" ] || [ "$blk_en" = "1" ]; then
-                    if command -v iptables >/dev/null 2>&1; then iptables -I FORWARD 1 -m mac --mac-source $mac -j DROP >/dev/null 2>&1; fi
-                    if command -v ip6tables >/dev/null 2>&1; then ip6tables -I FORWARD 1 -m mac --mac-source $mac -j DROP >/dev/null 2>&1; fi
-                    if command -v nft >/dev/null 2>&1; then nft insert rule inet fw4 forward ether saddr $mac drop >/dev/null 2>&1; fi
-                fi
-                if [ "$iso_en" = "true" ] || [ "$iso_en" = "1" ]; then
-                    if command -v iptables >/dev/null 2>&1; then iptables -I FORWARD 1 -m mac --mac-source $mac -d 192.168.0.0/16 -j DROP >/dev/null 2>&1; fi
-                    if command -v nft >/dev/null 2>&1; then nft insert rule inet fw4 forward ether saddr $mac ip daddr 192.168.0.0/16 drop >/dev/null 2>&1; fi
-                fi
-                
+                # 清空连线
                 if command -v conntrack >/dev/null 2>&1; then
                     [ -n "$ip" ] && [ "$ip" != "Unknown IP" ] && conntrack -D -s "$ip" >/dev/null 2>&1
+                    v6_ips=$(ip -6 neigh show 2>/dev/null | grep -i "$mac" | awk '{print $1}')
+                    for v6 in $v6_ips; do
+                        conntrack -D -s "$v6" >/dev/null 2>&1
+                    done
                 fi
                 for vap in $(ubus list | grep hostapd); do ubus call "$vap" del_client '{"addr":"'"$mac"'", "reason":5, "deauth":true, "ban_time":0}' >/dev/null 2>&1; done
+
+                # 防火墙重载再中断
+                (
+
+                    /etc/init.d/firewall reload >/dev/null 2>&1
+
+                    if [ "$blk_en" = "true" ] || [ "$blk_en" = "1" ]; then
+                        if command -v iptables >/dev/null 2>&1; then 
+                            iptables -I FORWARD 1 -m mac --mac-source $mac -j DROP >/dev/null 2>&1
+                            iptables -I INPUT 1 -m mac --mac-source $mac -j DROP >/dev/null 2>&1
+                            iptables -t mangle -I PREROUTING 1 -m mac --mac-source $mac -j DROP >/dev/null 2>&1
+                        fi
+                        if command -v ip6tables >/dev/null 2>&1; then 
+                            ip6tables -I FORWARD 1 -m mac --mac-source $mac -j DROP >/dev/null 2>&1
+                            ip6tables -I INPUT 1 -m mac --mac-source $mac -j DROP >/dev/null 2>&1
+                            ip6tables -t mangle -I PREROUTING 1 -m mac --mac-source $mac -j DROP >/dev/null 2>&1
+                        fi
+                        if command -v nft >/dev/null 2>&1; then 
+                            nft insert rule inet fw4 forward ether saddr $mac drop >/dev/null 2>&1
+                            nft insert rule inet fw4 input ether saddr $mac drop >/dev/null 2>&1
+                            nft insert rule inet fw4 mangle_prerouting ether saddr $mac drop >/dev/null 2>&1 || true
+                        fi
+                    fi
+                    if [ "$iso_en" = "true" ] || [ "$iso_en" = "1" ]; then
+                        if command -v iptables >/dev/null 2>&1; then iptables -I FORWARD 1 -m mac --mac-source $mac -d 192.168.0.0/16 -j DROP >/dev/null 2>&1; fi
+                        if command -v nft >/dev/null 2>&1; then nft insert rule inet fw4 forward ether saddr $mac ip daddr 192.168.0.0/16 drop >/dev/null 2>&1; fi
+                    fi
+                ) &
 
                 echo '{"result":0}'
                 exit 0
@@ -442,11 +546,18 @@ case "$1" in
                 if [ -n "$dept" ] && [ "$dept" != "none" ]; then uci set dhcp.$new_sect.netwiz_dept="$dept"; fi
 
                 if [ "$no_reload" != "1" ] && [ "$no_reload" != "true" ]; then
-                    # 批量操作
                     uci commit dhcp
                     uci commit firewall
-                    /etc/init.d/dnsmasq reload
+                    /etc/init.d/dnsmasq reload >/dev/null 2>&1
                     /etc/init.d/firewall reload >/dev/null 2>&1 &
+                    # 检查 dnsmasq
+                    sleep 2
+                    if ! pgrep dnsmasq > /dev/null; then
+                        logger -t Netwiz "⚠️ DNSMasq crashed after bind! Auto-restarting..."
+                        /etc/init.d/dnsmasq restart >/dev/null 2>&1
+                        sleep 2
+                        wakeup_apps  # 喚醒函數
+                    fi
                 fi
                 echo '{"result":0}'
                 exit 0
@@ -460,7 +571,7 @@ case "$1" in
                 matches=$(uci -q show dhcp 2>/dev/null | grep -i "\.mac=.*$mac" | cut -d'.' -f2 | sed 's/[^0-9]//g' | sort -rn)
                 for idx in $matches; do uci -q delete dhcp.@host[$idx]; done
                 
-                mac_clean=$(echo "$mac" | tr -d ':' | tr 'a-z' 'A-Z')
+                mac_clean=$(echo "$mac" | tr -d ':')
                 delete_fw_rule "nw_blk_${mac_clean}" "rule"
                 delete_fw_rule "nw_iso_${mac_clean}" "rule"
                 delete_fw_rule "nw_dmz_${mac_clean}" "redirect"
@@ -469,16 +580,31 @@ case "$1" in
                     uci commit firewall
                     /etc/init.d/dnsmasq reload >/dev/null 2>&1
                     /etc/init.d/firewall reload >/dev/null 2>&1 &
+                    # 检查 dnsmasq
+                    sleep 2
+                    if ! pgrep dnsmasq > /dev/null; then
+                        logger -t Netwiz "⚠️ DNSMasq crashed after unbind! Auto-restarting..."
+                        /etc/init.d/dnsmasq restart >/dev/null 2>&1
+                        sleep 2
+                        wakeup_apps  # 喚醒函數
+                    fi
                 fi
                 echo '{"result":0}'
                 exit 0
                 ;;
             apply_dhcp)
-                # 写入 Flash
                 uci commit dhcp
                 uci commit firewall
-                /etc/init.d/dnsmasq reload
+                /etc/init.d/dnsmasq reload >/dev/null 2>&1
                 /etc/init.d/firewall reload >/dev/null 2>&1 &
+                # 檢查 dnsmasq
+                sleep 2
+                if ! pgrep dnsmasq > /dev/null; then
+                    logger -t Netwiz "⚠️ DNSMasq crashed after reload! Auto-restarting..."
+                    /etc/init.d/dnsmasq restart >/dev/null 2>&1
+                    sleep 2
+                    wakeup_apps  # 喚醒函數
+                fi
                 echo '{"result":0}'
                 exit 0
                 ;;
@@ -530,7 +656,7 @@ case "$1" in
                 UPDATE_THRESHOLD=604800 # 写入阈值：7天
                 EXP_TIME=2592000 # 过期时间：30天
 
-                # 1、清理所有超过 30 天没更新的旧设备
+                # 清理所有超过 30 天没更新的旧设备
                 uci -q show netwiz | grep '=v6_pc' | while read -r line; do
                     sec=$(echo "$line" | cut -d'.' -f2 | cut -d'=' -f1)
                     ts=$(uci -q get netwiz."$sec".ts)
@@ -539,7 +665,7 @@ case "$1" in
                     fi
                 done
 
-                # 2、时间戳更新
+                # 时间戳更新
                 OLD_TS=$(uci -q get netwiz.v6pc_$MAC_SAFE.ts)
                 # 没记录过，或上次记录已经是 7 天前，才写入
                 if [ -z "$OLD_TS" ] || [ $((NOW - OLD_TS)) -gt $UPDATE_THRESHOLD ]; then
@@ -550,6 +676,43 @@ case "$1" in
                 
                 # 提交
                 uci commit netwiz
+                echo '{"result":0}'
+                exit 0
+                ;;
+                
+                reset_all)
+                # 1. 淨化防火牆
+                for rule in $(uci -q show firewall | grep -E "\.name='nw_" | cut -d'.' -f2 | sed "s/\[//g; s/\]//g" | sort -rn); do 
+                    uci -q delete firewall.@rule[$rule]
+                done
+                for redir in $(uci -q show firewall | grep -E "\.name='nw_dmz_" | cut -d'.' -f2 | sed "s/\[//g; s/\]//g" | sort -rn); do 
+                    uci -q delete firewall.@redirect[$redir]
+                done
+                uci commit firewall
+
+                # 2. 淨化 DHCP
+                for host in $(uci -q show dhcp | grep "=host" | cut -d'.' -f2 | sed "s/\[//g; s/\]//g" | sort -rn); do
+                    uci -q delete dhcp.@host[$host]
+                done
+                uci commit dhcp
+
+                # 3. 淨化 Netwiz 配置
+                rm -f /etc/config/netwiz
+                touch /etc/config/netwiz
+                uci -q batch <<EOF
+                    set netwiz.global=netwiz
+                    set netwiz.smart=netwiz
+                    commit netwiz
+EOF
+
+                # 4. 重启服务
+                /etc/init.d/dnsmasq restart >/dev/null 2>&1
+                /etc/init.d/firewall reload >/dev/null 2>&1
+                
+                # 启用高级应用
+                sleep 2
+                wakeup_apps
+                
                 echo '{"result":0}'
                 exit 0
                 ;;
