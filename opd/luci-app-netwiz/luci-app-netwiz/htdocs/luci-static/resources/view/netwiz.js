@@ -388,7 +388,6 @@ return view.extend({
             '        <form id="main-pppoe-fields" target="dummy_main_frame" action="about:blank" method="POST" style="margin:0; padding:0;">',
             '           <div class="nw-value"><label class="nw-value-title">{{LBL_USER}}</label><div class="nw-value-field">',
             '              <input type="search" id="pppoe-user" name="search_q3" class="nd-input" placeholder="{{PH_USER}}" autocomplete="on">',
-            '              <div id="main-user-mirror" style="display:none; margin-top:8px; padding:8px 10px; background:#eff6ff; border-radius:8px; font-size:13.5px; color:#1e3a8a; word-break:break-all; line-height:1.4; border:1px dashed #93c5fd; text-align:left;"></div>',
             '           </div></div>',
             '           <div class="nw-value"><label class="nw-value-title">{{LBL_PASS}}</label><div class="nw-value-field"><input type="search" id="pppoe-pass" name="search_q4" class="nd-input" placeholder="{{PH_PASS}}" autocomplete="on"></div></div>',
             '           <button type="submit" id="main-pppoe-submit" style="display:none;">Save</button>',
@@ -640,12 +639,12 @@ return view.extend({
         var wizUserMir = container.querySelector('#wiz-user-mirror');
         if (wizUserInp && wizUserMir) {
             var syncMir = function() {
-                // 超18个字符，显示投影
                 if (wizUserInp.value.length > 18) { 
                     wizUserMir.style.display = 'block';
                     wizUserMir.textContent = wizUserInp.value;
                 } else {
                     wizUserMir.style.display = 'none';
+                    wizUserMir.textContent = wizUserInp.value;
                 }
             };
             wizUserInp.addEventListener('input', syncMir);
@@ -1013,25 +1012,21 @@ return view.extend({
         Promise.all([
             callNetCheckWifi(),
             safePromise(callSystemBoard(), {}),
-            safePromise(uci.load('netwiz'), null) // 1. 恢复加载 netwiz 配置
+            safePromise(uci.load('netwiz'), null), // 恢复加载 netwiz 配置
+            safePromise(uci.load('wireless'), null) // 加载底层 wireless 配置
         ]).then(function(results) {
             var wifiRes = results[0];
             var boardRes = results[1] || {};
             var modelName = (boardRes.model || '').toLowerCase();
             
-            var hasWifi = (wifiRes === true || (typeof wifiRes === 'object' && wifiRes && wifiRes.has_wifi === true));
-            window._hasRealWifi = hasWifi; // 真实的硬件状态，供底部状态栏判断使用
-            var isUnknownDevice = (modelName.indexOf('generic') !== -1 && modelName.indexOf('unknown') !== -1);
-
-            // 2. 恢复读取 netwiz 的标志位
-            var wizardEnable = safeUciGet('netwiz', 'main', 'wizard_enable', '1');
-            window._currentWizState = wizardEnable;
-
-            var wizModal = container.querySelector('#nw-wizard-modal');
-            var btnReopenWiz = container.querySelector('#btn-reopen-wizard');
-
-            // 1. 处理主界面的 Wi-Fi 卡片显示与隐藏
-            if (hasWifi && !isUnknownDevice) {
+            var uciWifiDevs = [];
+            try { uciWifiDevs = uci.sections('wireless', 'wifi-device') || []; } catch(e) {}
+            
+            var hasWifi = (wifiRes === true || (typeof wifiRes === 'object' && wifiRes && wifiRes.has_wifi === true) || uciWifiDevs.length > 0);
+            window._hasRealWifi = hasWifi; // 真实的硬件状态
+            
+            // 处理主界面的 Wi-Fi 卡片显示与隐藏
+            if (hasWifi) {
                 var wifiCard = container.querySelector('#card-wifi');
                 if (wifiCard) wifiCard.style.display = 'flex';
             } else {

@@ -189,6 +189,7 @@ var T = {
     'TXT_BAK_IMPORT': _('Before Import'),
     'TXT_BAK_RESET': _('Before Reset'),
     'OPT_NO_CHANGE': _('-- Keep Unchanged --'),
+    'BDG_V6_RESERVED': _('Reserved')
 };
 
 var callDeviceList = rpc.declare({ object: 'netwiz_dev', method: 'get_list', params: ['show_conns'], expect: { '': {} } });
@@ -325,8 +326,8 @@ return view.extend({
             '       <div id="nd-m-dept-mgr" class="nd-dept-mgr-wrap" style="display:none; max-height: 400px; overflow-y: auto; overflow-x: hidden; padding: 5px 5px 10px 0;">',
             '           <div class="nd-dept-ctrl-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 5px 5px 12px 5px; margin-top: -6px; border-bottom: 1px dashed #cbd5e1; position: sticky; top: -6px; background: #fff; z-index: 10; gap: 10px;">',
             '               <div class="nd-dept-io-group" style="display: flex; gap: 10px;">',
-            '                   <button id="btn-import-depts" class="nd-btn nd-btn-gray" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">📂 {{BTN_IMPORT_DEPTS}}</button>',
             '                   <button id="btn-export-depts" class="nd-btn nd-btn-gray" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">💾 {{BTN_EXPORT_DEPTS}}</button>',
+            '                   <button id="btn-import-depts" class="nd-btn nd-btn-gray" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">📂 {{BTN_IMPORT_DEPTS}}</button>',
             '               </div>',
             '               <button id="btn-add-dept" class="nd-btn nd-btn-blue" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(59,130,246,0.2);">+ {{BTN_ADD_DEPT}}</button>',
             '           </div>',
@@ -1451,51 +1452,77 @@ return view.extend({
                         var hbKey = 'nw_v6_hb_' + dev.mac;   // Session 心跳钥匙
                         var currentPrefix = publicV6List[0].split(':').slice(0, 4).join(':'); // 提取真实前缀
                         
-                        var radarShortV6 = publicV6List.find(function(v) { return v.indexOf('::') !== -1 && v.length < 25; });
-                        var localShortV6 = localStorage.getItem(memKey);
-                        var isBackendPc = (dev.is_pc_v6 === true || dev.is_pc_v6 === 'true');
+                        // 💡 1. 優先執行無條件強制推算！
+                        var frontendType = getDeviceType(dev);
+                        var isStaticBound = (dev.is_static === true || dev.is_static === 'true');
+                        var isBackendPc = (dev.is_pc_v6 === true || dev.is_pc_v6 === 'true' || (isStaticBound && frontendType !== 'mobile'));
 
-                        // 全局队列
-                        var triggerKeepAlive = function() {
-                            var hasSent = sessionStorage.getItem(hbKey);
-                            // 只要这个会话没发过，且没在排队
-                            if (!hasSent && window.nwKeepAliveQueue.indexOf(dev.mac) === -1) { 
-                                sessionStorage.setItem(hbKey, 'pending'); // 占位
-                                window.nwKeepAliveQueue.push(dev.mac);    // 进排队
-                                processKeepAliveQueue();                  // 处理
-                            }
-                        };
-
-                        // 真实 > L1缓存 > L2预测拼凑
-                        if (radarShortV6) {
-                            localStorage.setItem(memKey, radarShortV6);
-                            triggerKeepAlive();
-                            
-                        } else if (localShortV6 && localShortV6.indexOf(currentPrefix) === 0) {
-                            publicV6List.unshift(localShortV6); 
-                            triggerKeepAlive();
-                            
-                        } else if (isBackendPc) {
+                        if (isBackendPc) {
                             var ipToUse = (dev.bound_ip && dev.bound_ip !== 'Unknown IP') ? dev.bound_ip : ((dev.ip !== 'Unknown IP') ? dev.ip : '');
                             if (ipToUse) {
                                 var ipv4Suffix = ipToUse.split('.').pop(); 
-                                var predictedV6 = currentPrefix + '::' + parseInt(ipv4Suffix, 10); 
-                                
-                                publicV6List.unshift(predictedV6); 
-                                localStorage.setItem(memKey, predictedV6); 
-                                triggerKeepAlive(); 
+                                var predictedV6 = currentPrefix + '::' + ipv4Suffix; 
+                                if (publicV6List.indexOf(predictedV6) === -1) {
+                                    publicV6List.unshift(predictedV6); // 霸道塞入第一位
+                                }
                             }
                         }
 
-                        // 展示
+                        // 💡 2. 徹底去重（防止重複的火星文和 IP）
+                        var uniqueV6 = [];
+                        publicV6List.forEach(function(v) { if(uniqueV6.indexOf(v) === -1) uniqueV6.push(v); });
+                        publicV6List = uniqueV6;
+
+                        var radarShortV6 = publicV6List.find(function(v) { return v.indexOf('::') !== -1 && v.length < 25; });
+                        var localShortV6 = localStorage.getItem(memKey);
+                        
+                        // 💡 3. 清理垃圾緩存
+                        if (localShortV6 && (localShortV6.indexOf('::') === -1 || localShortV6.length >= 25)) {
+                            localShortV6 = null;
+                            localStorage.removeItem(memKey);
+                        }
+
+                        var triggerKeepAlive = function() {
+                            var hasSent = sessionStorage.getItem(hbKey);
+                            if (!hasSent && window.nwKeepAliveQueue.indexOf(dev.mac) === -1) { 
+                                sessionStorage.setItem(hbKey, 'pending'); 
+                                window.nwKeepAliveQueue.push(dev.mac);    
+                                processKeepAliveQueue();                  
+                            }
+                        };
+
+                        // 💡 4. 記憶與保活
+                        if (radarShortV6) {
+                            localStorage.setItem(memKey, radarShortV6);
+                            triggerKeepAlive();
+                        } else if (localShortV6 && localShortV6.indexOf(currentPrefix) === 0) {
+                            if (publicV6List.indexOf(localShortV6) === -1) publicV6List.unshift(localShortV6); 
+                            triggerKeepAlive();
+                        }
+
+                        // 5. 短 IP 置顶
                         var showV6 = publicV6List.find(function(v) { return v.indexOf('::') !== -1 && v.length < 25; }) || publicV6List[0];
-                        var moreV6 = publicV6List.length >= 2 ? (' +' + publicV6List.length) : '';
-                        
-                        var allV6Str = publicV6List.join('\n');
-                        var titleStr = T['TIP_V6_COPY'] + '\n' + allV6Str;
-                        
-                        // 复制ipv6
-                        ipv6Html = '<div class="nd-ipv6-badge" data-v6="' + showV6 + '" title="' + titleStr + '" style="font-size:11px; color:#64748b; font-family:monospace; margin-top:3px; display:flex; align-items:center; gap:4px; cursor:pointer;"><span style="background:#10b981; padding:4px 5px; border-radius:4px; font-weight:bold; color:#fff; border:1px solid #e2e8f0; line-height:1;">IPv6</span> <span style="overflow:hidden; text-overflow:ellipsis; max-width:120px; white-space:nowrap;">' + showV6 + '</span><span style="color:#3b82f6; font-weight:bold;">' + moreV6 + '</span></div>';
+                        var mainIdx = publicV6List.indexOf(showV6);
+                        if (mainIdx > 0) {
+                            publicV6List.splice(mainIdx, 1);
+                            publicV6List.unshift(showV6); // 置顶
+                        }
+                        var moreV6 = publicV6List.length >= 2 ? (' +' + (publicV6List.length - 1)) : '';
+
+                        // 6. 预留状态
+                        var isV6Unseen = (dev.ipv6 || '').indexOf(showV6) === -1;
+
+                        var pureV6Str = publicV6List.join('\n');
+
+                        var v6ReservedText = T['BDG_V6_RESERVED'] || '预留';
+                        var displayV6Str = publicV6List.map(function(v) {
+                            return (isV6Unseen && v === showV6) ? (v + ' (' + v6ReservedText + ')') : v;
+                        }).join('\n');
+
+                        var titleStr = (T['TIP_V6_COPY'] || 'Public IPv6 (Click to copy):') + '\n' + displayV6Str;
+
+                        // 渲染
+                        ipv6Html = '<div class="nd-ipv6-badge" data-v6="' + encodeURIComponent(pureV6Str) + '" title="' + titleStr + '" style="font-size:11px; color:#64748b; font-family:monospace; margin-top:3px; display:flex; align-items:center; gap:4px; cursor:pointer;"><span style="background:#10b981; padding:4px 5px; border-radius:4px; font-weight:bold; color:#fff; border:1px solid #e2e8f0; line-height:1;">IPv6</span> <span style="overflow:hidden; text-overflow:ellipsis; max-width:120px; white-space:nowrap;">' + showV6 + '</span><span style="color:#3b82f6; font-weight:bold;">' + moreV6 + '</span></div>';
                     }
                 }
 
@@ -1540,6 +1567,11 @@ return view.extend({
                     handStyle = 'font-size:1.5em; color:#ff4d4f; margin-left:4px; vertical-align:middle; animation:blink-warning 0.6s infinite;';
                 }
                 
+                var handHtml = isSys ? '' : '<span style="' + handStyle + '">👈</span>';
+                var cursorStyle = isSys ? 'cursor:default;' : 'cursor:pointer;';
+                var macTitle = isSys ? '' : ('title="' + T['TIP_MAC_CTRL'] + '"');
+                var macClass = isSys ? 'nd-card-mac' : 'nd-card-mac btn-fw-mac';
+                
                 html += '<div class="' + cardClass + '" style="position:relative;">' + warningBadge + '<div class="nd-card-left"><div style="display:flex; align-items:center;">';
 
                 if (noCheckbox) {
@@ -1554,7 +1586,7 @@ return view.extend({
                     '               ' + statusBadgesHtml, 
                     '           </div>',
                     '       </div>',
-                    '       <div class="nd-card-mac btn-fw-mac" title="' + T['TIP_MAC_CTRL'] + '" data-mac="'+dev.mac+'" data-ip="'+(dev.bound_ip || dev.ip)+'" style="margin-left:50px; display:flex; align-items:center; cursor:pointer;">' + (dev.mac).toUpperCase() + ' <span style="' + handStyle + '">👈</span></div>',
+                    '       <div class="' + macClass + '" ' + macTitle + ' data-mac="'+dev.mac+'" data-ip="'+(dev.bound_ip || dev.ip)+'" style="margin-left:50px; display:flex; align-items:center; ' + cursorStyle + '">' + (dev.mac).toUpperCase() + ' ' + handHtml + '</div>',
                     '   </div>',
                     '   <div class="nd-card-mid">',
                     '       <div style="display:flex; flex-direction:column; align-items:flex-start; min-width:0;">',
@@ -1652,11 +1684,13 @@ return view.extend({
             container.querySelectorAll('.nd-ipv6-badge').forEach(function(badge) {
                 badge.addEventListener('click', function(e) {
                     e.stopPropagation(); // 阻止点击事件穿透
-                    var v6text = this.getAttribute('data-v6');
+                    
+                    var rawV6Text = this.getAttribute('data-v6') || '';
+                    var v6text = decodeURIComponent(rawV6Text);
                     
                     if (navigator.clipboard && window.isSecureContext) {
                         navigator.clipboard.writeText(v6text).then(function() {
-                            alert('✅ ' + T['MSG_V6_COPIED'] + '\n\n' + v6text);
+                            alert('✅ ' + (T['MSG_V6_COPIED'] || 'IPv6 address copied successfully:') + '\n\n' + v6text);
                         });
                     } else {
                         var textArea = document.createElement("textarea");
@@ -1665,7 +1699,10 @@ return view.extend({
                         document.body.appendChild(textArea);
                         textArea.focus();
                         textArea.select();
-                        try { document.execCommand('copy'); alert('✅ ' + T['MSG_V6_COPIED'] + '\n\n' + v6text); } catch (err) {}
+                        try { 
+                            document.execCommand('copy'); 
+                            alert('✅ ' + (T['MSG_V6_COPIED'] || 'IPv6 address copied successfully:') + '\n\n' + v6text); 
+                        } catch (err) {}
                         document.body.removeChild(textArea);
                     }
                 });
@@ -2252,29 +2289,22 @@ return view.extend({
 
         if (btnExportNet) {
             btnExportNet.addEventListener('click', function() {
-                openModal({ 
-                    title: T['TIT_EXPORT_ING'], 
-                    content: T['MSG_EXPORT_ING'], 
-                    hideCancel: true, 
-                    okText: T['BTN_PLEASE_WAIT'] 
+                openModal({
+                    title: T['TIT_EXPORT_ING'],
+                    content: T['MSG_EXPORT_ING'],
+                    hideCancel: true,
+                    okText: T['BTN_PLEASE_WAIT']
                 });
                 callExportConfig().then(function(res) {
-                    if(res.data && res.filename) {
-                        var byteCharacters = atob(res.data);
-                        var byteNumbers = new Array(byteCharacters.length);
-                        for (var i = 0; i < byteCharacters.length; i++) {
-                            byteNumbers[i] = byteCharacters.charCodeAt(i);
-                        }
-                        var byteArray = new Uint8Array(byteNumbers);
-                        var blob = new Blob([byteArray], {type: "application/gzip"});
-                        
+
+                    if(res && res.url) {
                         var a = document.createElement("a");
-                        a.href = URL.createObjectURL(blob);
-                        a.download = res.filename;
+                        a.href = res.url;
+                        a.download = res.filename || "NetWiz_NetConf.tar.gz";
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
-                        
+
                         openModal({ title: T['TIT_EXPORT_OK'], content: T['MSG_EXPORT_OK'], hideCancel: true, okText: T['BTN_CLOSE'] });
                     } else {
                         openModal({ title: T['TIT_EXPORT_FAIL'], content: T['MSG_EXPORT_FAIL_NODATA'], hideCancel: true, okText: T['BTN_CLOSE'] });
@@ -2285,7 +2315,6 @@ return view.extend({
             });
         }
 
-        // 公共的恢复确认逻辑
         function confirmAndRestore(payload) {
             openModal({ 
                 title: T['TIT_IMPORT_CONFIRM'], 
