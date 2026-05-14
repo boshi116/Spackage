@@ -298,10 +298,17 @@ return view.extend({
             '                <label class="nw-radio-btn"><input type="radio" name="wiz_wan_type" value="pppoe" checked> <span class="nw-radio-btn-text">{{MODE_PPPOE_TITLE}}</span></label>',
             '              </div>',
             '            </div>',
-            '            <div id="wiz-pppoe-fields" style="display:block; margin-top: 15px;">',
-            '               <div class="nw-value"><label class="nw-value-title">{{LBL_USER}}</label><div class="nw-value-field"><textarea id="wiz-pppoe-user" placeholder="{{PH_USER}}" rows="2"></textarea></div></div>',
-            '               <div class="nw-value"><label class="nw-value-title">{{LBL_PASS}}</label><div class="nw-value-field"><input type="text" id="wiz-pppoe-pass" placeholder="{{PH_PASS}}"></div></div>',
-            '            </div>',
+            '            ',
+            '            <iframe name="dummy_wiz_frame" style="display:none;"></iframe>',
+            '            <form id="wiz-pppoe-fields" target="dummy_wiz_frame" action="about:blank" method="POST" style="display:block; margin-top: 15px;">',
+            '               <div class="nw-value"><label class="nw-value-title">{{LBL_USER}}</label><div class="nw-value-field">',
+            '                  <input type="search" id="wiz-pppoe-user" name="search_q1" class="nd-input" placeholder="{{PH_USER}}" autocomplete="on">',
+            '                  <div id="wiz-user-mirror" style="display:none; margin-top:8px; padding:8px 10px; background:#eff6ff; border-radius:8px; font-size:13.5px; color:#1e3a8a; word-break:break-all; line-height:1.4; border:1px dashed #93c5fd; text-align:left;"></div>',
+            '               </div></div>',
+            '               <div class="nw-value"><label class="nw-value-title">{{LBL_PASS}}</label><div class="nw-value-field"><input type="search" id="wiz-pppoe-pass" name="search_q2" class="nd-input" placeholder="{{PH_PASS}}" autocomplete="on"></div></div>',
+            '               ',
+            '               <button type="submit" id="wiz-pppoe-submit" style="display:none;">Save</button>',
+            '            </form>',
             '         </div>',
             '         <div id="wiz-step-2-area" style="display:none;">',
             '            <div class="nw-step-title" style="margin-bottom: 20px; font-size: 19px;">{{WIZ_WIFI}}</div>',
@@ -377,8 +384,15 @@ return view.extend({
             '      </div>',
             '      <div id="fields-pppoe" style="display: none;">',
             '        <div class="nw-step-title">{{TITLE_PPPOE}}</div>',
-            '        <div class="nw-value"><label class="nw-value-title">{{LBL_USER}}</label><div class="nw-value-field"><textarea id="pppoe-user" placeholder="{{PH_USER}}" rows="2"></textarea></div></div>',
-            '        <div class="nw-value"><label class="nw-value-title">{{LBL_PASS}}</label><div class="nw-value-field"><input type="text" id="pppoe-pass" placeholder="{{PH_PASS}}"></div></div>',
+            '        <iframe name="dummy_main_frame" style="display:none;"></iframe>',
+            '        <form id="main-pppoe-fields" target="dummy_main_frame" action="about:blank" method="POST" style="margin:0; padding:0;">',
+            '           <div class="nw-value"><label class="nw-value-title">{{LBL_USER}}</label><div class="nw-value-field">',
+            '              <input type="search" id="pppoe-user" name="search_q3" class="nd-input" placeholder="{{PH_USER}}" autocomplete="on">',
+            '              <div id="main-user-mirror" style="display:none; margin-top:8px; padding:8px 10px; background:#eff6ff; border-radius:8px; font-size:13.5px; color:#1e3a8a; word-break:break-all; line-height:1.4; border:1px dashed #93c5fd; text-align:left;"></div>',
+            '           </div></div>',
+            '           <div class="nw-value"><label class="nw-value-title">{{LBL_PASS}}</label><div class="nw-value-field"><input type="search" id="pppoe-pass" name="search_q4" class="nd-input" placeholder="{{PH_PASS}}" autocomplete="on"></div></div>',
+            '           <button type="submit" id="main-pppoe-submit" style="display:none;">Save</button>',
+            '        </form>',
             '        <div class="nw-warn-text">{{MSG_WAN_AUTODETECT}}</div>',
             '      </div>',
             '      <div id="fields-wifi" style="display: none;">',
@@ -621,6 +635,26 @@ return view.extend({
 
         // ===== 快速开机向导流 =====
         var wizModal = container.querySelector('#nw-wizard-modal');
+        
+        var wizUserInp = container.querySelector('#wiz-pppoe-user');
+        var wizUserMir = container.querySelector('#wiz-user-mirror');
+        if (wizUserInp && wizUserMir) {
+            var syncMir = function() {
+                // 超18个字符，显示投影
+                if (wizUserInp.value.length > 18) { 
+                    wizUserMir.style.display = 'block';
+                    wizUserMir.textContent = wizUserInp.value;
+                } else {
+                    wizUserMir.style.display = 'none';
+                }
+            };
+            wizUserInp.addEventListener('input', syncMir);
+            wizUserInp.addEventListener('change', syncMir);
+
+            setInterval(function(){ 
+                if (wizUserInp.value !== wizUserMir.textContent) syncMir(); 
+            }, 800);
+        }
         var wArea1 = container.querySelector('#wiz-step-1-area'), wArea2 = container.querySelector('#wiz-step-2-area'), wArea3 = container.querySelector('#wiz-step-3-area');
         var wBtnPrev = container.querySelector('#wiz-btn-prev'), wBtnNext = container.querySelector('#wiz-btn-next'), wBtnApply = container.querySelector('#wiz-btn-apply');
         var wizHideCb = container.querySelector('#wiz-hide-checkbox');
@@ -699,8 +733,8 @@ return view.extend({
                 if (wizHideCb) wizHideCb.checked = true;
                 var skipWifiCb = container.querySelector('#wiz-skip-wifi-checkbox');
                 if (skipWifiCb) {
-                    skipWifiCb.checked = false;
-                    skipWifiCb.dispatchEvent(new Event('change')); // 触发联动，解开 Wi-Fi 密码框的置灰锁定
+                    skipWifiCb.checked = (window._hasRealWifi === false) ? true : false;
+                    skipWifiCb.dispatchEvent(new Event('change')); 
                 }
                 
                 // 4. 重新召唤向导！
@@ -726,6 +760,9 @@ return view.extend({
         // 4. 下一步逻辑
         wBtnNext.addEventListener('click', function() {
             if (currentWizStep === 1) {
+                var pppoeBtn = container.querySelector('#wiz-pppoe-submit');
+                if (pppoeBtn) pppoeBtn.click();
+                
                 var wType = container.querySelector('input[name="wiz_wan_type"]:checked').value;
                 if (wType === 'pppoe' && (!container.querySelector('#wiz-pppoe-user').value.replace(/[\r\n\s]+/g, '') || !container.querySelector('#wiz-pppoe-pass').value.trim())) {
                     openModal({ title: T['M_INC_TIT'], msg: T['M_INC_PPPOE'], okText: T['M_CLOSE'] }); 
@@ -983,6 +1020,7 @@ return view.extend({
             var modelName = (boardRes.model || '').toLowerCase();
             
             var hasWifi = (wifiRes === true || (typeof wifiRes === 'object' && wifiRes && wifiRes.has_wifi === true));
+            window._hasRealWifi = hasWifi; // 真实的硬件状态，供底部状态栏判断使用
             var isUnknownDevice = (modelName.indexOf('generic') !== -1 && modelName.indexOf('unknown') !== -1);
 
             // 2. 恢复读取 netwiz 的标志位
@@ -992,18 +1030,47 @@ return view.extend({
             var wizModal = container.querySelector('#nw-wizard-modal');
             var btnReopenWiz = container.querySelector('#btn-reopen-wizard');
 
+            // 1. 处理主界面的 Wi-Fi 卡片显示与隐藏
             if (hasWifi && !isUnknownDevice) {
                 var wifiCard = container.querySelector('#card-wifi');
                 if (wifiCard) wifiCard.style.display = 'flex';
-                
-                // 3. 只有值为 '1' 才弹出
-                if (wizardEnable === '1' && wizModal) {
-                    wizModal.style.display = 'flex';
-                }
             } else {
-                console.warn("[Netwiz] 警告: 未检测到 Wi-Fi 硬件，已彻底隐藏向导相关入口。");
-                if (wizModal) wizModal.style.display = 'none';
-                if (btnReopenWiz) btnReopenWiz.style.display = 'none'; // 彻底隐藏首页的“重新打开向导”按钮
+                console.warn("[Netwiz] 警告: 未检测到 Wi-Fi 硬件，已彻底隐藏 Wi-Fi 配置卡片。");
+                var wifiCard = container.querySelector('#card-wifi');
+                if (wifiCard) wifiCard.style.setProperty('display', 'none', 'important');
+
+                // 没有 Wi-Fi 时，向导第二步自动锁死“跳过”并隐藏密码框
+                var skipWifiCb = container.querySelector('#wiz-skip-wifi-checkbox');
+                var wifiInputArea = container.querySelector('#wiz-wifi-input-area');
+                if (skipWifiCb) {
+                    skipWifiCb.checked = true; // 强行勾选跳过
+                    var cbWrap = skipWifiCb.closest('.nw-wiz-cb-wrap');
+                    if (cbWrap) {
+                        cbWrap.style.setProperty('display', 'none', 'important'); // 隐藏复选框本身
+                        if (cbWrap.parentElement) {
+                            cbWrap.parentElement.style.setProperty('display', 'none', 'important');
+                        }
+                    }
+                }
+                if (wifiInputArea) {
+                    wifiInputArea.style.setProperty('display', 'none', 'important'); // 隐藏密码框
+                    // 插入友好的无 Wi-Fi 提示
+                    var wArea2 = container.querySelector('#wiz-step-2-area');
+                    if (wArea2 && !container.querySelector('#nw-no-wifi-tip')) {
+                        var tip = document.createElement('div');
+                        tip.id = 'nw-no-wifi-tip';
+                        tip.innerHTML = '<div style="text-align:center; padding: 30px 15px; color:#64748b; font-size:15px; background:#f1f5f9; border-radius:8px; border: 1px dashed #cbd5e1; margin-bottom:15px;">未检测到 Wi-Fi 硬件，本步骤自动跳过。<br>请直接点击右下角【下一步】。</div>';
+                        wArea2.insertBefore(tip, wifiInputArea);
+                    }
+                }
+            }
+
+            if (wizardEnable === '1' && wizModal) {
+                wizModal.style.display = 'flex';
+            }
+            
+            if (btnReopenWiz) {
+                btnReopenWiz.style.display = '';
             }
         }).catch(function(err) {});
 
@@ -1479,7 +1546,9 @@ return view.extend({
                     var activeIfaces = wIfacesList.filter(function(i) { return i.disabled !== '1' && (i.mode === 'ap' || i.mode === 'sta') && i.ssid; });
                     var wifiLines = [];
                     
-                    if (activeIfaces.length === 0) {
+                    if (!window._hasRealWifi) {
+                        // 没有真实物理 Wi-Fi，隐藏状态栏的 Wi-Fi 信息
+                    } else if (activeIfaces.length === 0) {
                         wifiLines.push("<div><span>" + T['TXT_WIFI_STATUS'] + ": </span><b style='color:#ef4444;'>" + T['TXT_OFF'] + "</b></div>");
                     } else {
                         var apIfaces = activeIfaces.filter(function(i) { return i.mode === 'ap'; });
@@ -2123,6 +2192,9 @@ return view.extend({
 
         container.querySelector('#btn-next-2').addEventListener('click', function () {
             try {
+                var mainBtn = container.querySelector('#main-pppoe-submit');
+                if (mainBtn) mainBtn.click();
+                
                 var rTypeEl = container.querySelector('input[name="router_type"]:checked');
                 var rType = rTypeEl ? rTypeEl.value : 'dhcp';
                 var targetIp = '', targetGw = '', isBypass = false;
