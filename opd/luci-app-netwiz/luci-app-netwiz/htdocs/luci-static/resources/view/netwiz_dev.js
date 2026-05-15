@@ -60,6 +60,7 @@ var T = {
     'MSG_EMPTY_CAT': _('No device records in this category'),
     'BDG_ONLINE': _('Online'),
     'BDG_OFFLINE': _('Offline'),
+    'BDG_LONG_OFFLINE': _('Long-term Offline'),
     'BDG_STATIC': _('Static'),
     'BDG_GW': _('Upstream Gateway'),
     'BDG_LOCAL': _('Local System'),
@@ -189,7 +190,8 @@ var T = {
     'TXT_BAK_IMPORT': _('Before Import'),
     'TXT_BAK_RESET': _('Before Reset'),
     'OPT_NO_CHANGE': _('-- Keep Unchanged --'),
-    'BDG_V6_RESERVED': _('Reserved')
+    'BDG_V6_RESERVED': _('Reserved'),
+    'TXT_UNOPERABLE': _('Unoperable')
 };
 
 var callDeviceList = rpc.declare({ object: 'netwiz_dev', method: 'get_list', params: ['show_conns'], expect: { '': {} } });
@@ -1146,7 +1148,13 @@ return view.extend({
             var isSys = dev.is_gw === 'true' || dev.is_gw === true || dev.is_local === 'true' || dev.is_local === true;
             var isVisitor = dev.is_visitor === 'true' || dev.is_visitor === true;
             
-            if (isSys || isVisitor) return false;
+            var isCrossSubnet = (dev.ip && dev.ip !== 'Unknown IP' && dev.ip.substring(0, dev.ip.lastIndexOf('.') + 1) !== basePrefix);
+            var isStatic = (dev.is_static === true || dev.is_static === 'true');
+
+            if (isSys || isVisitor) return false; 
+            
+            if (isCrossSubnet && !isStatic) return false;
+            
             return true; 
         }
 
@@ -1356,9 +1364,20 @@ return view.extend({
                 var isIso = (dev.fw_isolate === 'true' || dev.fw_isolate === true);
                 var isDmz = (dev.fw_dmz === 'true' || dev.fw_dmz === true);
 
-                var statusBadgesHtml = isOnline 
-                    ? '<span class="nd-status-badge nd-status-online"><span class="nd-dot-online"></span>' + T['BDG_ONLINE'] + '</span>' 
-                    : '<span class="nd-status-badge nd-status-offline"><span class="nd-dot-offline"></span>' + T['BDG_OFFLINE'] + '</span>';
+                // 解析后端的 in_config 状态
+                var isInConfig = (dev.in_config === 'true' || dev.in_config === true);
+                
+                var statusBadgesHtml = '';
+                if (isOnline) {
+                    // 1. 在线
+                    statusBadgesHtml = '<span class="nd-status-badge nd-status-online"><span class="nd-dot-online"></span>' + T['BDG_ONLINE'] + '</span>';
+                } else if (!isInConfig) {
+                    // 2. 长期离线，离线并后端配置文件里无此MAC
+                    statusBadgesHtml = '<span class="nd-status-badge nd-status-offline" style="background:#f8fafc; color:#94a3b8; border-color:#e2e8f0; font-weight:normal;"><span class="nd-dot-offline" style="background:#cbd5e1; animation:none;"></span>' + (T['BDG_LONG_OFFLINE'] || '长期离线') + '</span>';
+                } else {
+                    // 3. 普通离线，配置文件里有，暂时不在线)
+                    statusBadgesHtml = '<span class="nd-status-badge nd-status-offline"><span class="nd-dot-offline"></span>' + T['BDG_OFFLINE'] + '</span>';
+                }
 
                 if (isBlk) statusBadgesHtml += '<span class="nd-badge" style="background:#fef2f2; color:#ef4444; border-color:#fecaca;">⛔ ' + T['BDG_FW_BLK'] + '</span>';
                 if (isIso) statusBadgesHtml += '<span class="nd-badge" style="background:#fffbeb; color:#d97706; border-color:#fde68a;">🛡️ ' + T['BDG_FW_ISO'] + '</span>';
@@ -1448,27 +1467,12 @@ return view.extend({
 
                     // 显示徽章
                     if (publicV6List.length > 0) {
-                        var memKey = 'nw_v6_mem_' + dev.mac; // L1 记忆钥匙
-                        var hbKey = 'nw_v6_hb_' + dev.mac;   // Session 心跳钥匙
-                        var currentPrefix = publicV6List[0].split(':').slice(0, 4).join(':'); // 提取真实前缀
-                        
-                        // 💡 1. 優先執行無條件強制推算！
-                        var frontendType = getDeviceType(dev);
-                        var isStaticBound = (dev.is_static === true || dev.is_static === 'true');
-                        var isBackendPc = (dev.is_pc_v6 === true || dev.is_pc_v6 === 'true' || (isStaticBound && frontendType !== 'mobile'));
+                        // 这三行极其重要，不能删
+                        var memKey = 'nw_v6_mem_' + dev.mac; 
+                        var hbKey = 'nw_v6_hb_' + dev.mac;   
+                        var currentPrefix = publicV6List[0].split(':').slice(0, 4).join(':'); 
 
-                        if (isBackendPc) {
-                            var ipToUse = (dev.bound_ip && dev.bound_ip !== 'Unknown IP') ? dev.bound_ip : ((dev.ip !== 'Unknown IP') ? dev.ip : '');
-                            if (ipToUse) {
-                                var ipv4Suffix = ipToUse.split('.').pop(); 
-                                var predictedV6 = currentPrefix + '::' + ipv4Suffix; 
-                                if (publicV6List.indexOf(predictedV6) === -1) {
-                                    publicV6List.unshift(predictedV6); // 霸道塞入第一位
-                                }
-                            }
-                        }
-
-                        // 💡 2. 徹底去重（防止重複的火星文和 IP）
+                        // 去重（防止重複的火星文和 IP）
                         var uniqueV6 = [];
                         publicV6List.forEach(function(v) { if(uniqueV6.indexOf(v) === -1) uniqueV6.push(v); });
                         publicV6List = uniqueV6;
@@ -1476,7 +1480,7 @@ return view.extend({
                         var radarShortV6 = publicV6List.find(function(v) { return v.indexOf('::') !== -1 && v.length < 25; });
                         var localShortV6 = localStorage.getItem(memKey);
                         
-                        // 💡 3. 清理垃圾緩存
+                        // 清理緩存
                         if (localShortV6 && (localShortV6.indexOf('::') === -1 || localShortV6.length >= 25)) {
                             localShortV6 = null;
                             localStorage.removeItem(memKey);
@@ -1491,7 +1495,7 @@ return view.extend({
                             }
                         };
 
-                        // 💡 4. 記憶與保活
+                        // 保活
                         if (radarShortV6) {
                             localStorage.setItem(memKey, radarShortV6);
                             triggerKeepAlive();
@@ -1532,6 +1536,9 @@ return view.extend({
                 } else if (isStatic) {
                     actions = '<button class="nd-btn nd-btn-gray btn-edit" data-mac="'+dev.mac+'" data-ip="'+(dev.bound_ip || dev.ip)+'" data-name="'+dev.name+'">' + T['BTN_EDIT'] + '</button>' +
                               '<button class="nd-btn nd-btn-red btn-unbind" data-mac="'+dev.mac+'">' + T['BTN_UNBIND'] + '</button>';
+                } else if (!isSelectable(dev) && !isVisitor) {
+
+                    actions = '<span style="color:#94a3b8; font-size:13px; padding-right:10px;">' + T['TXT_UNOPERABLE'] + '</span>';
                 } else {
                     actions = '<button class="nd-btn nd-btn-green btn-bind" data-mac="'+dev.mac+'" data-ip="'+dev.ip+'" data-name="'+dev.name+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> ' + T['BTN_QUICK_BIND'] + '</button>';
                 }
@@ -1540,7 +1547,7 @@ return view.extend({
                 var isChecked = selectedDevices.findIndex(function(d){ return d.mac === dev.mac; }) !== -1;
 
                 var isSys = isGw || isLocal;
-                var noCheckbox = isSys || isVisitor;
+                var noCheckbox = !isSelectable(dev); 
                 var crossSubnetWarn = "";
 
                 var isValidIp = (dev.ip && dev.ip !== 'Unknown IP' && dev.ip.substring(0, dev.ip.lastIndexOf('.') + 1) === basePrefix);

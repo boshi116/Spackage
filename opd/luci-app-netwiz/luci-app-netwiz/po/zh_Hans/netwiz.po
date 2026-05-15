@@ -691,6 +691,12 @@ msgstr "在线"
 msgid "Offline"
 msgstr "离线"
 
+msgid "Unoperable"
+msgstr "不可操作"
+
+msgid "Long-term Offline"
+msgstr "长期离线"
+
 msgid "Static"
 msgstr "静态"
 
