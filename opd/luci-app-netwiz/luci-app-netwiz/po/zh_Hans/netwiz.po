@@ -842,10 +842,10 @@ msgid "Pending"
 msgstr "待生效"
 
 msgid "Device Type (By IP)"
-msgstr "设备类型（按IP）"
+msgstr "类型（按IP）"
 
 msgid "Device Type (Built-in)"
-msgstr "设备类型（内置）"
+msgstr "类型（内置）"
 
 msgid "Custom Groups"
 msgstr "自定义组"
@@ -896,7 +896,7 @@ msgid "Visiting"
 msgstr "正在访问"
 
 msgid "Department Network Segments"
-msgstr "自定义分组IP自动选号池"
+msgstr "自定义组IP选号池"
 
 msgid "+ Add New Department"
 msgstr "+ 新建分组"
@@ -1167,3 +1167,12 @@ msgstr "-- 保持不变 --"
 
 msgid "Reserved"
 msgstr "预留"
+
+msgid "Note:"
+msgstr "说明："
+
+msgid "Custom group names are not strictly bound to IP subnets. The ranges are only used for automatic IP assignment when a group is selected."
+msgstr "自定义组的名称不会强制绑定IP网段，网段也不受名称限制，仅用于选择自定义组时自动发号到对应网段。"
+
+msgid "When enabled, [Terminal Device & IP Binding] can assign short IPv6 addresses to PCs."
+msgstr "联动【终端设备与 IP 绑定】固定 IP，电脑享受短 IPv6"

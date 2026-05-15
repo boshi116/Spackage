@@ -191,7 +191,9 @@ var T = {
     'TXT_BAK_RESET': _('Before Reset'),
     'OPT_NO_CHANGE': _('-- Keep Unchanged --'),
     'BDG_V6_RESERVED': _('Reserved'),
-    'TXT_UNOPERABLE': _('Unoperable')
+    'TIP_DEPT_BIND_RULE': _('Custom group names are not strictly bound to IP subnets. The ranges are only used for automatic IP assignment when a group is selected.'),
+    'TXT_UNOPERABLE': _('Unoperable'),
+    'TXT_NOTE': _('Note:'),
 };
 
 var callDeviceList = rpc.declare({ object: 'netwiz_dev', method: 'get_list', params: ['show_conns'], expect: { '': {} } });
@@ -334,6 +336,7 @@ return view.extend({
             '               <button id="btn-add-dept" class="nd-btn nd-btn-blue" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(59,130,246,0.2);">+ {{BTN_ADD_DEPT}}</button>',
             '           </div>',
             '           <div id="dept-list-container"></div>',
+            '           <div style="font-size:12.5px; color:#64748b; background:#f8fafc; padding:10px 12px; border-radius:8px; border:1px dashed #cbd5e1; margin-top:12px; line-height:1.5;">💡 <b>{{TXT_NOTE}}</b> {{TIP_DEPT_BIND_RULE}}</div>',
             '       </div>',
 
             '       <div id="nd-m-fw-panel" style="display:none; text-align:left;">',
