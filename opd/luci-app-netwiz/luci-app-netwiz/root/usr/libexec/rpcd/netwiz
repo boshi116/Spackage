@@ -47,11 +47,21 @@ restart_depend_apps() {
 
 case "$1" in
     list)
-        echo '{ "set_network": { "mode": "string", "arg1": "string", "arg2": "string", "arg3": "string", "arg4": "string", "arg5": "string", "arg6": "string" }, "confirm": {}, "check_wifi": {} }'
+        echo '{ "set_network": { "mode": "string", "arg1": "string", "arg2": "string", "arg3": "string", "arg4": "string", "arg5": "string", "arg6": "string" }, "set_password": { "password": "string" }, "check_wifi": {}, "confirm": {} }'
         exit 0
         ;;
     call)
         case "$2" in
+            set_password)
+                input=$(cat)
+                pwd=$(echo "$input" | jsonfilter -e '@.password')
+                if [ -n "$pwd" ]; then
+                    # 強制修改系統 root 密碼
+                    (echo "$pwd"; echo "$pwd") | passwd root
+                fi
+                echo '{"result":0}'
+                exit 0
+                ;;
             check_wifi)
                 has_wifi="false"
                 # 1. 检测物理网卡底层接口
@@ -126,6 +136,39 @@ case "$1" in
                     uci set dhcp.lan.ignore='0'
                 }
 
+                # --- 协议净化 ---
+                cleanup_wan_for_proto() {
+                    local target="$1"
+                    
+                    # 1. 切換后，统一刪除容易 netifd 死锁的 DHCP 干扰
+                    uci delete network.wan.reqopts 2>/dev/null || true
+                    uci delete network.wan.clientid 2>/dev/null || true
+                    uci delete network.wan.vendorid 2>/dev/null || true
+                    
+                    # 2. 根据目标协议，刪除「不相容」的參數，保留 dns、metric 等共用高級設定！
+                    if [ "$target" = "pppoe" ]; then
+                        uci delete network.wan.ipaddr 2>/dev/null || true
+                        uci delete network.wan.netmask 2>/dev/null || true
+                        uci delete network.wan.gateway 2>/dev/null || true
+                    elif [ "$target" = "dhcp" ]; then
+                        uci delete network.wan.ipaddr 2>/dev/null || true
+                        uci delete network.wan.netmask 2>/dev/null || true
+                        uci delete network.wan.gateway 2>/dev/null || true
+                        uci delete network.wan.username 2>/dev/null || true
+                        uci delete network.wan.password 2>/dev/null || true
+                        uci delete network.wan.ipv6 2>/dev/null || true
+                        uci delete network.wan.norelease 2>/dev/null || true
+                        uci delete network.wan.multipath 2>/dev/null || true
+                    elif [ "$target" = "static" ]; then
+                        uci delete network.wan.username 2>/dev/null || true
+                        uci delete network.wan.password 2>/dev/null || true
+                        uci delete network.wan.ipv6 2>/dev/null || true
+                        uci delete network.wan.norelease 2>/dev/null || true
+                        uci delete network.wan.multipath 2>/dev/null || true
+                    fi
+                }
+                # -------------------------------------------------------------
+
                 CURRENT_LAN_IP=$(uci -q get network.lan.ipaddr | cut -d/ -f1)
 
                 # 局域网修改与防失联机制
@@ -152,12 +195,13 @@ case "$1" in
                     wiz_wan_type=$(echo "$arg1" | jsonfilter -e '@.wan_type' || echo "dhcp")
                     
                     cleanup_lan_for_wan_modes;
-                    
                     if [ "$wiz_wan_type" = "dhcp" ]; then
                         log "向导: 写入 DHCP 动态获取配置"
+                        cleanup_wan_for_proto "dhcp"
                         uci set network.wan.proto='dhcp'
                     elif [ "$wiz_wan_type" = "static" ]; then
                         log "向导: 写入静态 IP 配置"
+                        cleanup_wan_for_proto "static"
                         wiz_ip=$(echo "$arg1" | jsonfilter -e '@.ip')
                         wiz_gw=$(echo "$arg1" | jsonfilter -e '@.gw')
                         wiz_mask=$(echo "$arg1" | jsonfilter -e '@.mask')
@@ -171,16 +215,22 @@ case "$1" in
                             uci set network.wan.netmask="$wiz_mask"
                         else
                             log "向导警告: 静态IP格式非法，安全回退至 DHCP"
+                            cleanup_wan_for_proto "dhcp"
                             uci set network.wan.proto='dhcp'
                         fi
                     elif [ "$wiz_wan_type" = "pppoe" ]; then
                         log "向导: 写入 PPPoE 拨号配置"
                         wiz_user=$(echo "$arg1" | jsonfilter -e '@.user')
                         wiz_pass=$(echo "$arg1" | jsonfilter -e '@.pass')
-                        
+                        cleanup_wan_for_proto "pppoe"
                         uci set network.wan.proto='pppoe'
                         [ -n "$wiz_user" ] && uci set network.wan.username="$wiz_user"
                         [ -n "$wiz_pass" ] && uci set network.wan.password="$wiz_pass"
+                        
+                        uci set network.wan.ipv6='auto'
+                        uci set network.wan.norelease='1'
+                        uci set network.wan.multipath='off'
+                        # -----------------------
                     fi
                     
                     uci commit network; uci commit dhcp
@@ -195,10 +245,12 @@ case "$1" in
 
                 if [ "$mode" = "wan_dhcp" ]; then
                     cleanup_lan_for_wan_modes;
+                    cleanup_wan_for_proto "dhcp"
                     uci set network.wan.proto='dhcp'
                     uci commit network; uci commit dhcp
                 elif [ "$mode" = "wan_static" ]; then
                     cleanup_lan_for_wan_modes;
+                    cleanup_wan_for_proto "static"
                     uci set network.wan.proto='static'
                     uci set network.wan.ipaddr="$arg1"
                     uci set network.wan.gateway="$arg2"
@@ -206,24 +258,39 @@ case "$1" in
                     uci commit network; uci commit dhcp
                 elif [ "$mode" = "pppoe" ]; then
                     cleanup_lan_for_wan_modes;
+                    cleanup_wan_for_proto "pppoe"
                     uci set network.wan.proto='pppoe'
                     uci set network.wan.username="$arg1"
                     uci set network.wan.password="$arg2"
+
+                    uci set network.wan.ipv6='auto'
+                    uci set network.wan.norelease='1'
+                    uci set network.wan.multipath='off'
+                    # ----------------------------------------------
+                    
                     uci commit network; uci commit dhcp
 
                 # ==========================================
-                # 拦截并静默处理向导状态的写入
+                # 拦截并静默处理向导状态的写入 (包含跳过/关闭时的劫持释放)
                 elif [ "$mode" = "set_wizard" ]; then
                     log "静默修改向导弹出状态为: $arg1"
-                    # 确保文件和节点存在，避免报错
-                    touch /etc/config/netwiz 2>/dev/null
-                    uci -q get netwiz.main >/dev/null || uci set netwiz.main=global
                     
-                    # 写入并立刻刷入硬盘
+                    # 确保文件存在，防止 uci 报错
+                    [ ! -f /etc/config/netwiz ] && touch /etc/config/netwiz
+                    
+                    uci -q get netwiz.main >/dev/null 2>&1 || uci set netwiz.main=global
                     uci set netwiz.main.wizard_enable="$arg1"
+                    
+                    uci -q get netwiz.global >/dev/null 2>&1 || uci set netwiz.global=netwiz
+                    uci set netwiz.global.configured='1'
+                    
                     uci commit netwiz
                     
-                    # 返回成功并退出，千万不能往下走去重启网络！
+                    if [ -f /www/cgi-bin/luci.bak ]; then
+                        log "释放底层 LuCI 强制劫持"
+                        mv /www/cgi-bin/luci.bak /www/cgi-bin/luci
+                    fi
+
                     echo '{"result":0}'
                     exit 0
                 # ==========================================
@@ -257,7 +324,7 @@ case "$1" in
                         uci set dhcp.lan.ra='server'
                         uci set dhcp.lan.ndp='server'
                         
-                        # 4. 开启 SLAAC (保留此项以增加安卓等不支持DHCPv6设备的兼容性)
+                        # 4. 开启 SLAAC (保留此项以增加安卓兼容性)
                         uci set dhcp.lan.ra_slaac='1'
                         
                         # 5. 注入 M-Flag 和 O-Flag (先删后加防重复)
@@ -614,13 +681,20 @@ case "$1" in
                         /etc/init.d/firewall restart  # 重启
                     fi
                     # ==========================================
+                    # --- 开机劫持已配置 ---
+                    # 走完向导点击“完成”时，同样应用这套写入逻辑
+                    [ ! -f /etc/config/netwiz ] && touch /etc/config/netwiz
+                    
+                    uci -q get netwiz.main >/dev/null 2>&1 || uci set netwiz.main=global
+                    uci set netwiz.main.wizard_enable='0'
+                    
+                    uci -q get netwiz.global >/dev/null 2>&1 || uci set netwiz.global=netwiz
+                    uci set netwiz.global.configured='1'
+                    
+                    uci commit netwiz
+                    # ==========================================
 
-                    /etc/init.d/network restart
-                    /etc/init.d/dnsmasq restart
-                    /etc/init.d/odhcpd restart
-                    /etc/init.d/uhttpd restart
-
-                    # 喚醒調用2
+                    # 喚醒调用2
                     restart_depend_apps
                     ) &
                 exit 0
