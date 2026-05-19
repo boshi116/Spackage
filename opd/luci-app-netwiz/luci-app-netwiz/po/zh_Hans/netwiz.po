@@ -368,7 +368,7 @@ msgid "Enable 2.4G Wi-Fi"
 msgstr "启用 2.4G Wi-Fi"
 
 msgid "Enable 5G Wi-Fi"
-msgstr "启用 5G/双路 Wi-Fi"
+msgstr "启用 5G Wi-Fi"
 
 msgid "Network Name (SSID)"
 msgstr "无线网络名称 (SSID)"
@@ -401,7 +401,7 @@ msgid "2.4G Wi-Fi"
 msgstr "2.4G Wi-Fi"
 
 msgid "5G Wi-Fi"
-msgstr "5G/双路 Wi-Fi"
+msgstr "5G Wi-Fi"
 
 msgid "SSID cannot be empty."
 msgstr "网络名称 (SSID) 不能为空。"
@@ -446,7 +446,7 @@ msgid "Wi-Fi Status"
 msgstr "Wi-Fi 状态"
 
 msgid "5G Wi-Fi Account"
-msgstr "5G/双路 Wi-Fi 账号"
+msgstr "5G Wi-Fi 账号"
 
 msgid "2.4G Wi-Fi Account"
 msgstr "2.4G Wi-Fi 账号"
@@ -1284,3 +1284,15 @@ msgstr "💡 此密码将用于日后登录路由器后台及 SSH，建议立即
 
 msgid "Please enter a new password or check \"Skip Password Setup\"!"
 msgstr "请输入新管理员密码，或勾选「暂不配置」！"
+
+msgid "Smart Connect"
+msgstr "多频合一"
+
+msgid "Independent Bands"
+msgstr "分频独立"
+
+msgid "WISP Repeater"
+msgstr "中继 (WISP)"
+
+msgid "Disabled"
+msgstr "未开启"
