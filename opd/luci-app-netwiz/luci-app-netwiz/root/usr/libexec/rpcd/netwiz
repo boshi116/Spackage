@@ -45,6 +45,30 @@ restart_depend_apps() {
 }
 # 结束
 
+# =======================================================
+# PPPoE 拨号后 IPv6 虚拟接口未生成的底层 Bug 进行自愈
+watchdog_pppoe_ipv6() {
+    if [ "$(uci -q get network.wan.proto)" = "pppoe" ]; then
+        log ">>> 启动 PPPoE IPv6 虚拟接口守护 (20秒后检测)..."
+        (
+            sleep 20
+            # 确认 WAN 是否已经拨号成功 (IPv4 连通)
+            if ifstatus wan | grep -q '"up": true'; then
+                # 检查底层的 wan_6 或 wan6 虚拟接口是否成功生成并 up
+                if ! ifstatus wan_6 | grep -q '"up": true' && ! ifstatus wan6 | grep -q '"up": true'; then
+                    log "⚠️ 发现 PPPoE 已连接，但 IPv6 虚拟接口 (wan_6) 丢失！正在执行自愈重置..."
+                    ifdown wan
+                    sleep 3
+                    ifup wan
+                else
+                    log "✅ PPPoE IPv6 虚拟接口状态正常。"
+                fi
+            fi
+        ) &
+    fi
+}
+# =======================================================
+
 case "$1" in
     list)
         echo '{ "set_network": { "mode": "string", "arg1": "string", "arg2": "string", "arg3": "string", "arg4": "string", "arg5": "string", "arg6": "string" }, "set_password": { "password": "string" }, "check_wifi": {}, "confirm": {} }'
@@ -653,6 +677,7 @@ case "$1" in
 
                         # 唤醒调用1
                         restart_depend_apps
+                        watchdog_pppoe_ipv6
 
                         log "✅ 无线配置流程全部安全执行完毕！"
                         exit 0
@@ -696,6 +721,7 @@ case "$1" in
 
                     # 喚醒调用2
                     restart_depend_apps
+                    watchdog_pppoe_ipv6
                     ) &
                 exit 0
                 ;;
