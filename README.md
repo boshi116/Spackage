@@ -1,8 +1,8 @@
 ## 📦 自用包AI最近自动更新
-- 更新时间：2026-05-21 09:52:19
-- 更新文件数：7
+- 更新时间：2026-05-21 17:56:35
+- 更新文件数：8
 - 更新插件：
-  - luci-app-netwiz
-  - openwrt-passwall
+  - luci-app-bandix-plus
+  - vlmcsd
 ---
 
