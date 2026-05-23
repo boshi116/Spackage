@@ -1,5 +1,8 @@
-concurrency: name: my-packages
-于:
+concurrency:
+  group: my-packages
+  cancel-in-progress: true
+
+on:
   push:
     paths:
       - '.github/workflows/merge.yml'
@@ -64,15 +67,15 @@ jobs:
             git_clone https://github.com/riverscn/openwrt-iptvhelper openwrt-iptvhelper
             git_clone https://github.com/kongfl888/luci-app-timedreboot luci-app-timedreboot
             git_clone https://github.com/destan19/OpenAppFilter OpenAppFilter
-            git_clone  https://github.com/upcliujie/luci-app-tcpdump luci-app-tcpdump
-            git_clone   https://github.com/Natduki/luci-app-sqm-controller luci-app-sqm-controller
+            git_clone https://github.com/upcliujie/luci-app-tcpdump luci-app-tcpdump
+            git_clone https://github.com/Natduki/luci-app-sqm-controller luci-app-sqm-controller
           } &
 
           {
             git_clone https://github.com/sirpdboy/luci-app-timecontrol luci-app-timecontrol
             git_clone https://github.com/sirpdboy/luci-app-advancedplus luci-app-advancedplus
-           #git_clone https://github.com/sirpdboy/luci-app-lucky luci-app-lucky
-            git_clone https://github.com/gdy666/luci-app-lucky  luci-app-lucky
+            # git_clone https://github.com/sirpdboy/luci-app-lucky luci-app-lucky
+            git_clone https://github.com/gdy666/luci-app-lucky luci-app-lucky
             git_clone https://github.com/sirpdboy/luci-app-partexp luci-app-partexp
             git_clone https://github.com/sirpdboy/netspeedtest netspeedtest
             git_clone https://github.com/sirpdboy/luci-app-watchdog luci-app-watchdog
@@ -87,7 +90,7 @@ jobs:
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
             git_clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic luci-app-unblockneteasemusic
-            #git_clone https://github.com/sbwml/luci-app-qbittorrent luci-app-qbittorrent
+            # git_clone https://github.com/sbwml/luci-app-qbittorrent luci-app-qbittorrent
             git_clone https://github.com/sbwml/luci-app-quickfile luci-app-quickfile
             
             git clone --depth 1 https://github.com/gaoderby/luci-app-kms tmp_kms
@@ -127,10 +130,10 @@ jobs:
             git_clone https://github.com/timsaya/openwrt-bandix openwrt-bandix
             git_clone https://github.com/timsaya/luci-app-bandix-plus luci-app-bandix-plus
             git_clone https://github.com/timsaya/openwrt-bandix-plus openwrt-bandix-plus
-            git_clone  https://github.com/huchd0/luci-app-netwiz luci-app-netwiz
-            git_clone  https://github.com/tpxcer/luci-app-minigate luci-app-minigate
-            git_clone  https://github.com/MayflyDestiny/luci-app-mosdns-panel luci-app-mosdns-panel
-            #git_clone  https://github.com/DustReliant/luci-app-filetransfer luci-app-filetransfer
+            git_clone https://github.com/huchd0/luci-app-netwiz luci-app-netwiz
+            git_clone https://github.com/tpxcer/luci-app-minigate luci-app-minigate
+            git_clone https://github.com/MayflyDestiny/luci-app-mosdns-panel luci-app-mosdns-panel
+            # git_clone https://github.com/DustReliant/luci-app-filetransfer luci-app-filetransfer
           } & 
 
           {
