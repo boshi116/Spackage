@@ -1,5 +1,5 @@
-name: my-packages
-on:
+concurrency: name: my-packages
+于:
   push:
     paths:
       - '.github/workflows/merge.yml'
@@ -88,6 +88,7 @@ jobs:
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
             git_clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic luci-app-unblockneteasemusic
             #git_clone https://github.com/sbwml/luci-app-qbittorrent luci-app-qbittorrent
+            git_clone https://github.com/sbwml/luci-app-quickfile luci-app-quickfile
             
             git clone --depth 1 https://github.com/gaoderby/luci-app-kms tmp_kms
             cp -r tmp_kms/luci/applications/luci-app-vlmcsd opd/
