@@ -791,36 +791,51 @@ return view.extend({
         };
         updateWizSteps(currentWizStep);
 
-        var skipAndReleaseLuci = function() {
+        // ================== 跳过与关闭逻辑 ==================
+        var handleWizardExit = function(action) {
             var hideCb = container.querySelector('#wiz-hide-checkbox');
-            var hideState = (hideCb && hideCb.checked) ? '0' : '1';
 
-            // 判断是「首次打开」还是「日常」
-            if (window._realIsConfigured === '0') {
-                // 跳官方后台
-                wizModal.style.display = 'none';
-                openModal({ 
-                    title: T['WIZ_SKIP_TITLE'] || '跳过向导', 
-                    msg: '<div style="color: #64748b; font-size: 16px; font-weight:bold;">' + (T['WIZ_SKIP_MSG'] || '进入官方后台中...') + '</div>', 
-                    spin: true 
+            if (action === 'close') {
+                if (hideCb && hideCb.checked) {
+                    localStorage.setItem('nw_wizard_never_show', '1');
+                } else {
+                    localStorage.removeItem('nw_wizard_never_show');
+                }
+            }
+
+            var isFirstRun = (window._realIsConfigured !== '1');
+
+            silentSaveWizardState('1').then(function() {
+                executeExitNav(isFirstRun, action);
+            }).catch(function() {
+                executeExitNav(isFirstRun, action);
+            });
+        };
+
+        var executeExitNav = function(isFirstRun, action) {
+            var wizModal = container.querySelector('#nw-wizard-modal');
+            
+            if (isFirstRun) {
+
+                if (wizModal) wizModal.style.display = 'none';
+                openModal({
+                    title: T['WIZ_SKIP_TITLE'] || '解除鎖定',
+                    msg: '<div style="color: #64748b; font-size: 16px; font-weight:bold;">' + (T['WIZ_SKIP_MSG'] || '正在解除鎖定，進入官方后台...') + '</div>',
+                    spin: true
                 });
-
-                silentSaveWizardState(hideState).then(function() {
-                    setTimeout(function() {
-                        window.location.replace('http://' + window.location.hostname + '/cgi-bin/luci/');
-                    }, 500);
-                }).catch(function() {
+                setTimeout(function() {
                     window.location.replace('http://' + window.location.hostname + '/cgi-bin/luci/');
-                });
+                }, 500);
             } else {
-                // 关闭直接隐藏
-                wizModal.style.display = 'none';
-                silentSaveWizardState(hideState);
+
+                if (wizModal) wizModal.style.display = 'none';
             }
         };
 
-        container.querySelector('#wiz-modal-close').addEventListener('click', skipAndReleaseLuci);
-        container.querySelector('#wiz-btn-skip').addEventListener('click', skipAndReleaseLuci);
+        // 分別綁定不同的 action
+        container.querySelector('#wiz-modal-close').addEventListener('click', function() { handleWizardExit('close'); });
+        container.querySelector('#wiz-btn-skip').addEventListener('click', function() { handleWizardExit('skip'); });
+        // ==========================================================
 
         var btnReopenWiz = container.querySelector('#btn-reopen-wizard');
         if (btnReopenWiz) {
@@ -1022,11 +1037,16 @@ return view.extend({
 
             // 网络配置的核心提取为一个函数，分流调用
             var doNetSetupConfig = function() {
-                // 完成向导，真实读取勾选框状态
+                // 1. 处理“不再提示”状态
                 var wizHideCb = container.querySelector('#wiz-hide-checkbox');
-                var hideState = (wizHideCb && wizHideCb.checked) ? '0' : '1';
-                
-                silentSaveWizardState(hideState).then(function() {
+                if (wizHideCb && wizHideCb.checked) {
+                    localStorage.setItem('nw_wizard_never_show', '1');
+                } else {
+                    localStorage.removeItem('nw_wizard_never_show');
+                }
+
+                // 2. 提交配置，底层必须强制写入 '1' 永久解锁 CGI 拦截
+                silentSaveWizardState('1').then(function() {
                     var applyPromise;
                     if (isSkipWifi) {
                         if (wType === 'pppoe') {
@@ -1285,10 +1305,21 @@ return view.extend({
                 uci.load('netwiz').then(function() {
                     var isConfigured = uci.get('netwiz', 'global', 'configured');
                     var isWizEnabled = uci.get('netwiz', 'main', 'wizard_enable');
-                    window._realIsConfigured = isConfigured || '0';
-                    
-                    if (isConfigured !== '1' || isWizEnabled === '1' || isWizEnabled === 1) {
+                    window._realIsConfigured = String(isConfigured || '0');
+
+                    // 读取本地浏览器是否勾选过“不再提示”
+                    var neverShow = localStorage.getItem('nw_wizard_never_show');
+
+                    // 核心判断逻辑：
+                    if (window._realIsConfigured !== '1') {
+                        // 1. 第一次开机，显示向导
                         if (wizModal) wizModal.style.display = 'flex';
+                    } else if (String(isWizEnabled) === '1' && neverShow !== '1') {
+                        // 2.平常，没有勾选“不再提示”
+                        if (wizModal) wizModal.style.display = 'flex';
+                    } else {
+                        // 3. 平常勾选“不再提示”
+                        if (wizModal) wizModal.style.display = 'none';
                     }
                 }).catch(function() {
                     window._realIsConfigured = '0';
@@ -1462,7 +1493,7 @@ return view.extend({
 
                                     // 4. 清理所有弹窗并触发底层保存
                                     container.querySelector('#nw-global-modal').style.display = 'none';
-                                    var wizModal = container.querySelector('#nw-wizard-modal');
+                                    var wizModal = document.getElementById('nw-wizard-modal');
                                     if (wizModal) wizModal.style.display = 'none';
                                     
                                     container.querySelector('#btn-apply').click(); 
