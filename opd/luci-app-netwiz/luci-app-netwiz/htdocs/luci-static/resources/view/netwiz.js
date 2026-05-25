@@ -417,7 +417,7 @@ return view.extend({
             '         </div>',
             '         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">',
             '            <label class="nw-wiz-cb-wrap" style="font-size: 13.5px; color: #64748b; font-weight: 500; margin: 0;">',
-            '               <input type="checkbox" id="wiz-hide-checkbox" checked>',
+            '               <input type="checkbox" id="wiz-hide-checkbox">',
             '               <span class="nw-wiz-checkmark"></span>',
             '               <span style="line-height: 1.3; display: inline-block;">{{WIZ_HIDE}}</span>',
             '            </label>',
@@ -712,6 +712,10 @@ return view.extend({
         });
 
         // ==================  安全XSS 字符转义  ==================
+        var safeGetLocal = function(k) { try { return window.localStorage.getItem(k); } catch(e) { return null; } };
+        var safeSetLocal = function(k, v) { try { window.localStorage.setItem(k, v); } catch(e) {} };
+        var safeRemoveLocal = function(k) { try { window.localStorage.removeItem(k); } catch(e) {} };
+        // ==============================================================
         var escapeHTML = function(str) {
             if (!str) return '';
             return String(str).replace(/[&<>'"]/g, function(tag) {
@@ -797,10 +801,13 @@ return view.extend({
 
             if (action === 'close') {
                 if (hideCb && hideCb.checked) {
-                    localStorage.setItem('nw_wizard_never_show', '1');
+                    safeSetLocal('nw_wizard_never_show', '1');
                 } else {
-                    localStorage.removeItem('nw_wizard_never_show');
+                    safeRemoveLocal('nw_wizard_never_show');
                 }
+            } else if (action === 'skip') {
+                // 跳过清除“不再提示”的缓存
+                safeRemoveLocal('nw_wizard_never_show');
             }
 
             var isFirstRun = (window._realIsConfigured !== '1');
@@ -1040,13 +1047,13 @@ return view.extend({
                 // 1. 处理“不再提示”状态
                 var wizHideCb = container.querySelector('#wiz-hide-checkbox');
                 if (wizHideCb && wizHideCb.checked) {
-                    localStorage.setItem('nw_wizard_never_show', '1');
+                    safeSetLocal('nw_wizard_never_show', '1');
                 } else {
-                    localStorage.removeItem('nw_wizard_never_show');
+                    safeRemoveLocal('nw_wizard_never_show');
                 }
 
                 // 2. 提交配置，底层必须强制写入 '1' 永久解锁 CGI 拦截
-                silentSaveWizardState('1').then(function() {
+                silentSaveWizardState('0').then(function() {
                     var applyPromise;
                     if (isSkipWifi) {
                         if (wType === 'pppoe') {
@@ -1288,27 +1295,26 @@ return view.extend({
                     }
                 }
                 if (wifiInputArea) {
-                    wifiInputArea.style.setProperty('display', 'none', 'important'); // 隐藏密码框
-                    // 插入友好的无 Wi-Fi 提示
-                    var wArea2 = container.querySelector('#wiz-step-2-area');
-                    if (wArea2 && !container.querySelector('#nw-no-wifi-tip')) {
-                        var tip = document.createElement('div');
-                        tip.id = 'nw-no-wifi-tip';
-                        tip.innerHTML = '<div style="text-align:center; padding: 30px 15px; color:#64748b; font-size:15px; background:#f1f5f9; border-radius:8px; border: 1px dashed #cbd5e1; margin-bottom:15px;">' + T['MSG_NO_WIFI_TIP'] + '</div>';
-                        wArea2.insertBefore(tip, wifiInputArea);
-                    }
+                wifiInputArea.style.setProperty('display', 'none', 'important'); // 隐藏密码框
+                var wArea3 = container.querySelector('#wiz-step-3-area'); 
+                if (wArea3 && !container.querySelector('#nw-no-wifi-tip')) {
+                    var tip = document.createElement('div');
+                    tip.id = 'nw-no-wifi-tip';
+                    tip.innerHTML = '<div style="text-align:center; padding: 30px 15px; color:#64748b; font-size:15px; background:#f1f5f9; border-radius:8px; border: 1px dashed #cbd5e1; margin-bottom:15px;">' + T['MSG_NO_WIFI_TIP'] + '</div>';
+                    wArea3.insertBefore(tip, wifiInputArea);
                 }
+            }
             }
 
             // ================== 弹出向导 ==================
             if (typeof uci !== 'undefined') {
                 uci.load('netwiz').then(function() {
-                    var isConfigured = uci.get('netwiz', 'global', 'configured');
-                    var isWizEnabled = uci.get('netwiz', 'main', 'wizard_enable');
-                    window._realIsConfigured = String(isConfigured || '0');
+                    var isConfigured = safeUciGet('netwiz', 'global', 'configured', '0');
+                    var isWizEnabled = safeUciGet('netwiz', 'main', 'wizard_enable', '1');
+                    window._realIsConfigured = String(isConfigured);
 
                     // 读取本地浏览器是否勾选过“不再提示”
-                    var neverShow = localStorage.getItem('nw_wizard_never_show');
+                    var neverShow = safeGetLocal('nw_wizard_never_show');
 
                     // 核心判断逻辑：
                     if (window._realIsConfigured !== '1') {
@@ -1400,7 +1406,7 @@ return view.extend({
                             
                             // 1 次断线（約 1~5 秒）确认断线，且没有弹过窗，才触发弹窗
                             if (window._wanDropCount >= 1) {
-                                if (!window._hasAlertedWanDown && !localStorage.getItem('ignoreWanAlert')) {
+                                if (!window._hasAlertedWanDown && !safeGetLocal('ignoreWanAlert')) {
                                     window._hasAlertedWanDown = true;
                                     
                                     // 专属悬浮层，让探针运行
@@ -1423,7 +1429,7 @@ return view.extend({
                                     // 点击不处理，手动删掉悬浮层
                                     document.getElementById('btn-ignore-wan').onclick = function() {
                                         window._hasAlertedWanDown = true;
-                                        localStorage.setItem('ignoreWanAlert', 'true'); 
+                                        safeSetLocal('ignoreWanAlert', 'true'); 
                                         var el = document.getElementById('nw-custom-wan-alert');
                                         if (el) el.remove();
                                     };
@@ -1442,7 +1448,7 @@ return view.extend({
                         window._hasAlertedWanDown = false;
                         
                         // 清除免扰状态
-                        localStorage.removeItem('ignoreWanAlert'); 
+                        safeRemoveLocal('ignoreWanAlert'); 
                     }
 
                     var dns2 = dnsServers[1] || '';
@@ -3403,9 +3409,9 @@ return view.extend({
                             fetchProbe('http://' + h + '/cgi-bin/luci/?v=' + Date.now(), 2000)
                             .then(function() { 
                                 clearInterval(checkSameTimer); 
-                                // 成功，跳官方主页
-                                window.location.href = '/cgi-bin/luci/'; 
-                            }).catch(function() {}); 
+                                // 成功后留在当前插件页
+                                window.location.reload(); 
+                            }).catch(function() {});
                         }, 3000);
                     }
                 };
