@@ -25,11 +25,11 @@ FILES="luci-app-netwiz luci-i18n-netwiz-zh-cn luci-i18n-netwiz-zh-tw"
 DOWNLOAD_SUCCESS=0
 
 for FILE in $FILES; do
-    # 完美匹配您的文件名格式：前缀_包名.后缀 (例如 apk_luci-app-netwiz.apk)
+    # 匹配文件名格式：前缀_包名.后缀 (apk_luci-app-netwiz.apk)
     TARGET_FILE="${PKG_TYPE}_${FILE}.${PKG_TYPE}"
     URL_DIRECT="https://github.com/huchd0/luci-app-netwiz/releases/latest/download/${TARGET_FILE}"
     
-    # 🌟 代理池：引入目前国内最稳定的三个加速节点，防止单一节点失效
+    # 引入目前国内最稳定的三个加速节点，防止单一节点失效
     PROXY_1="https://ghp.ci/${URL_DIRECT}"
     PROXY_2="https://ghproxy.net/${URL_DIRECT}"
     PROXY_3="https://github.moeyy.xyz/${URL_DIRECT}"
@@ -51,7 +51,7 @@ for FILE in $FILES; do
         wget -qO "/tmp/${TARGET_FILE}" --no-check-certificate -T 10 "$PROXY_2"
     fi
 
-    # 校验是否最终下载成功 (大于1KB才算真正的包，防止下载到含有 404 报错的 HTML 文件)
+    # 校验是否下载成功 (大于1KB才算真正的包，防止下载到含有 404 报错的 HTML 文件)
     FILE_SIZE=$(ls -l "/tmp/${TARGET_FILE}" 2>/dev/null | awk '{print $5}')
     if [ -s "/tmp/${TARGET_FILE}" ] && [ "$FILE_SIZE" -gt 1000 ]; then
         DOWNLOAD_SUCCESS=$((DOWNLOAD_SUCCESS + 1))
@@ -92,4 +92,33 @@ rm -rf /tmp/luci-sessions/* /var/run/luci-sessions/* 2>/dev/null
 
 echo -e "\n👉 👉 👉  NetWiz 核心程序及多语言包更新与部署完成！✅"
 echo -e "💡 登录状态已安全重置，请返回浏览器按下 【F5】 刷新，【重新登录】即可看到新菜单！"
+
+# ==========================================
+# 5. 匿名安装量统计 (仅向后台发送基础硬件环境信息)
+# ==========================================
+(
+    # 提取 OpenWrt 版本号和架构 (例如: 23.05.0 和 ramips/mt7621)
+    if [ -f /etc/openwrt_release ]; then
+        . /etc/openwrt_release
+        OW_VER=${DISTRIB_RELEASE:-"unknown"}
+        OW_ARCH=${DISTRIB_TARGET:-"unknown"}
+    else
+        OW_VER="unknown"
+        OW_ARCH=$(uname -m 2>/dev/null || echo "unknown")
+    fi
+
+    # 统计接口地址
+    API_URL="https://netwiz-tracker.vercel.app/api/track"
+    
+    #  提取IP和地域由服务端拼接参数
+    REQ_URL="${API_URL}?app=netwiz&ver=${OW_VER}&arch=${OW_ARCH}"
+    
+    # 静默发送请求，3秒超时，放入后台执行)
+    if command -v curl >/dev/null 2>&1; then
+        curl -s -m 3 "$REQ_URL" >/dev/null 2>&1
+    else
+        wget -qO- -T 3 "$REQ_URL" >/dev/null 2>&1
+    fi
+) &
+
 exit 0
