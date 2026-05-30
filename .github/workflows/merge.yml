@@ -134,22 +134,10 @@ jobs:
             git_clone https://github.com/MayflyDestiny/luci-app-mosdns-panel luci-app-mosdns-panel
           } & 
 
-          {
-            git clone --depth 1 https://github.com/kenzok8/jell jell_tmp
-            [ -d "jell_tmp" ] && {
-              mv -f jell_tmp/luci-app-aria2 opd/
-              mv -f jell_tmp/luci-app-ipsec-server opd/
-              mv -f jell_tmp/luci-app-pptpd opd/
-              mv -f jell_tmp/webdav2 opd/
-              mv -f jell_tmp/luci-app-msd_lite opd/
-              mv -f jell_tmp/luci-app-onliner opd/
-              mv -f jell_tmp/msd_lite opd/
-              mv -f jell_tmp/unishare opd/
-              mv -f jell_tmp/luci-app-unishare opd/
-              mv -f jell_tmp/luci-app-rtbwmon opd/
-              mv -f jell_tmp/luci-app-kodexplorer opd/
-            }
-            rm -rf jell_tmp
+            git clone --depth 1 https://github.com/kenzok8/jell .
+            mv -f luci-app-aria2 luci-app-ipsec-server luci-app-pptpd webdav2 luci-app-msd_lite luci-app-onliner msd_lite unishare luci-app-unishare luci-app-rtbwmon luci-app-kodexplorer ${GITHUB_WORKSPACE}/opd/ 2>/dev/null || true
+            cd ${GITHUB_WORKSPACE}
+            rm -rf /tmp/jell
           } &
 
           wait
