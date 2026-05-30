@@ -21,6 +21,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          submodules: false  # 强制关闭子模块，彻底解决报错
 
       - name: 强制拉取远程最新代码（解决冲突）
         run: |
@@ -28,9 +29,9 @@ jobs:
 
       - name: 清理残留子模块与文件
         run: |
-          rm -rf .gitmodules OpenAppFilter
+          rm -rf .gitmodules OpenAppFilter jell_tmp
           git submodule deinit --all -f 2>/dev/null || true
-          git rm --cached OpenAppFilter 2>/dev/null || true
+          git rm --cached --ignore-unmatch OpenAppFilter jell_tmp 2>/dev/null || true
 
       - name: 设置 Git 与时区
         run: |
@@ -74,7 +75,6 @@ jobs:
           {
             git_clone https://github.com/sirpdboy/luci-app-timecontrol luci-app-timecontrol
             git_clone https://github.com/sirpdboy/luci-app-advancedplus luci-app-advancedplus
-            # git_clone https://github.com/sirpdboy/luci-app-lucky luci-app-lucky
             git_clone https://github.com/gdy666/luci-app-lucky luci-app-lucky
             git_clone https://github.com/sirpdboy/luci-app-partexp luci-app-partexp
             git_clone https://github.com/sirpdboy/netspeedtest netspeedtest
@@ -90,7 +90,6 @@ jobs:
             git_clone https://github.com/brvphoenix/wrtbwmon wrtbwmon
             git_clone https://github.com/sbwml/luci-app-mosdns luci-app-mosdns
             git_clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic luci-app-unblockneteasemusic
-            # git_clone https://github.com/sbwml/luci-app-qbittorrent luci-app-qbittorrent
             git_clone https://github.com/sbwml/luci-app-quickfile luci-app-quickfile
             
             git clone --depth 1 https://github.com/gaoderby/luci-app-kms tmp_kms
@@ -133,7 +132,6 @@ jobs:
             git_clone https://github.com/huchd0/luci-app-netwiz luci-app-netwiz
             git_clone https://github.com/tpxcer/luci-app-minigate luci-app-minigate
             git_clone https://github.com/MayflyDestiny/luci-app-mosdns-panel luci-app-mosdns-panel
-            # git_clone https://github.com/DustReliant/luci-app-filetransfer luci-app-filetransfer
           } & 
 
           {
