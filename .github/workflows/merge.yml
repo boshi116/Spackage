@@ -66,6 +66,7 @@ jobs:
             git_clone https://github.com/destan19/OpenAppFilter OpenAppFilter
             git_clone https://github.com/upcliujie/luci-app-tcpdump luci-app-tcpdump
             git_clone https://github.com/Natduki/luci-app-sqm-controller luci-app-sqm-controller
+            git_clone https://github.com/YusDyr/luci-app-trafficctl luci-app-trafficctl
           } &
 
           {
