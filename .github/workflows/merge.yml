@@ -21,37 +21,41 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          submodules: ''
+          submodules: false  # 强制关闭子模块，彻底解决报错
 
-      - name: 强制清空所有残留
-        run: |
-          rm -rf jell_tmp tmp_jell .gitmodules .git/modules/*
-          git submodule deinit --all -f 2>/dev/null || true
-          git rm --cached -rf jell_tmp tmp_jell 2>/dev/null || true
-          git clean -ffdx 2>/dev/null || true
-
-      - name: 强制拉取最新代码
+      - name: 强制拉取远程最新代码（解决冲突）
         run: |
           git pull --force --rebase https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
 
-      - name: 设置 Git
+      - name: 清理残留子模块与文件
+        run: |
+          rm -rf .gitmodules OpenAppFilter jell_tmp
+          git submodule deinit --all -f 2>/dev/null || true
+          git rm --cached --ignore-unmatch OpenAppFilter jell_tmp 2>/dev/null || true
+
+      - name: 设置 Git 与时区
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           sudo timedatectl set-timezone Asia/Shanghai || true
 
-      - name: 下载插件（不再产生临时目录）
+      - name: 清理环境并并行下载插件
         run: |
           set -euo pipefail
           shopt -s extglob
+          
+          echo "🧹 清理工作目录..."
           rm -rf !( .github | README.md | .gitignore | .git )
           mkdir -p opd
 
           git_clone() {
             local repo="$1"
             local dir="$2"
+            echo "🔽 下载 → opd/$dir"
             git clone --depth 1 "$repo" "opd/$dir"
           }
+
+          echo "🚀 开始并行下载所有插件..."
 
           {
             git_clone https://github.com/kiddin9/luci-app-dnsfilter luci-app-dnsfilter
@@ -95,6 +99,7 @@ jobs:
             git clone --depth 1 https://github.com/openwrt/packages tmp_openwrt_pkg
             cp -r tmp_openwrt_pkg/net/adblock-fast opd/
             rm -rf tmp_openwrt_pkg
+            
           } &
 
           {
@@ -127,30 +132,64 @@ jobs:
             git_clone https://github.com/huchd0/luci-app-netwiz luci-app-netwiz
             git_clone https://github.com/tpxcer/luci-app-minigate luci-app-minigate
             git_clone https://github.com/MayflyDestiny/luci-app-mosdns-panel luci-app-mosdns-panel
-          } &
+          } & 
 
           {
-            mkdir -p /tmp/jell
-            cd /tmp/jell
-            git clone --depth 1 https://github.com/kenzok8/jell .
-            mv -f luci-app-aria2 luci-app-ipsec-server luci-app-pptpd webdav2 luci-app-msd_lite luci-app-onliner msd_lite unishare luci-app-unishare luci-app-rtbwmon luci-app-kodexplorer ${GITHUB_WORKSPACE}/opd/ 2>/dev/null || true
-            cd ${GITHUB_WORKSPACE}
-            rm -rf /tmp/jell
+            git clone --depth 1 https://github.com/kenzok8/jell jell_tmp
+            [ -d "jell_tmp" ] && {
+              mv -f jell_tmp/luci-app-aria2 opd/
+              mv -f jell_tmp/luci-app-ipsec-server opd/
+              mv -f jell_tmp/luci-app-pptpd opd/
+              mv -f jell_tmp/webdav2 opd/
+              mv -f jell_tmp/luci-app-msd_lite opd/
+              mv -f jell_tmp/luci-app-onliner opd/
+              mv -f jell_tmp/msd_lite opd/
+              mv -f jell_tmp/unishare opd/
+              mv -f jell_tmp/luci-app-unishare opd/
+              mv -f jell_tmp/luci-app-rtbwmon opd/
+              mv -f jell_tmp/luci-app-kodexplorer opd/
+            }
+            rm -rf jell_tmp
           } &
 
           wait
-          find opd -name ".git*" -o -name "README*" -o -name "LICENSE" -o -name "docs" | xargs rm -rf 2>/dev/null || true
+          echo "✅ 所有插件下载完成"
 
-      - name: 提交并推送
+          echo "🧹 清理冗余文件..."
+          find opd -name ".git*" -o -name "README*" -o -name "LICENSE" -o -name "docs" -o -name ".github" | xargs rm -rf 2>/dev/null || true
+
+      - name: 提交并推送更新 + 写入 README.md
         run: |
+          touch README.md
+          
           git add -A
           CHANGES=$(git status --porcelain)
+          
           if [ -n "$CHANGES" ]; then
+            echo "📤 检测到更新，开始提交"
+            echo "====================================="
+            echo "$CHANGES"
+            echo "====================================="
+
+            FILE_COUNT=$(echo "$CHANGES" | wc -l)
             UPDATE_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-            echo "自动更新 $UPDATE_TIME" > README.md
+            UPDATE_PLUGINS=$(echo "$CHANGES" | awk '{print $2}' | grep '^opd/' | cut -d'/' -f2 | sort -u | head -15)
+
+            {
+              echo "## 📦 自用包AI最近自动更新"
+              echo "- 更新时间：$UPDATE_TIME"
+              echo "- 更新文件数：$FILE_COUNT"
+              echo "- 更新插件："
+              echo "$UPDATE_PLUGINS" | while read p; do echo "  - $p"; done
+              echo "---"
+              echo
+              cat README.md
+            } > README.tmp && mv README.tmp README.md
+
             git add README.md
-            git commit -m "更新 $UPDATE_TIME"
+            git commit -m "📦 自动更新 $UPDATE_TIME"
             git push --force https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
           else
-            echo "无变更"
+            echo "ℹ️ 无文件变更"
+            exit 0
           fi
