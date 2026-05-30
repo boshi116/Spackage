@@ -23,13 +23,13 @@ jobs:
           persist-credentials: false
           submodules: ''
 
-      - name: 清理残留
+      - name: 兜底清理残留
         run: |
           git submodule deinit --all -f 2>/dev/null || true
           git rm --cached -r jell_tmp 2>/dev/null || true
           rm -rf .gitmodules jell_tmp .git/modules/jell_tmp
 
-      - name: 强制拉取
+      - name: 强制拉取远程最新代码
         run: |
           git pull --force --rebase https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
 
@@ -135,7 +135,7 @@ jobs:
           } & 
 
           {
-            # 改名为 tmp_jell，不再叫 jell_tmp
+            # 重命名为 tmp_jell，彻底规避旧名称冲突
             git clone --depth 1 https://github.com/kenzok8/jell tmp_jell
             [ -d "tmp_jell" ] && {
               mv -f tmp_jell/luci-app-aria2 opd/
