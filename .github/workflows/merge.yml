@@ -21,17 +21,19 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          submodules: false  # 强制关闭子模块，彻底解决报错
+          submodules: ''  # 👈 修复点
 
-      - name: 强制拉取远程最新代码（解决冲突）
+      # 强制清理 git 残留，防止 jell_tmp 报错
+      - name: 彻底清理残留子模块
+        run: |
+          git submodule deinit --all -f 2>/dev/null || true
+          git rm --cached -r jell_tmp 2>/dev/null || true
+          rm -rf .gitmodules jell_tmp
+          git config --local --remove-section submodule.jell_tmp 2>/dev/null || true
+
+      - name: 强制拉取远程最新代码
         run: |
           git pull --force --rebase https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
-
-      - name: 清理残留子模块与文件
-        run: |
-          rm -rf .gitmodules OpenAppFilter jell_tmp
-          git submodule deinit --all -f 2>/dev/null || true
-          git rm --cached --ignore-unmatch OpenAppFilter jell_tmp 2>/dev/null || true
 
       - name: 设置 Git 与时区
         run: |
@@ -155,41 +157,18 @@ jobs:
           wait
           echo "✅ 所有插件下载完成"
 
-          echo "🧹 清理冗余文件..."
           find opd -name ".git*" -o -name "README*" -o -name "LICENSE" -o -name "docs" -o -name ".github" | xargs rm -rf 2>/dev/null || true
 
-      - name: 提交并推送更新 + 写入 README.md
+      - name: 提交并推送更新
         run: |
-          touch README.md
-          
           git add -A
           CHANGES=$(git status --porcelain)
-          
           if [ -n "$CHANGES" ]; then
-            echo "📤 检测到更新，开始提交"
-            echo "====================================="
-            echo "$CHANGES"
-            echo "====================================="
-
-            FILE_COUNT=$(echo "$CHANGES" | wc -l)
             UPDATE_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-            UPDATE_PLUGINS=$(echo "$CHANGES" | awk '{print $2}' | grep '^opd/' | cut -d'/' -f2 | sort -u | head -15)
-
-            {
-              echo "## 📦 自用包AI最近自动更新"
-              echo "- 更新时间：$UPDATE_TIME"
-              echo "- 更新文件数：$FILE_COUNT"
-              echo "- 更新插件："
-              echo "$UPDATE_PLUGINS" | while read p; do echo "  - $p"; done
-              echo "---"
-              echo
-              cat README.md
-            } > README.tmp && mv README.tmp README.md
-
+            echo "自动更新 $UPDATE_TIME" > README.md
             git add README.md
             git commit -m "📦 自动更新 $UPDATE_TIME"
             git push --force https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
           else
-            echo "ℹ️ 无文件变更"
-            exit 0
+            echo "ℹ️ 无变更"
           fi
