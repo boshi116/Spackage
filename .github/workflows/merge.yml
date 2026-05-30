@@ -21,41 +21,37 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          submodules: false  # 强制关闭子模块，彻底解决报错
+          submodules: ''
 
-      - name: 强制拉取远程最新代码（解决冲突）
+      - name: 强制清空所有残留
+        run: |
+          rm -rf jell_tmp tmp_jell .gitmodules .git/modules/*
+          git submodule deinit --all -f 2>/dev/null || true
+          git rm --cached -rf jell_tmp tmp_jell 2>/dev/null || true
+          git clean -ffdx 2>/dev/null || true
+
+      - name: 强制拉取最新代码
         run: |
           git pull --force --rebase https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
 
-      - name: 清理残留子模块与文件
-        run: |
-          rm -rf .gitmodules OpenAppFilter jell_tmp
-          git submodule deinit --all -f 2>/dev/null || true
-          git rm --cached --ignore-unmatch OpenAppFilter jell_tmp 2>/dev/null || true
-
-      - name: 设置 Git 与时区
+      - name: 设置 Git
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           sudo timedatectl set-timezone Asia/Shanghai || true
 
-      - name: 清理环境并并行下载插件
+      - name: 下载插件（不再产生临时目录）
         run: |
           set -euo pipefail
           shopt -s extglob
-          
-          echo "🧹 清理工作目录..."
           rm -rf !( .github | README.md | .gitignore | .git )
           mkdir -p opd
 
           git_clone() {
             local repo="$1"
             local dir="$2"
-            echo "🔽 下载 → opd/$dir"
             git clone --depth 1 "$repo" "opd/$dir"
           }
-
-          echo "🚀 开始并行下载所有插件..."
 
           {
             git_clone https://github.com/kiddin9/luci-app-dnsfilter luci-app-dnsfilter
@@ -99,7 +95,6 @@ jobs:
             git clone --depth 1 https://github.com/openwrt/packages tmp_openwrt_pkg
             cp -r tmp_openwrt_pkg/net/adblock-fast opd/
             rm -rf tmp_openwrt_pkg
-            
           } &
 
           {
@@ -117,7 +112,7 @@ jobs:
             git_clone https://github.com/nooblk-98/luci-app-netstat luci-app-netstat
             git_clone https://github.com/nooblk-98/luci-theme-noobwrt luci-theme-noobwrt
             git_clone https://github.com/muink/luci-app-tinyfilemanager luci-app-tinyfilemanager
-          } 
+          } &
 
           {
             git_clone https://github.com/kenzok78/luci-app-adguardhome luci-app-adguardhome
@@ -132,8 +127,11 @@ jobs:
             git_clone https://github.com/huchd0/luci-app-netwiz luci-app-netwiz
             git_clone https://github.com/tpxcer/luci-app-minigate luci-app-minigate
             git_clone https://github.com/MayflyDestiny/luci-app-mosdns-panel luci-app-mosdns-panel
-          } & 
+          } &
 
+          {
+            mkdir -p /tmp/jell
+            cd /tmp/jell
             git clone --depth 1 https://github.com/kenzok8/jell .
             mv -f luci-app-aria2 luci-app-ipsec-server luci-app-pptpd webdav2 luci-app-msd_lite luci-app-onliner msd_lite unishare luci-app-unishare luci-app-rtbwmon luci-app-kodexplorer ${GITHUB_WORKSPACE}/opd/ 2>/dev/null || true
             cd ${GITHUB_WORKSPACE}
@@ -141,16 +139,13 @@ jobs:
           } &
 
           wait
-          echo "✅ 所有插件下载完成"
-
-          echo "🧹 清理冗余文件..."
-          find opd -name ".git*" -o -name "README*" -o -name "LICENSE" -o -name "docs" -o -name ".github" | xargs rm -rf 2>/dev/null || true
-
+          find opd -name ".git*" -o -name "README*" -o -name "LICENSE" -o -name "docs" | xargs rm -rf 2>/dev/null || true
+ 
       - name: 提交并推送更新 + 写入 README.md
         run: |
           touch README.md
           
-          git add -A
+          git add -A 
           CHANGES=$(git status --porcelain)
           
           if [ -n "$CHANGES" ]; then
