@@ -1,0 +1,42 @@
+{
+  "env": {
+    "browser": true,
+    "es2017": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "script",
+    "ecmaFeatures": {
+      "globalReturn": true
+    }
+  },
+  "globals": {
+    "_": "readonly",
+    "E": "readonly",
+    "L": "readonly",
+    "poll": "readonly",
+    "request": "readonly",
+    "baseclass": "readonly",
+    "dom": "readonly",
+    "form": "readonly",
+    "fs": "readonly",
+    "rpc": "readonly",
+    "uci": "readonly",
+    "ui": "readonly",
+    "view": "readonly"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "args": "none", "varsIgnorePattern": "^_" }],
+    "no-undef": "error",
+    "no-redeclare": "error",
+    "no-constant-condition": "warn",
+    "no-empty": ["warn", { "allowEmptyCatch": true }],
+    "no-extra-semi": "error",
+    "no-unreachable": "error",
+    "eqeqeq": ["warn", "smart"],
+    "no-var": "off",
+    "prefer-const": "off",
+    "semi": ["error", "always"],
+    "curly": ["warn", "multi-line"]
+  }
+}

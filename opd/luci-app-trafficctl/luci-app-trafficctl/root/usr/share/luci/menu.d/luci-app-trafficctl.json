@@ -1,0 +1,13 @@
+{
+	"admin/status/trafficctl": {
+		"title": "Traffic Control",
+		"order": 80,
+		"action": {
+			"type": "view",
+			"path": "trafficctl/status"
+		},
+		"depends": {
+			"acl": [ "luci-app-trafficctl" ]
+		}
+	}
+}

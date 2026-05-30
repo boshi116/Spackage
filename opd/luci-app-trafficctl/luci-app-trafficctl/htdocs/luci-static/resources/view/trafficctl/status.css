@@ -1,0 +1,828 @@
+/* trafficctl status view — consolidated styles */
+
+/* ── Utility ─────────────────────────────────────────────────────── */
+.tm-hidden { display: none !important; }
+
+/* ── Offload banner ───────────────────────────────────────────────── */
+.tm-offload-banner {
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.tm-offload-banner__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.tm-offload-banner__icon {
+    font-size: 15px;
+    margin-right: 8px;
+}
+
+.tm-offload-banner__body {
+    flex: 1;
+}
+
+.tm-offload-banner__close {
+    cursor: pointer;
+    opacity: 0.5;
+    padding: 0 0 0 10px;
+    font-size: 18px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.tm-offload-ul {
+    margin: 4px 0 4px 18px;
+    padding: 0;
+}
+
+/* ── Action / rate-limit panel ────────────────────────────────────── */
+.tm-rate-panel {
+    padding: 12px 14px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border: 1px solid var(--tm-border);
+    background: var(--tm-section-action);
+}
+
+.tm-rate-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.tm-rate-panel__title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--tm-text);
+}
+
+/* ── Rate / mode segmented toggle inside rate panel ──────────────── */
+.tm-mode-toggle {
+    display: inline-flex;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1.5px solid var(--tm-border);
+    margin-top: 6px;
+}
+
+/* ── Custom-value row ─────────────────────────────────────────────── */
+.tm-custom-row {
+    display: flex;
+    margin-top: 6px;
+    align-items: center;
+    gap: 6px;
+}
+
+.tm-custom-input {
+    width: 70px;
+    font-size: 12px;
+    padding: 4px 8px;
+    border: 1.5px solid var(--tm-border);
+    border-radius: 8px;
+    background: var(--tm-bg);
+    color: var(--tm-text);
+}
+
+.tm-custom-unit-btns {
+    display: inline-flex;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1.5px solid var(--tm-border);
+}
+
+.tm-custom-apply {
+    padding: 4px 12px;
+    font-size: 12px;
+    border-radius: 8px;
+    border: none;
+    background: var(--tm-proto);
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+/* ── Buttons (base + variants) ───────────────────────────────────── */
+.tm-btn {
+    padding: 5px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 13px;
+    min-width: 140px;
+    text-align: center;
+    font-weight: 500;
+    color: #fff;
+}
+
+.tm-btn--block {
+    background: #c05621;
+    border: 1px solid #9c4221;
+}
+
+.tm-btn--unblock {
+    background: #276749;
+    border: 1px solid #22543d;
+}
+
+/* ── Action row (inet + wifi buttons) ────────────────────────────── */
+.tm-action-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Settings panel ──────────────────────────────────────────────── */
+.tm-settings-panel {
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: var(--tm-section-action);
+    border: 1px solid var(--tm-border);
+}
+
+.tm-settings-toggle {
+    padding: 8px 14px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--tm-text-mute);
+}
+
+.tm-settings-body {
+    padding: 0 14px 10px;
+}
+
+/* ── Status bar ──────────────────────────────────────────────────── */
+.tm-status {
+    padding: 8px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.tm-status--loading {
+    background: var(--tm-info-bg);
+    border: 1px solid var(--tm-info-border);
+    color: var(--tm-info-fg);
+}
+
+.tm-status--ok {
+    background: var(--tm-info-bg);
+    border: 1px solid var(--tm-state-ok);
+    color: var(--tm-state-ok);
+}
+
+.tm-status--error {
+    background: var(--tm-blocked-bg);
+    border: 1px solid var(--tm-blocked-border);
+    color: var(--tm-blocked-fg);
+}
+
+.tm-status--action {
+    background: var(--tm-info-bg);
+    border: 1px solid var(--tm-rate-fg);
+    color: var(--tm-rate-fg);
+}
+
+/* ── Stats bar (summary / single device) ─────────────────────────── */
+.tm-stats-bar {
+    padding: 8px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.tm-stats-bar--info {
+    background: var(--tm-info-bg);
+    border: 1px solid var(--tm-info-border);
+    color: var(--tm-info-fg);
+}
+
+.tm-stats-bar--blocked {
+    background: var(--tm-blocked-bg);
+    border: 1px solid var(--tm-blocked-border);
+    color: var(--tm-blocked-fg);
+}
+
+/* ── Chip base (shared by all chip variants) ─────────────────────── */
+.tm-chip {
+    display: inline-block;
+    padding: 4px 10px;
+    margin: 2px;
+    border-radius: 14px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    border: 1.5px solid var(--tm-border);
+    background: var(--tm-bg);
+    color: var(--tm-text);
+    user-select: none;
+}
+
+.tm-chip--active {
+    border-color: var(--tm-proto);
+    background: var(--tm-proto);
+    color: #fff;
+    font-weight: 600;
+}
+
+.tm-chip--off {
+    color: var(--tm-text-mute);
+}
+
+.tm-chip--off-active {
+    border-color: var(--tm-text-mute);
+    background: var(--tm-text-mute);
+    color: #fff;
+    font-weight: 600;
+}
+
+/* ── Rate chips row ──────────────────────────────────────────────── */
+.tm-rate-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0;
+}
+
+/* ── Column visibility chips ─────────────────────────────────────── */
+.tm-col-chip {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    margin: 2px;
+    transition: all .15s;
+    font-weight: 500;
+}
+
+.tm-col-chip--on {
+    background: var(--tm-proto);
+    color: #fff;
+    border: 1px solid var(--tm-proto);
+}
+
+.tm-col-chip--off {
+    background: var(--tm-bg);
+    color: var(--tm-text-mute);
+    border: 1px solid var(--tm-border);
+}
+
+/* ── Quick-bar (All devices + recent chips) ──────────────────────── */
+.tm-quick-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.tm-quick-bar__all {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+    border: 1.5px solid var(--tm-proto);
+    background: var(--tm-proto);
+    color: #fff;
+}
+
+.tm-quick-bar__all--outline {
+    background: var(--tm-bg);
+    color: var(--tm-proto);
+}
+
+.tm-recent-container {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+/* ── Recent device chips (base + active) ─────────────────────────── */
+.tm-recent-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+    border: 1.5px solid var(--tm-border);
+    background: var(--tm-bg);
+    color: var(--tm-text);
+}
+
+.tm-recent-chip--active {
+    font-weight: 600;
+    border-color: var(--tm-proto);
+    background: var(--tm-info-bg);
+    color: var(--tm-proto);
+}
+
+.tm-recent-remove {
+    margin-left: 2px;
+    font-size: 10px;
+    opacity: 0;
+    transition: opacity .15s;
+    color: var(--tm-text-mute);
+    cursor: pointer;
+}
+
+/* ── Toggle wrapper ──────────────────────────────────────────────── */
+.tm-toggle-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 12px;
+    white-space: nowrap;
+}
+
+/* ── Inline label (muted, small) ─────────────────────────────────── */
+.tm-inline-label {
+    font-size: 12px;
+    margin-right: 4px;
+    white-space: nowrap;
+    color: var(--tm-text-mute);
+}
+
+/* ── Inline pick display text ────────────────────────────────────── */
+.tm-inline-pick-display {
+    color: var(--tm-text);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 1px dashed var(--tm-text-mute);
+    padding-bottom: 1px;
+    white-space: nowrap;
+}
+
+.tm-inline-pick-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.tm-inline-pick-popup {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--tm-bg);
+    border: 1px solid var(--tm-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    z-index: 200;
+    padding: 4px 0;
+    white-space: nowrap;
+}
+
+/* ── Search select dropdown ──────────────────────────────────────── */
+.tm-search-wrapper {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+    max-width: 480px;
+}
+
+.tm-search-input {
+    width: 100%;
+    padding: 8px 32px 8px 12px;
+    font-size: 14px;
+    border: 2px solid var(--tm-border);
+    border-radius: 6px;
+    cursor: pointer;
+    background: var(--tm-bg);
+    color: var(--tm-text);
+}
+
+.tm-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: var(--tm-text-mute);
+    font-size: 16px;
+    line-height: 1;
+}
+
+.tm-search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--tm-bg);
+    border: 1px solid var(--tm-border);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0,0,0,.15);
+    z-index: 100;
+}
+
+.tm-dropdown-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid var(--tm-border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tm-dropdown-item--section {
+    padding: 3px 10px;
+    font-size: 11px;
+    color: var(--tm-text-mute);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    cursor: default;
+    border-bottom: 1px solid var(--tm-border);
+}
+
+.tm-dropdown-item--all {
+    font-weight: 600;
+    color: var(--tm-proto);
+}
+
+/* ── Speed graph popup ───────────────────────────────────────────── */
+.tm-graph-popup {
+    position: fixed;
+    z-index: 500;
+    padding: 10px;
+    border-radius: 10px;
+    background: var(--tm-bg);
+    border: 1px solid var(--tm-border);
+    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+
+.tm-graph-popup__note {
+    font-size: 10px;
+    color: var(--tm-text-mute);
+    margin-top: 4px;
+    text-align: center;
+}
+
+.tm-graph-popup__empty {
+    color: var(--tm-text-mute);
+    font-size: 11px;
+}
+
+/* ── Extended stats panel (base + sticky) ────────────────────────── */
+.tm-ext-panel {
+    background: var(--tm-bg-subtle);
+    border: 1px solid var(--tm-border);
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 13px;
+    margin: 8px 0;
+}
+
+.tm-ext-panel--sticky {
+    position: sticky;
+    top: 0;
+}
+
+.tm-ext-panel__title {
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--tm-text);
+}
+
+.tm-ext-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 0;
+    border-bottom: 1px dotted var(--tm-border);
+}
+
+.tm-ext-col-flex {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Activity log panel ──────────────────────────────────────────── */
+.tm-activity-panel {
+    margin: 8px 0;
+    padding: 8px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--tm-border);
+    background: var(--tm-bg-subtle);
+}
+
+.tm-log-area {
+    max-height: 250px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 11px;
+    background: var(--tm-bg);
+    border: 1px solid var(--tm-border);
+    border-radius: 4px;
+    padding: 6px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--tm-text);
+}
+
+.tm-log-line {
+    padding: 1px 0;
+    border-bottom: 1px solid var(--tm-border);
+}
+
+/* ── Tables ──────────────────────────────────────────────────────── */
+.tm-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    border: 1px solid var(--tm-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.tm-th {
+    cursor: pointer;
+    padding: 7px 12px;
+    white-space: nowrap;
+    background: var(--tm-th-bg);
+    color: var(--tm-th-fg);
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    user-select: none;
+    text-align: left;
+}
+
+/* ── Table cell base + utilities ─────────────────────────────────── */
+.tm-td {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--tm-border);
+    font-size: 12px;
+    color: var(--tm-text);
+}
+
+.tm-td--compact { padding: 5px 12px; }
+.tm-td--mono    { font-family: monospace; }
+.tm-td--right   { text-align: right; }
+.tm-td--center  { text-align: center; }
+.tm-td--bold    { font-weight: 600; }
+.tm-td--medium  { font-weight: 500; }
+.tm-td--sm      { font-size: 11px; }
+
+/* Row striping via nth-child (replaces inline background) */
+.tm-row:nth-child(odd) > .tm-td  { background: var(--tm-bg); }
+.tm-row:nth-child(even) > .tm-td { background: var(--tm-bg-alt); }
+
+/* ── Color utilities (for td, span, b) ──────────────────────────── */
+.tm-c-proto  { color: var(--tm-proto); }
+.tm-c-service { color: var(--tm-service); }
+.tm-c-ok     { color: var(--tm-state-ok); }
+.tm-c-wait   { color: var(--tm-state-wait); }
+.tm-c-close  { color: var(--tm-state-close); }
+.tm-c-rate   { color: var(--tm-rate-fg); }
+.tm-c-shape  { color: var(--tm-shape-fg); }
+.tm-c-drop   { color: var(--tm-drop-fg); }
+.tm-c-mute   { color: var(--tm-text-mute); }
+.tm-c-faint  { color: var(--tm-text-faint); }
+.tm-c-speed  { color: var(--tm-speed); }
+.tm-fw-600   { font-weight: 600; }
+.tm-fw-500   { font-weight: 500; }
+
+/* ── Device icon wrapper ─────────────────────────────────────────── */
+.tm-device-icon-wrap {
+    position: relative;
+}
+
+.tm-device-icon-badge {
+    position: absolute;
+    top: -2px;
+    right: -8px;
+    font-size: 8px;
+}
+
+/* ── Card grid ───────────────────────────────────────────────────── */
+.tm-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* ── Card (base + all variant) ───────────────────────────────────── */
+.tm-card {
+    padding: 10px 8px;
+    border-radius: 8px;
+    border: 2px solid var(--tm-border);
+    background: var(--tm-bg);
+    cursor: pointer;
+    text-align: center;
+    font-size: 11px;
+    transition: all .15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    overflow: hidden;
+}
+
+.tm-card--all {
+    padding: 10px;
+    border-color: var(--tm-proto);
+    background: var(--tm-info-bg);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--tm-proto);
+    gap: 4px;
+}
+
+.tm-card__name {
+    font-weight: 600;
+    color: var(--tm-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.tm-card__ip {
+    color: var(--tm-text-mute);
+    font-family: monospace;
+    font-size: 10px;
+}
+
+.tm-card__speed {
+    color: var(--tm-speed);
+    font-weight: 600;
+    font-size: 10px;
+}
+
+/* ── Avatar strip ────────────────────────────────────────────────── */
+.tm-avatar-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 6px 2px;
+    margin-bottom: 8px;
+    scrollbar-width: thin;
+}
+
+.tm-avatar-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+    min-width: 56px;
+    transition: all .15s;
+}
+
+/* ── Chip cloud (device selector) ────────────────────────────────── */
+.tm-chip-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+/* ── Cloud chip (base + variants) ────────────────────────────────── */
+.tm-cloud-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: 16px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .15s;
+    border: 1.5px solid var(--tm-border);
+    background: var(--tm-bg);
+    color: var(--tm-text);
+    user-select: none;
+}
+
+.tm-cloud-chip--active {
+    border-color: var(--tm-proto);
+    background: var(--tm-proto);
+    color: #fff;
+    font-weight: 600;
+}
+
+.tm-cloud-chip--blocked {
+    border-color: var(--tm-blocked-border);
+    background: var(--tm-blocked-bg);
+    color: var(--tm-blocked-fg);
+}
+
+.tm-cloud-chip--limited {
+    border-color: var(--tm-rate-fg);
+    color: var(--tm-rate-fg);
+}
+
+.tm-cloud-chip__speed {
+    font-size: 10px;
+    opacity: .7;
+}
+
+/* ── Section label ───────────────────────────────────────────────── */
+.tm-section-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--tm-text-mute);
+    margin-bottom: 4px;
+    margin-top: 8px;
+}
+
+/* ── Separator (vertical pipe) ───────────────────────────────────── */
+.tm-sep {
+    border-left: 1px solid var(--tm-border);
+    height: 18px;
+    margin: 0 4px;
+}
+
+/* ── Version footer ──────────────────────────────────────────────── */
+.tm-version-footer {
+    text-align: right;
+    font-size: 10px;
+    color: var(--tm-text-faint);
+    padding: 8px 4px 0;
+    user-select: all;
+}
+
+/* ── SVG inline icon (Ethernet) ──────────────────────────────────── */
+.tm-eth-icon {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 3px;
+}
+
+/* ── Settings subsections ────────────────────────────────────────── */
+.tm-settings-section-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding-top: 4px;
+}
+
+.tm-conn-filters-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.tm-table-speed-inner {
+    padding-top: 4px;
+}
+
+.tm-table-speed-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+/* ── Logging section row ─────────────────────────────────────────── */
+.tm-log-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding-top: 4px;
+}
+
+/* ── Chips container ─────────────────────────────────────────────── */
+.tm-chips-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0;
+}

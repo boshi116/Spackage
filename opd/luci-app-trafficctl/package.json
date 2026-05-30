@@ -1,0 +1,11 @@
+{
+  "name": "luci-app-trafficctl",
+  "private": true,
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  },
+  "scripts": {
+    "lint": "eslint htdocs/",
+    "lint:fix": "eslint htdocs/ --fix"
+  }
+}
