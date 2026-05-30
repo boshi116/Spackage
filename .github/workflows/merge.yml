@@ -138,7 +138,7 @@ jobs:
             mv -f luci-app-aria2 luci-app-ipsec-server luci-app-pptpd webdav2 luci-app-msd_lite luci-app-onliner msd_lite unishare luci-app-unishare luci-app-rtbwmon luci-app-kodexplorer ${GITHUB_WORKSPACE}/opd/ 2>/dev/null || true
             cd ${GITHUB_WORKSPACE}
             rm -rf /tmp/jell
-          } &
+          } 
 
           wait
           echo "✅ 所有插件下载完成"
