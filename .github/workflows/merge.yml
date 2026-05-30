@@ -21,17 +21,15 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          submodules: ''  # 👈 修复点
+          submodules: ''
 
-      # 强制清理 git 残留，防止 jell_tmp 报错
-      - name: 彻底清理残留子模块
+      - name: 清理残留
         run: |
           git submodule deinit --all -f 2>/dev/null || true
           git rm --cached -r jell_tmp 2>/dev/null || true
-          rm -rf .gitmodules jell_tmp
-          git config --local --remove-section submodule.jell_tmp 2>/dev/null || true
+          rm -rf .gitmodules jell_tmp .git/modules/jell_tmp
 
-      - name: 强制拉取远程最新代码
+      - name: 强制拉取
         run: |
           git pull --force --rebase https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
 
@@ -137,21 +135,22 @@ jobs:
           } & 
 
           {
-            git clone --depth 1 https://github.com/kenzok8/jell jell_tmp
-            [ -d "jell_tmp" ] && {
-              mv -f jell_tmp/luci-app-aria2 opd/
-              mv -f jell_tmp/luci-app-ipsec-server opd/
-              mv -f jell_tmp/luci-app-pptpd opd/
-              mv -f jell_tmp/webdav2 opd/
-              mv -f jell_tmp/luci-app-msd_lite opd/
-              mv -f jell_tmp/luci-app-onliner opd/
-              mv -f jell_tmp/msd_lite opd/
-              mv -f jell_tmp/unishare opd/
-              mv -f jell_tmp/luci-app-unishare opd/
-              mv -f jell_tmp/luci-app-rtbwmon opd/
-              mv -f jell_tmp/luci-app-kodexplorer opd/
+            # 改名为 tmp_jell，不再叫 jell_tmp
+            git clone --depth 1 https://github.com/kenzok8/jell tmp_jell
+            [ -d "tmp_jell" ] && {
+              mv -f tmp_jell/luci-app-aria2 opd/
+              mv -f tmp_jell/luci-app-ipsec-server opd/
+              mv -f tmp_jell/luci-app-pptpd opd/
+              mv -f tmp_jell/webdav2 opd/
+              mv -f tmp_jell/luci-app-msd_lite opd/
+              mv -f tmp_jell/luci-app-onliner opd/
+              mv -f tmp_jell/msd_lite opd/
+              mv -f tmp_jell/unishare opd/
+              mv -f tmp_jell/luci-app-unishare opd/
+              mv -f tmp_jell/luci-app-rtbwmon opd/
+              mv -f tmp_jell/luci-app-kodexplorer opd/
             }
-            rm -rf jell_tmp
+            rm -rf tmp_jell
           } &
 
           wait
@@ -165,7 +164,8 @@ jobs:
           CHANGES=$(git status --porcelain)
           if [ -n "$CHANGES" ]; then
             UPDATE_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-            echo "自动更新 $UPDATE_TIME" > README.md
+            echo "## 📦 自用包AI最近自动更新" > README.md
+            echo "- 更新时间：$UPDATE_TIME" >> README.md
             git add README.md
             git commit -m "📦 自动更新 $UPDATE_TIME"
             git push --force https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
