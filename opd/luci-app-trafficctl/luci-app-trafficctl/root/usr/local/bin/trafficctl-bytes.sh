@@ -5,7 +5,12 @@
 
 . /usr/local/bin/trafficctl-fw.sh
 
-[ "$(tctl_get_offload_mode)" = "software" ] && [ "$TCTL_FW" = "nft" ] && exec /usr/local/bin/trafficctl-bytes-nft.sh
+# Any offload mode (software, hardware, hardware-counter) bypasses conntrack counters
+# for fast-path packets. Use nftables counters at forward priority -200 (before the
+# flowtable at -150) which capture every packet regardless of offload state.
+# Only pure "none" mode has accurate conntrack counters.
+_offload=$(tctl_get_offload_mode)
+[ "$_offload" != "none" ] && [ "$TCTL_FW" = "nft" ] && exec /usr/local/bin/trafficctl-bytes-nft.sh
 
 LAN_DEV=$(tctl_get_lan_device)
 LAN_SUBNET=$(ip -4 addr show dev "$LAN_DEV" 2>/dev/null | grep -oE 'inet [0-9.]+' | head -1 | awk '{print $2}')

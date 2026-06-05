@@ -119,11 +119,6 @@ var callShapeStats = rpc.declare({
 	expect: { result: [] }
 });
 
-var callRdns = rpc.declare({
-	object: 'luci.trafficctl',
-	method: 'rdns',
-	params: ['ip']
-});
 
 var callTelegramGet = rpc.declare({
 	object: 'luci.trafficctl',
@@ -164,6 +159,19 @@ var callActivityLog = rpc.declare({
 var callVersion = rpc.declare({
 	object: 'luci.trafficctl',
 	method: 'version'
+});
+
+var callConfigSet = rpc.declare({
+	object: 'luci.trafficctl',
+	method: 'config_set',
+	params: ['enabled', 'default_mode', 'sw', 'hw']
+});
+
+var callNetworkRrdnsLookup = rpc.declare({
+	object: 'network.rrdns',
+	method: 'lookup',
+	params: ['addrs', 'timeout', 'limit'],
+	expect: { '': {} }
 });
 
 var callConfigGet = rpc.declare({
@@ -234,7 +242,7 @@ function mkEthIcon(size) {
 	svg.setAttribute('stroke-width', '2');
 	svg.setAttribute('stroke-linecap', 'round');
 	svg.setAttribute('stroke-linejoin', 'round');
-	svg.setAttribute('class', 'tm-eth-icon');
+	svg.setAttribute('class', 'tc-eth-icon');
 	var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
 	path.setAttribute('d', 'M4 7h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1zM7 11v2M10 11v2M13 11v2M16 11v2');
 	svg.appendChild(path);
@@ -260,7 +268,7 @@ function renderSparkline(history, globalMax, width, height, limitKbit) {
 	svg.style.cssText = 'display:block;margin:0 auto'; /* sparkline — kept inline (runtime/canvas) */
 	var area = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
 	area.setAttribute('points', '0,' + h + ' ' + points.join(' ') + ' ' + (w - 0) + ',' + h);
-	area.setAttribute('fill', 'var(--tm-speed)');
+	area.setAttribute('fill', 'var(--tc-speed)');
 	area.setAttribute('opacity', '0.1');
 	area.setAttribute('stroke', 'none');
 	svg.appendChild(area);
@@ -272,7 +280,7 @@ function renderSparkline(history, globalMax, width, height, limitKbit) {
 			var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
 			line.setAttribute('x1', '0'); line.setAttribute('x2', String(w));
 			line.setAttribute('y1', ly); line.setAttribute('y2', ly);
-			line.setAttribute('stroke', 'var(--tm-rate-fg)');
+			line.setAttribute('stroke', 'var(--tc-warn)');
 			line.setAttribute('stroke-width', '1');
 			line.setAttribute('stroke-dasharray', '3,2');
 			line.setAttribute('opacity', '0.7');
@@ -282,7 +290,7 @@ function renderSparkline(history, globalMax, width, height, limitKbit) {
 	var polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
 	polyline.setAttribute('points', points.join(' '));
 	polyline.setAttribute('fill', 'none');
-	polyline.setAttribute('stroke', 'var(--tm-speed)');
+	polyline.setAttribute('stroke', 'var(--tc-speed)');
 	polyline.setAttribute('stroke-width', '1.5');
 	polyline.setAttribute('stroke-linejoin', 'round');
 	svg.appendChild(polyline);
@@ -351,9 +359,9 @@ function renderFullGraph(history, limitKbit, width, height) {
 	grad.setAttribute('id', 'fg-dl-grad'); grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0');
 	grad.setAttribute('x2', '0'); grad.setAttribute('y2', '1');
 	var stop1 = document.createElementNS(ns, 'stop');
-	stop1.setAttribute('offset', '0%'); stop1.setAttribute('stop-color', 'var(--tm-speed)'); stop1.setAttribute('stop-opacity', '0.35');
+	stop1.setAttribute('offset', '0%'); stop1.setAttribute('stop-color', 'var(--tc-speed)'); stop1.setAttribute('stop-opacity', '0.35');
 	var stop2 = document.createElementNS(ns, 'stop');
-	stop2.setAttribute('offset', '100%'); stop2.setAttribute('stop-color', 'var(--tm-speed)'); stop2.setAttribute('stop-opacity', '0.03');
+	stop2.setAttribute('offset', '100%'); stop2.setAttribute('stop-color', 'var(--tc-speed)'); stop2.setAttribute('stop-opacity', '0.03');
 	grad.appendChild(stop1); grad.appendChild(stop2); defs.appendChild(grad);
 
 	// Gradient for upload area
@@ -361,16 +369,16 @@ function renderFullGraph(history, limitKbit, width, height) {
 	gradUp.setAttribute('id', 'fg-ul-grad'); gradUp.setAttribute('x1', '0'); gradUp.setAttribute('y1', '0');
 	gradUp.setAttribute('x2', '0'); gradUp.setAttribute('y2', '1');
 	var stopU1 = document.createElementNS(ns, 'stop');
-	stopU1.setAttribute('offset', '0%'); stopU1.setAttribute('stop-color', 'var(--tm-state-ok)'); stopU1.setAttribute('stop-opacity', '0.25');
+	stopU1.setAttribute('offset', '0%'); stopU1.setAttribute('stop-color', 'var(--tc-ok)'); stopU1.setAttribute('stop-opacity', '0.25');
 	var stopU2 = document.createElementNS(ns, 'stop');
-	stopU2.setAttribute('offset', '100%'); stopU2.setAttribute('stop-color', 'var(--tm-state-ok)'); stopU2.setAttribute('stop-opacity', '0.02');
+	stopU2.setAttribute('offset', '100%'); stopU2.setAttribute('stop-color', 'var(--tc-ok)'); stopU2.setAttribute('stop-opacity', '0.02');
 	gradUp.appendChild(stopU1); gradUp.appendChild(stopU2); defs.appendChild(gradUp);
 	svg.appendChild(defs);
 
 	// Background
 	var bg = document.createElementNS(ns, 'rect');
 	bg.setAttribute('width', w); bg.setAttribute('height', h);
-	bg.setAttribute('fill', 'var(--tm-bg)'); bg.setAttribute('rx', '8');
+	bg.setAttribute('fill', 'var(--tc-bg)'); bg.setAttribute('rx', '8');
 	svg.appendChild(bg);
 
 	// Grid lines — nice tick values, at least 5 lines, label every 2nd if crowded
@@ -381,14 +389,14 @@ function renderFullGraph(history, limitKbit, width, height) {
 		var gl = document.createElementNS(ns, 'line');
 		gl.setAttribute('x1', pad.left); gl.setAttribute('x2', w - pad.right);
 		gl.setAttribute('y1', gy.toFixed(1)); gl.setAttribute('y2', gy.toFixed(1));
-		gl.setAttribute('stroke', 'var(--tm-border)'); gl.setAttribute('stroke-width', '0.5');
+		gl.setAttribute('stroke', 'var(--tc-border)'); gl.setAttribute('stroke-width', '0.5');
 		gl.setAttribute('stroke-dasharray', '2,2');
 		svg.appendChild(gl);
 		if (gi > 0 && gi % labelEvery === 0) {
 			var lbl = document.createElementNS(ns, 'text');
 			lbl.setAttribute('x', pad.left - 4); lbl.setAttribute('y', (gy + 3).toFixed(1));
 			lbl.setAttribute('text-anchor', 'end');
-			lbl.setAttribute('font-size', '9'); lbl.setAttribute('fill', 'var(--tm-text-mute)');
+			lbl.setAttribute('font-size', '9'); lbl.setAttribute('fill', 'var(--tc-muted)');
 			lbl.textContent = fmtSpeed(val);
 			svg.appendChild(lbl);
 		}
@@ -402,7 +410,7 @@ function renderFullGraph(history, limitKbit, width, height) {
 		var tl = document.createElementNS(ns, 'text');
 		tl.setAttribute('x', tx.toFixed(1)); tl.setAttribute('y', (h - 8).toFixed(1));
 		tl.setAttribute('text-anchor', 'middle');
-		tl.setAttribute('font-size', '9'); tl.setAttribute('fill', 'var(--tm-text-mute)');
+		tl.setAttribute('font-size', '9'); tl.setAttribute('fill', 'var(--tc-muted)');
 		if (secs < 60) tl.textContent = secs + 's';
 		else tl.textContent = Math.floor(secs/60) + 'm' + (secs%60 ? (secs%60)+'s' : '');
 		svg.appendChild(tl);
@@ -410,7 +418,7 @@ function renderFullGraph(history, limitKbit, width, height) {
 		var vtick = document.createElementNS(ns, 'line');
 		vtick.setAttribute('x1', tx.toFixed(1)); vtick.setAttribute('x2', tx.toFixed(1));
 		vtick.setAttribute('y1', pad.top); vtick.setAttribute('y2', pad.top + gh);
-		vtick.setAttribute('stroke', 'var(--tm-border)'); vtick.setAttribute('stroke-width', '0.3');
+		vtick.setAttribute('stroke', 'var(--tc-border)'); vtick.setAttribute('stroke-width', '0.3');
 		vtick.setAttribute('stroke-dasharray', '2,4');
 		svg.appendChild(vtick);
 	}
@@ -427,7 +435,7 @@ function renderFullGraph(history, limitKbit, width, height) {
 		bandPath += ' Z';
 		var bandEl = document.createElementNS(ns, 'path');
 		bandEl.setAttribute('d', bandPath);
-		bandEl.setAttribute('fill', 'var(--tm-speed)'); bandEl.setAttribute('opacity', '0.08');
+		bandEl.setAttribute('fill', 'var(--tc-speed)'); bandEl.setAttribute('opacity', '0.08');
 		svg.appendChild(bandEl);
 	}
 
@@ -442,7 +450,7 @@ function renderFullGraph(history, limitKbit, width, height) {
 	// Download line
 	var dlLine = document.createElementNS(ns, 'polyline');
 	dlLine.setAttribute('points', dlPoints.join(' '));
-	dlLine.setAttribute('fill', 'none'); dlLine.setAttribute('stroke', 'var(--tm-speed)');
+	dlLine.setAttribute('fill', 'none'); dlLine.setAttribute('stroke', 'var(--tc-speed)');
 	dlLine.setAttribute('stroke-width', '2'); dlLine.setAttribute('stroke-linejoin', 'round'); dlLine.setAttribute('stroke-linecap', 'round');
 	svg.appendChild(dlLine);
 
@@ -456,7 +464,7 @@ function renderFullGraph(history, limitKbit, width, height) {
 		svg.appendChild(ulArea);
 		var ulLine = document.createElementNS(ns, 'polyline');
 		ulLine.setAttribute('points', ulPoints.join(' '));
-		ulLine.setAttribute('fill', 'none'); ulLine.setAttribute('stroke', 'var(--tm-state-ok)');
+		ulLine.setAttribute('fill', 'none'); ulLine.setAttribute('stroke', 'var(--tc-ok)');
 		ulLine.setAttribute('stroke-width', '1.5'); ulLine.setAttribute('stroke-linejoin', 'round');
 		ulLine.setAttribute('stroke-dasharray', '4,2'); ulLine.setAttribute('opacity', '0.8');
 		svg.appendChild(ulLine);
@@ -468,7 +476,7 @@ function renderFullGraph(history, limitKbit, width, height) {
 		var ll = document.createElementNS(ns, 'line');
 		ll.setAttribute('x1', pad.left); ll.setAttribute('x2', w - pad.right);
 		ll.setAttribute('y1', ly.toFixed(1)); ll.setAttribute('y2', ly.toFixed(1));
-		ll.setAttribute('stroke', 'var(--tm-rate-fg)'); ll.setAttribute('stroke-width', '1.5');
+		ll.setAttribute('stroke', 'var(--tc-warn)'); ll.setAttribute('stroke-width', '1.5');
 		ll.setAttribute('stroke-dasharray', '6,3'); ll.setAttribute('opacity', '0.85');
 		svg.appendChild(ll);
 		// Label background
@@ -476,7 +484,7 @@ function renderFullGraph(history, limitKbit, width, height) {
 		var limLbl = document.createElementNS(ns, 'text');
 		limLbl.setAttribute('x', (w - pad.right - 3).toFixed(1)); limLbl.setAttribute('y', (ly - 5).toFixed(1));
 		limLbl.setAttribute('text-anchor', 'end');
-		limLbl.setAttribute('font-size', '9'); limLbl.setAttribute('fill', 'var(--tm-rate-fg)'); limLbl.setAttribute('font-weight', '600');
+		limLbl.setAttribute('font-size', '9'); limLbl.setAttribute('fill', 'var(--tc-warn)'); limLbl.setAttribute('font-weight', '600');
 		limLbl.textContent = '⚡ ' + limTxt;
 		svg.appendChild(limLbl);
 	}
@@ -487,14 +495,14 @@ function renderFullGraph(history, limitKbit, width, height) {
 	var dlLeg = document.createElementNS(ns, 'text');
 	dlLeg.setAttribute('x', legendX); dlLeg.setAttribute('y', legendY);
 	dlLeg.setAttribute('text-anchor', 'end'); dlLeg.setAttribute('font-size', '9');
-	dlLeg.setAttribute('fill', 'var(--tm-speed)'); dlLeg.setAttribute('font-weight', '600');
+	dlLeg.setAttribute('fill', 'var(--tc-speed)'); dlLeg.setAttribute('font-weight', '600');
 	dlLeg.textContent = '↓ DL';
 	svg.appendChild(dlLeg);
 	if (hasUpload) {
 		var ulLeg = document.createElementNS(ns, 'text');
 		ulLeg.setAttribute('x', legendX); ulLeg.setAttribute('y', legendY + 12);
 		ulLeg.setAttribute('text-anchor', 'end'); ulLeg.setAttribute('font-size', '9');
-		ulLeg.setAttribute('fill', 'var(--tm-state-ok)'); ulLeg.setAttribute('font-weight', '600');
+		ulLeg.setAttribute('fill', 'var(--tc-ok)'); ulLeg.setAttribute('font-weight', '600');
 		ulLeg.textContent = '↑ UL';
 		svg.appendChild(ulLeg);
 	}
@@ -505,12 +513,12 @@ function renderFullGraph(history, limitKbit, width, height) {
 	var lastY = yScale(lastP.speed);
 	var dot = document.createElementNS(ns, 'circle');
 	dot.setAttribute('cx', lastX.toFixed(1)); dot.setAttribute('cy', lastY.toFixed(1));
-	dot.setAttribute('r', '3.5'); dot.setAttribute('fill', 'var(--tm-speed)'); dot.setAttribute('stroke', 'var(--tm-bg)'); dot.setAttribute('stroke-width', '1.5');
+	dot.setAttribute('r', '3.5'); dot.setAttribute('fill', 'var(--tc-speed)'); dot.setAttribute('stroke', 'var(--tc-bg)'); dot.setAttribute('stroke-width', '1.5');
 	svg.appendChild(dot);
 	var curLbl = document.createElementNS(ns, 'text');
 	curLbl.setAttribute('x', (lastX - 6).toFixed(1)); curLbl.setAttribute('y', (lastY - 8).toFixed(1));
 	curLbl.setAttribute('text-anchor', 'end'); curLbl.setAttribute('font-size', '10');
-	curLbl.setAttribute('fill', 'var(--tm-speed)'); curLbl.setAttribute('font-weight', '700');
+	curLbl.setAttribute('fill', 'var(--tc-speed)'); curLbl.setAttribute('font-weight', '700');
 	curLbl.textContent = fmtSpeed(lastP.speed);
 	svg.appendChild(curLbl);
 
@@ -521,27 +529,27 @@ function renderFullGraph(history, limitKbit, width, height) {
 	overlay.setAttribute('fill', 'transparent'); overlay.setAttribute('style', 'cursor:crosshair');
 	var crossV = document.createElementNS(ns, 'line');
 	crossV.setAttribute('y1', pad.top); crossV.setAttribute('y2', pad.top + gh);
-	crossV.setAttribute('stroke', 'var(--tm-text-mute)'); crossV.setAttribute('stroke-width', '0.8');
+	crossV.setAttribute('stroke', 'var(--tc-muted)'); crossV.setAttribute('stroke-width', '0.8');
 	crossV.setAttribute('stroke-dasharray', '3,2'); crossV.setAttribute('display', 'none');
 	var crossH = document.createElementNS(ns, 'line');
 	crossH.setAttribute('x1', pad.left); crossH.setAttribute('x2', w - pad.right);
-	crossH.setAttribute('stroke', 'var(--tm-text-mute)'); crossH.setAttribute('stroke-width', '0.8');
+	crossH.setAttribute('stroke', 'var(--tc-muted)'); crossH.setAttribute('stroke-width', '0.8');
 	crossH.setAttribute('stroke-dasharray', '3,2'); crossH.setAttribute('display', 'none');
 	var crossDot = document.createElementNS(ns, 'circle');
-	crossDot.setAttribute('r', '4'); crossDot.setAttribute('fill', 'var(--tm-speed)');
+	crossDot.setAttribute('r', '4'); crossDot.setAttribute('fill', 'var(--tc-speed)');
 	crossDot.setAttribute('stroke', '#fff'); crossDot.setAttribute('stroke-width', '2'); crossDot.setAttribute('display', 'none');
 	var crossLabel = document.createElementNS(ns, 'text');
-	crossLabel.setAttribute('font-size', '10'); crossLabel.setAttribute('fill', 'var(--tm-text)');
+	crossLabel.setAttribute('font-size', '10'); crossLabel.setAttribute('fill', 'currentColor');
 	crossLabel.setAttribute('font-weight', '600'); crossLabel.setAttribute('display', 'none');
 	var crossTime = document.createElementNS(ns, 'text');
-	crossTime.setAttribute('font-size', '9'); crossTime.setAttribute('fill', 'var(--tm-text-mute)');
+	crossTime.setAttribute('font-size', '9'); crossTime.setAttribute('fill', 'var(--tc-muted)');
 	crossTime.setAttribute('display', 'none');
 	// Upload crosshair dot
 	var crossDotUp = document.createElementNS(ns, 'circle');
-	crossDotUp.setAttribute('r', '3'); crossDotUp.setAttribute('fill', 'var(--tm-state-ok)');
+	crossDotUp.setAttribute('r', '3'); crossDotUp.setAttribute('fill', 'var(--tc-ok)');
 	crossDotUp.setAttribute('stroke', '#fff'); crossDotUp.setAttribute('stroke-width', '1.5'); crossDotUp.setAttribute('display', 'none');
 	var crossLabelUp = document.createElementNS(ns, 'text');
-	crossLabelUp.setAttribute('font-size', '9'); crossLabelUp.setAttribute('fill', 'var(--tm-state-ok)');
+	crossLabelUp.setAttribute('font-size', '9'); crossLabelUp.setAttribute('fill', 'var(--tc-ok)');
 	crossLabelUp.setAttribute('font-weight', '500'); crossLabelUp.setAttribute('display', 'none');
 
 	svg.appendChild(crossV); svg.appendChild(crossH);
@@ -597,125 +605,7 @@ function renderFullGraph(history, limitKbit, width, height) {
 	return svg;
 }
 
-function injectStyles() {
-	if (document.getElementById('tm-style')) return;
-	var s = document.createElement('style');
-	s.id = 'tm-style';
-	s.textContent =
-		':root {' +
-			'--tm-bg:        #ffffff;' +
-			'--tm-bg-alt:    #f7fafc;' +
-			'--tm-bg-subtle: #f7f8fa;' +
-			'--tm-text:      #1a202c;' +
-			'--tm-text-mute: #718096;' +
-			'--tm-text-faint:#a0aec0;' +
-			'--tm-border:    #e2e8f0;' +
-			'--tm-th-bg:     #4a5568;' +
-			'--tm-th-fg:     #ffffff;' +
-			'--tm-proto:     #2b6cb0;' +
-			'--tm-service:   #805ad5;' +
-			'--tm-state-ok:  #276749;' +
-			'--tm-state-wait:#c53030;' +
-			'--tm-state-close:#c05621;' +
-			'--tm-info-bg:   #ebf8ff;' +
-			'--tm-info-border:#90cdf4;' +
-			'--tm-info-fg:   #2c5282;' +
-			'--tm-blocked-bg:#fff5f5;' +
-			'--tm-blocked-border:#fc8181;' +
-			'--tm-blocked-fg:#c53030;' +
-			'--tm-rate-fg:   #c05621;' +
-			'--tm-drop-fg:   #9b2c2c;' +
-			'--tm-speed:     #3182ce;' +
-			'--tm-shape-fg:  #2b6cb0;' +
-			'--tm-hover:     #ebf8ff;' +
-			'--tm-section-action: #f0f4f8;' +
-			'--tm-section-data:   #ffffff;' +
-		'}' +
-		':root[data-darkmode="true"],' +
-		'html[data-darkmode="true"],' +
-		'body.dark, .dark {' +
-			'--tm-bg:        #1e1e1e;' +
-			'--tm-bg-alt:    #262626;' +
-			'--tm-bg-subtle: #242424;' +
-			'--tm-text:      #e2e8f0;' +
-			'--tm-text-mute: #a0aec0;' +
-			'--tm-text-faint:#718096;' +
-			'--tm-border:    #3a3a3a;' +
-			'--tm-th-bg:     #2d3748;' +
-			'--tm-th-fg:     #e2e8f0;' +
-			'--tm-proto:     #63b3ed;' +
-			'--tm-service:   #b794f4;' +
-			'--tm-state-ok:  #68d391;' +
-			'--tm-state-wait:#fc8181;' +
-			'--tm-state-close:#f6ad55;' +
-			'--tm-info-bg:   #1a365d;' +
-			'--tm-info-border:#2c5282;' +
-			'--tm-info-fg:   #bee3f8;' +
-			'--tm-blocked-bg:#3d1818;' +
-			'--tm-blocked-border:#9b2c2c;' +
-			'--tm-blocked-fg:#fc8181;' +
-			'--tm-rate-fg:   #f6ad55;' +
-			'--tm-drop-fg:   #fc8181;' +
-			'--tm-speed:     #63b3ed;' +
-			'--tm-shape-fg:  #63b3ed;' +
-			'--tm-hover:     #2d3748;' +
-			'--tm-section-action: #252a30;' +
-			'--tm-section-data:   #1e1e1e;' +
-		'}' +
-		'@keyframes tm-spin{to{transform:rotate(360deg)}}' +
-		'@keyframes tm-pulse{0%,100%{opacity:.5}50%{opacity:1}}' +
-		'.tm-spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--tm-border);' +
-		'border-top-color:var(--tm-text);border-radius:50%;animation:tm-spin .7s linear infinite;' +
-		'vertical-align:middle;margin-right:6px}' +
-		'.tm-speed-active{color:var(--tm-speed)!important;font-weight:600}' +
-		'.tm-speed-idle{color:var(--tm-text-faint)!important}' +
-		'tr.tm-row:hover td{background:var(--tm-hover)!important;cursor:pointer}' +
-		'.tm-link{color:inherit;text-decoration:none;border-bottom:1px dotted var(--tm-text-faint)}' +
-		'.tm-link:hover{border-bottom-style:solid}' +
-		'.tm-toggle-input{position:absolute;opacity:0;width:0;height:0}' +
-		'.tm-toggle{position:relative;display:inline-block;width:34px;height:18px;background:var(--tm-border);' +
-		'border-radius:9px;cursor:pointer;transition:background .2s}' +
-		'.tm-toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;' +
-		'background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 2px rgba(0,0,0,.2)}' +
-		'.tm-toggle-input:checked+.tm-toggle{background:var(--tm-proto)}' +
-		'.tm-toggle-input:checked+.tm-toggle::after{transform:translateX(16px)}' +
-		'[data-tip]{position:relative}' +
-		'[data-tip]::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 4px);left:50%;' +
-		'transform:translateX(-50%);padding:4px 8px;border-radius:4px;font-size:11px;font-weight:400;' +
-		'white-space:nowrap;background:var(--tm-th-bg);color:var(--tm-th-fg);' +
-		'pointer-events:none;opacity:0;transition:opacity .1s;z-index:999}' +
-		'[data-tip]:hover::after{opacity:1}' +
-		'.tg-section{border-left:3px solid #0088cc;padding-left:12px;margin-top:4px}' +
-		'.tg-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}' +
-		'.tg-row+.tg-row{margin-top:8px}' +
-		'.tg-input{font-size:12px;padding:4px 8px;background:var(--tm-bg);color:var(--tm-text);border:1px solid var(--tm-border);border-radius:4px;outline:none;transition:border-color .2s}' +
-		'.tg-input:focus{border-color:#0088cc}' +
-		'.tg-input--token{width:240px}' +
-		'.tg-input--chat{width:120px}' +
-		'.tg-input--template{width:100%;min-height:60px;resize:vertical;font-family:monospace;font-size:11px}' +
-		'.tg-btn{font-size:11px;padding:3px 10px;border:1px solid var(--tm-border);border-radius:4px;background:var(--tm-bg);color:var(--tm-text);cursor:pointer;transition:background .15s}' +
-		'.tg-btn:hover{background:var(--tm-hover)}' +
-		'.tg-btn--primary{background:#0088cc;color:#fff;border-color:#0088cc}' +
-		'.tg-btn--primary:hover{background:#006fa3}' +
-		'.tg-label{font-size:11px;color:var(--tm-text-mute);font-weight:500}' +
-		'.tg-status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:6px;vertical-align:middle}' +
-		'.tg-status-dot--on{background:var(--tm-state-ok)}' +
-		'.tg-status-dot--off{background:var(--tm-text-faint)}' +
-		'.tg-segmented{display:inline-flex;border:1px solid var(--tm-border);border-radius:6px;overflow:hidden;font-size:12px}' +
-		'.tg-segmented__item{padding:5px 14px;cursor:pointer;background:var(--tm-bg);color:var(--tm-text-mute);transition:background .15s,color .15s;user-select:none;border-right:1px solid var(--tm-border);border-top:none;border-bottom:none;border-left:none;font-family:inherit;font-size:inherit;line-height:inherit;outline:none}' +
-		'.tg-segmented__item:last-child{border-right:none}' +
-		'.tg-segmented__item--active{background:#0088cc;color:#fff}' +
-		'.tg-divider{font-size:11px;font-weight:600;color:var(--tm-text-mute);margin-top:12px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--tm-border)}' +
-		'.tg-bubble{background:var(--tm-bg-alt);border:1px solid var(--tm-border);border-radius:12px 12px 12px 4px;padding:10px 14px;max-width:280px;font-size:12px;line-height:1.5;box-shadow:0 1px 2px rgba(0,0,0,0.06)}' +
-		'.tg-bubble--kbd{text-align:center;border-radius:12px}' +
-		'.tg-kbd-row{display:flex;gap:2px;justify-content:center;margin-top:4px}' +
-		'.tg-kbd-btn{background:#3390ec;color:#fff;border-radius:6px;padding:5px 10px;font-size:11px;flex:1;text-align:center;min-width:0}' +
-		'.tg-commands{background:var(--tm-bg-subtle);border:1px solid var(--tm-border);border-radius:4px;padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.8}' +
-		'.tg-eye{cursor:pointer;font-size:14px;user-select:none;line-height:1}' +
-		'.tg-template-hint{font-size:10px;color:var(--tm-text-faint);margin-top:2px}' +
-		'.tg-save-status{font-size:11px;margin-left:8px;transition:opacity .3s}';
-	document.head.appendChild(s);
-}
+/* styles come from status.css — no runtime injection needed */
 
 
 var PRIVATE_RE = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/;
@@ -758,22 +648,22 @@ function buildGroupedTable(groups, sortCol, sortDir) {
 		return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
 	});
 
-	var thead = E('thead', {}, E('tr', {}, cols.map(function(c) {
+	var titleRow = E('div', { 'class': 'tr cbi-section-table-titles' }, cols.map(function(c) {
 		var arrow = c.key === sortCol ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
-		return E('th', { 'class': 'tm-th', 'data-col': c.key, 'data-num': c.num ? '1' : '0' }, c.label + arrow);
-	})));
-
-	var tbody = E('tbody', {}, sorted.map(function(r) {
-		return E('tr', { 'class': 'tm-row' }, [
-			E('td', { 'class': 'tm-td tm-td--medium tm-c-proto' }, escHtml(r.key)),
-			E('td', { 'class': 'tm-td tm-td--right tm-td--bold' }, String(r.count)),
-			E('td', { 'class': 'tm-td tm-td--right tm-c-proto' }, String(r.tcp)),
-			E('td', { 'class': 'tm-td tm-td--right tm-c-close' }, String(r.udp)),
-			E('td', { 'class': 'tm-td tm-td--right tm-td--mono tm-td--medium' }, fmtBytes(r.bytes))
-		]);
+		return E('div', { 'class': 'th', 'data-col': c.key, 'data-num': c.num ? '1' : '0' }, c.label + arrow);
 	}));
 
-	return E('table', { 'class': 'tm-table' }, [thead, tbody]);
+	var rows = sorted.map(function(r) {
+		return E('div', { 'class': 'tr' }, [
+			E('div', { 'class': 'td tc-c-speed tc-fw-bold' }, escHtml(r.key)),
+			E('div', { 'class': 'td tc-right tc-fw-bold' }, String(r.count)),
+			E('div', { 'class': 'td tc-right tc-c-speed' }, String(r.tcp)),
+			E('div', { 'class': 'td tc-right tc-c-warn' }, String(r.udp)),
+			E('div', { 'class': 'td tc-right tc-mono' }, fmtBytes(r.bytes))
+		]);
+	});
+
+	return E('div', { 'class': 'table tc-table' }, [titleRow].concat(rows));
 }
 
 function buildTable(conns, sortCol, sortDir, rdnsMode, hiddenCols) {
@@ -796,44 +686,44 @@ function buildTable(conns, sortCol, sortDir, rdnsMode, hiddenCols) {
 		return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
 	});
 
-	var thead = E('thead', {}, E('tr', {}, cols.map(function(c) {
+	var titleRow = E('div', { 'class': 'tr cbi-section-table-titles' }, cols.map(function(c) {
 		var arrow = c.key === sortCol ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
-		return E('th', { 'class': 'tm-th', 'data-col': c.key, 'data-num': c.num ? '1' : '0' }, c.label + arrow);
-	})));
+		return E('div', { 'class': 'th', 'data-col': c.key, 'data-num': c.num ? '1' : '0' }, c.label + arrow);
+	}));
 
-	var tbody = E('tbody', {}, sorted.map(function(r, i) {
+	var rows = sorted.map(function(r) {
 		var state = escHtml(r.state || '');
-		var scCls = state === 'ESTABLISHED' ? ' tm-c-ok' : state === 'TIME_WAIT' ? ' tm-c-wait' : state === 'CLOSE_WAIT' ? ' tm-c-close' : '';
+		var scCls = state === 'ESTABLISHED' ? ' tc-c-ok' : state === 'TIME_WAIT' ? ' tc-c-err' : state === 'CLOSE_WAIT' ? ' tc-c-warn' : '';
 
 		var dst = r.dst || '';
 		var dstEl = dst
 			? E('a', { 'href': 'https://ipinfo.io/'+dst, 'target': '_blank', 'rel': 'noopener noreferrer',
-			           'class':'tm-link', 'onclick': 'event.stopPropagation()' }, dst)
+			           'class':'tc-link', 'onclick': 'event.stopPropagation()' }, dst)
 			: '';
 
-		var hostCell = E('td', { 'class': 'tm-td tm-td--compact', 'data-dst': dst });
+		var hostCell = E('div', { 'class': 'td', 'data-dst': dst });
 		if (r.host) {
 			hostCell.textContent = r.host;
 		} else if (rdnsMode && !PRIVATE_RE.test(dst)) {
-			hostCell.innerHTML = '<span class="tm-c-faint" style="font-style:italic">' + _('resolving…') + '</span>';
+			hostCell.innerHTML = '<span class="tc-c-faint" style="font-style:italic">' + _('resolving…') + '</span>';
 		} else {
 			hostCell.textContent = '—';
 		}
 
 		var cellMap = {
-			proto: E('td', { 'class': 'tm-td tm-td--compact tm-td--bold tm-c-proto' }, r.proto || ''),
-			dst: E('td', { 'class': 'tm-td tm-td--compact tm-td--mono' }, dstEl),
-			host: hostCell,
-			port: E('td', { 'class': 'tm-td tm-td--compact tm-td--right tm-td--mono' }, String(r.port || '')),
-			service: E('td', { 'class': 'tm-td tm-td--compact tm-c-service' }, escHtml(r.service || (SERVICE_PORTS[r.port]||''))),
-			bytes: E('td', { 'class': 'tm-td tm-td--compact tm-td--right tm-td--mono tm-td--medium' }, fmtBytes(r.bytes)),
-			state: E('td', { 'class': 'tm-td tm-td--compact tm-td--medium' + scCls }, state)
+			proto:   E('div', { 'class': 'td tc-fw-bold tc-c-speed' }, r.proto || ''),
+			dst:     E('div', { 'class': 'td tc-mono' }, dstEl),
+			host:    hostCell,
+			port:    E('div', { 'class': 'td tc-right tc-mono' }, String(r.port || '')),
+			service: E('div', { 'class': 'td tc-c-speed' }, escHtml(r.service || (SERVICE_PORTS[r.port]||''))),
+			bytes:   E('div', { 'class': 'td tc-right tc-mono tc-fw-bold' }, fmtBytes(r.bytes)),
+			state:   E('div', { 'class': 'td tc-fw-bold' + scCls }, state)
 		};
 		var cells = cols.map(function(c) { return cellMap[c.key]; });
-		return E('tr', { 'class': 'tm-row' }, cells);
-	}));
+		return E('div', { 'class': 'tr' }, cells);
+	});
 
-	return E('table', { 'class': 'tm-table' }, [thead, tbody]);
+	return E('div', { 'class': 'table tc-table' }, [titleRow].concat(rows));
 }
 
 function buildSummaryTable(rows, sortCol, sortDir, onSort, onSelect, speedMap, dropMap, shapeMap, speedHistory, hiddenCols) {
@@ -849,8 +739,8 @@ function buildSummaryTable(rows, sortCol, sortDir, onSort, onSelect, speedMap, d
 		{ key:'udp',              label:'UDP',          num:true,  tip: _('UDP bytes transferred'), hide:true },
 		{ key:'blocked',          label: _('Inet'),     num:false, tip: _('Internet access status (paused = traffic blocked)') },
 		{ key:'conn_type',        label: _('Link'),     num:false, tip: _('Connection interface (WiFi band or LAN port)') },
-		{ key:'_throttle_kbit',   label: '⚡',            num:true,  tip: _('Speed limit: shaper (queue) or limiter (drop)') },
-		{ key:'_drop_packets',    label: '🚫',           num:true,  tip: _('Packets dropped by rate limiter'), hide:true },
+		{ key:'_throttle_kbit',   label: _('Limit'),            num:true,  tip: _('Speed limit: shaper (queue) or limiter (drop)') },
+		{ key:'_drop_packets',    label: _('Drop'),           num:true,  tip: _('Packets dropped by rate limiter'), hide:true },
 		{ key:'_backlog',         label: '📦',           num:true,  tip: _('Bytes queued in traffic shaper'), hide:true }
 	];
 
@@ -905,47 +795,47 @@ function buildSummaryTable(rows, sortCol, sortDir, onSort, onSelect, speedMap, d
 	});
 
 	var hasSpeedData = Object.keys(speedMap).length > 0;
-	var thead = E('thead', {}, E('tr', {}, visibleCols.map(function(c) {
+	var titleRow = E('div', { 'class': 'tr cbi-section-table-titles' }, visibleCols.map(function(c) {
 		var arrow = c.key === sortCol ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
 		var compact = c.key === '_spark' || c.key === '_throttle_kbit' || c.key === '_drop_packets' || c.key === '_backlog';
-		var thExtra = (c.key === '_spark' ? ';cursor:default;width:68px' : '') + (compact ? ';white-space:nowrap;width:1%' : '');
-		var attrs = { 'class': 'tm-th', 'style': thExtra || undefined, 'data-col': c.key, 'data-num': c.num ? '1' : '0' };
+		var style = (c.key === '_spark' ? 'cursor:default;width:68px;' : '') + (compact ? 'white-space:nowrap;width:1%;' : '');
+		var attrs = { 'class': 'th', 'style': style || undefined, 'data-col': c.key, 'data-num': c.num ? '1' : '0' };
 		if (c.tip) attrs['data-tip'] = c.tip;
 		var label = c.label + arrow;
 		if (c.key === '_speed' && !hasSpeedData) label = c.label + ' ';
-		var th = E('th', attrs);
-		th.innerHTML = label + ((c.key === '_speed' && !hasSpeedData) ? '<span class="tm-spinner"></span>' : '');
+		var th = E('div', attrs);
+		th.innerHTML = label + ((c.key === '_speed' && !hasSpeedData) ? '<span class="tc-spinner"></span>' : '');
 		if (c.key !== '_spark') th.addEventListener('click', function() { onSort(c.key, c.num); });
 		return th;
-	})));
+	}));
 
-	var tbody = E('tbody', {}, sorted.map(function(r, i) {
+	var tableRows = sorted.map(function(r) {
 		var sd = speedMap[r.ip];
 		var cellMap = {};
 
-		cellMap.name = E('td', { 'class': 'tm-td tm-td--bold tm-c-proto' }, escHtml(r.name));
-		cellMap.ip = E('td', { 'class': 'tm-td tm-td--mono' }, escHtml(r.ip));
-		var macEl = r.mac ? E('a', { 'href':'/cgi-bin/luci/admin/network/dhcp','target':'_blank','rel':'noopener','class':'tm-link','title':_('Open DHCP/DNS bindings'),'onclick':'event.stopPropagation()' }, r.mac) : '';
-		cellMap.mac = E('td', { 'class': 'tm-td tm-td--mono tm-td--sm tm-c-mute' }, macEl || '');
+		cellMap.name = E('div', { 'class': 'td tc-fw-bold tc-c-speed' }, escHtml(r.name));
+		cellMap.ip   = E('div', { 'class': 'td tc-mono' }, escHtml(r.ip));
+		var macEl = r.mac ? E('a', { 'href':'/cgi-bin/luci/admin/network/dhcp','target':'_blank','rel':'noopener','class':'tc-link','title':_('Open DHCP/DNS bindings'),'onclick':'event.stopPropagation()' }, r.mac) : '';
+		cellMap.mac  = E('div', { 'class': 'td tc-mono tc-sm tc-c-muted' }, macEl || '');
 
-		cellMap._speed = E('td', { 'class': 'tm-td tm-td--right tm-td--mono', 'data-speed-ip': r.ip, 'title': sd ? (_('Avg')+': '+fmtSpeed(sd.avg)+' / '+_('Max')+': '+fmtSpeed(sd.max)) : _('Calculating…') });
-		if (sd && sd.current > 1024) { cellMap._speed.className = 'tm-speed-active'; cellMap._speed.textContent = fmtSpeed(sd.current); }
-		else { cellMap._speed.className = 'tm-speed-idle'; cellMap._speed.textContent = sd ? fmtSpeed(sd.current) : '—'; }
+		cellMap._speed = E('div', { 'class': 'td tc-right tc-mono', 'data-speed-ip': r.ip, 'title': sd ? (_('Avg')+': '+fmtSpeed(sd.avg)+' / '+_('Max')+': '+fmtSpeed(sd.max)) : _('Calculating…') });
+		if (sd && sd.current > 1024) { cellMap._speed.className = 'td tc-right tc-mono tc-speed-active'; cellMap._speed.textContent = fmtSpeed(sd.current); }
+		else { cellMap._speed.className = 'td tc-right tc-mono tc-speed-idle'; cellMap._speed.textContent = sd ? fmtSpeed(sd.current) : '—'; }
 
 		var sparkTip = r._throttle_kbit > 0 ? (_('Limit') + ': ' + fmtRate(r._throttle_kbit)) : '';
-		cellMap._spark = E('td', { 'class': 'tm-td tm-td--center', 'style': 'padding:2px 4px', 'data-spark-ip': r.ip, 'data-tip': sparkTip || undefined });
+		cellMap._spark = E('div', { 'class': 'td tc-center', 'style': 'padding:2px 4px', 'data-spark-ip': r.ip, 'data-tip': sparkTip || undefined });
 		var sparkSvg = renderSparkline(speedHistory[r.ip], globalSpeedMax, 60, 20, r._throttle_kbit);
 		if (sparkSvg) cellMap._spark.appendChild(sparkSvg);
 
-		cellMap.conns = E('td', { 'class': 'tm-td tm-td--right tm-td--bold' }, String(r.conns||0));
-		cellMap.total = E('td', { 'class': 'tm-td tm-td--right tm-td--mono tm-td--sm' }, fmtBytes(r.total||0));
-		cellMap.tcp = E('td', { 'class': 'tm-td tm-td--right tm-td--mono tm-td--sm tm-c-proto' }, fmtBytes(r.tcp||0));
-		cellMap.udp = E('td', { 'class': 'tm-td tm-td--right tm-td--mono tm-td--sm tm-c-close' }, fmtBytes(r.udp||0));
+		cellMap.conns = E('div', { 'class': 'td tc-right tc-fw-bold' }, String(r.conns||0));
+		cellMap.total = E('div', { 'class': 'td tc-right tc-mono tc-sm' }, fmtBytes(r.total||0));
+		cellMap.tcp   = E('div', { 'class': 'td tc-right tc-mono tc-sm tc-c-speed' }, fmtBytes(r.tcp||0));
+		cellMap.udp   = E('div', { 'class': 'td tc-right tc-mono tc-sm tc-c-warn' }, fmtBytes(r.udp||0));
 
 		var inetBadge = r.blocked
-			? E('span', { 'class': 'tm-c-rate tm-fw-600' }, '⏸️ ' + _('paused'))
-			: E('span', { 'class': 'tm-c-proto' }, '▶️ ' + _('ok'));
-		cellMap.blocked = E('td', { 'class': 'tm-td tm-td--center' }, inetBadge);
+			? E('span', { 'class': 'tc-c-warn tc-fw-bold' }, '⏸ ' + _('blocked'))
+			: E('span', { 'class': 'tc-c-faint' }, '—');
+		cellMap.blocked = E('div', { 'class': 'td tc-center' }, inetBadge);
 
 		var linkBadge;
 		var ct = r.conn_type || 'ethernet';
@@ -962,44 +852,45 @@ function buildSummaryTable(rows, sortCol, sortDir, onSort, onSelect, speedMap, d
 					tip = _('Last seen') + ': ' + lastType + ', ' + agoStr + ' ' + _('ago');
 				}
 			}
-			linkBadge = E('span', { 'class': 'tm-c-faint', 'style': 'cursor:help', 'title': tip }, '❓');
+			linkBadge = E('span', { 'class': 'tc-c-faint', 'style': 'cursor:help', 'title': tip }, '?');
 		} else if (isWifi) {
 			var wLabel = ct === 'wifi' ? 'WiFi' : ct;
 			linkBadge = r.wifi_blocked
-				? E('span', { 'class': 'tm-c-rate tm-fw-600', 'style': 'text-decoration:line-through' }, '📶 ' + wLabel)
-				: E('span', { 'class': 'tm-c-proto' }, '📶 ' + wLabel);
+				? E('span', { 'class': 'tc-c-warn tc-fw-bold', 'style': 'text-decoration:line-through' }, wLabel)
+				: E('span', { 'class': 'tc-c-speed' }, wLabel);
 		} else {
 			var ethLabel = (ct === 'ethernet') ? 'eth' : ct;
-			linkBadge = E('span', { 'class': 'tm-c-mute' }, [mkEthIcon(14), document.createTextNode(ethLabel)]);
+			linkBadge = E('span', { 'class': 'tc-c-muted' }, [mkEthIcon(14), document.createTextNode(ethLabel)]);
 		}
-		cellMap.conn_type = E('td', { 'class': 'tm-td tm-td--center' }, linkBadge);
+		cellMap.conn_type = E('div', { 'class': 'td tc-center' }, linkBadge);
 
 		var throttleBadge;
-		if (r._throttle_mode === 'shaper') { throttleBadge = E('span', { 'class': 'tm-c-shape tm-fw-600', 'title': _('Shaper (tc/HTB queue)') }, '🌊 ' + fmtRate(r._throttle_kbit)); }
-		else if (r._throttle_mode === 'limiter') { throttleBadge = E('span', { 'class': 'tm-c-rate tm-fw-600', 'title': _('Limiter (nft drop)') }, '⚡ ' + fmtRate(r._throttle_kbit)); }
-		else { throttleBadge = E('span', { 'class': 'tm-c-faint' }, '—'); }
-		cellMap._throttle_kbit = E('td', { 'class': 'tm-td tm-td--center' }, throttleBadge);
+		if (r._throttle_mode === 'shaper') { throttleBadge = E('span', { 'class': 'tc-c-speed tc-fw-bold', 'title': _('Shaper (tc/HTB queue)') }, '≈ ' + fmtRate(r._throttle_kbit)); }
+		else if (r._throttle_mode === 'limiter') { throttleBadge = E('span', { 'class': 'tc-c-warn tc-fw-bold', 'title': _('Limiter (nft drop)') }, '⚡ ' + fmtRate(r._throttle_kbit)); }
+		else { throttleBadge = E('span', { 'class': 'tc-c-faint' }, '—'); }
+		cellMap._throttle_kbit = E('div', { 'class': 'td tc-center' }, throttleBadge);
 
 		var dp = r._drop_packets || 0;
-		var dropBadge = dp > 0 ? E('span', { 'class': 'tm-c-drop tm-fw-600', 'title': fmtBytes(r._drop_bytes||0)+' '+_('dropped') }, '🚫 ' + dp) : E('span', { 'class': 'tm-c-faint' }, '—');
-		cellMap._drop_packets = E('td', { 'class': 'tm-td tm-td--center', 'data-drop-ip': r.ip }, dropBadge);
+		var dropBadge = dp > 0 ? E('span', { 'class': 'tc-c-err tc-fw-bold', 'title': fmtBytes(r._drop_bytes||0)+' '+_('dropped') }, String(dp)) : E('span', { 'class': 'tc-c-faint' }, '—');
+		cellMap._drop_packets = E('div', { 'class': 'td tc-center', 'data-drop-ip': r.ip }, dropBadge);
 
 		var bl = r._backlog || 0;
-		var backlogBadge = bl > 0 ? E('span', { 'class': 'tm-c-shape tm-fw-600', 'title': _('Bytes queued in tc') }, fmtBytes(bl)) : E('span', { 'class': 'tm-c-faint' }, '—');
-		cellMap._backlog = E('td', { 'class': 'tm-td tm-td--center', 'data-backlog-ip': r.ip }, backlogBadge);
+		var backlogBadge = bl > 0 ? E('span', { 'class': 'tc-c-speed tc-fw-bold', 'title': _('Bytes queued in tc') }, fmtBytes(bl)) : E('span', { 'class': 'tc-c-faint' }, '—');
+		cellMap._backlog = E('div', { 'class': 'td tc-center', 'data-backlog-ip': r.ip }, backlogBadge);
 
 		var cells = visibleCols.map(function(c) { return cellMap[c.key]; });
-		var row = E('tr', { 'class': 'tm-row', 'title': _('Click to inspect') + ' ' + r.name }, cells);
+		var row = E('div', { 'class': 'tr', 'title': _('Click to inspect') + ' ' + r.name }, cells);
 		row.addEventListener('click', function() { addRecentDevice(r.ip, r.name); onSelect(r.ip, r.name); });
 		return row;
-	}));
+	});
 
-	return E('table', { 'class': 'tm-table' }, [thead, tbody]);
+	return E('div', { 'class': 'table tc-table' }, [titleRow].concat(tableRows));
 }
 
 function setStatus(el, type, msg) {
-	el.className = 'tm-status tm-status--' + (type || 'ok');
-	el.innerHTML = type === 'loading' ? '<span class="tm-spinner"></span>'+escHtml(msg) : escHtml(msg);
+	var cls = {loading: '', ok: 'success', error: 'error', action: 'warning'};
+	el.className = 'alert-message ' + (cls[type] || '');
+	el.innerHTML = type === 'loading' ? '<span class="tc-spinner"></span>'+escHtml(msg) : escHtml(msg);
 }
 
 function updateUrlParams(opts) {
@@ -1040,7 +931,6 @@ function buildExtendedStatsPanel(ip, shapeMap, dropMap, speedMap) {
 	var dm = dropMap[ip];
 	var spd = speedMap[ip];
 
-	var td = 'padding:5px 12px;border-bottom:1px solid var(--tm-border);font-size:13px';
 	var tooltips = {
 		'Drops': _('packets dropped by queue overflow'),
 		'Overlimits': _('rate exceeded events'),
@@ -1057,16 +947,16 @@ function buildExtendedStatsPanel(ip, shapeMap, dropMap, speedMap) {
 
 	function addRow(label, value, color) {
 		var tip = tooltips[label] || '';
-		rows.push(E('tr', { 'class': 'tm-row' }, [
-			E('td', { 'style': td + ';color:var(--tm-text-mute)', 'title': tip }, label),
-			E('td', { 'style': td + ';text-align:right;font-family:monospace;font-weight:600' + (color ? ';color:' + color : '') }, value)
+		rows.push(E('div', { 'class': 'tr' }, [
+			E('div', { 'class': 'td tc-c-muted', 'title': tip }, label),
+			E('div', { 'class': 'td tc-right tc-mono tc-fw-bold', 'style': color ? 'color:' + color : '' }, value)
 		]));
 	}
 
 	if (sm && sm.rate_kbit > 0) {
-		if (sm.drops != null) addRow(_('Drops'), String(sm.drops), sm.drops > 0 ? 'var(--tm-drop-fg)' : null);
-		if (sm.overlimits != null) addRow(_('Overlimits'), String(sm.overlimits), sm.overlimits > 0 ? 'var(--tm-rate-fg)' : null);
-		if (sm.ecn_mark != null) addRow(_('ECN marks'), String(sm.ecn_mark), sm.ecn_mark > 0 ? 'var(--tm-rate-fg)' : null);
+		if (sm.drops != null) addRow(_('Drops'), String(sm.drops), sm.drops > 0 ? 'var(--tc-err)' : null);
+		if (sm.overlimits != null) addRow(_('Overlimits'), String(sm.overlimits), sm.overlimits > 0 ? 'var(--tc-warn)' : null);
+		if (sm.ecn_mark != null) addRow(_('ECN marks'), String(sm.ecn_mark), sm.ecn_mark > 0 ? 'var(--tc-warn)' : null);
 		if (sm.new_flows != null || sm.old_flows != null) {
 			addRow(_('Flows'), (sm.new_flows || 0) + ' ' + _('new') + ' / ' + (sm.old_flows || 0) + ' ' + _('old'), null);
 		}
@@ -1078,37 +968,33 @@ function buildExtendedStatsPanel(ip, shapeMap, dropMap, speedMap) {
 			var currentBps = spd.current || 0;
 			var rateBytes = (sm.rate_kbit * 1000) / 8;
 			var util = rateBytes > 0 ? ((currentBps / rateBytes) * 100) : 0;
-			var utilColor = util > 95 ? 'var(--tm-drop-fg)' : util > 70 ? 'var(--tm-rate-fg)' : 'var(--tm-state-ok)';
+			var utilColor = util > 95 ? 'var(--tc-err)' : util > 70 ? 'var(--tc-warn)' : 'var(--tc-ok)';
 			addRow(_('Utilization'), util.toFixed(1) + '%', utilColor);
 		}
 	} else if (dm && dm.rate_kbit > 0) {
-		addRow(_('Packets dropped'), String(dm.packets || 0), (dm.packets || 0) > 0 ? 'var(--tm-drop-fg)' : null);
-		addRow(_('Bytes dropped'), fmtBytes(dm.bytes || 0), (dm.bytes || 0) > 0 ? 'var(--tm-drop-fg)' : null);
+		addRow(_('Packets dropped'), String(dm.packets || 0), (dm.packets || 0) > 0 ? 'var(--tc-err)' : null);
+		addRow(_('Bytes dropped'), fmtBytes(dm.bytes || 0), (dm.bytes || 0) > 0 ? 'var(--tc-err)' : null);
 		var dropBytes = dm.bytes || 0;
 		var passBytes = dm.pass_bytes || 0;
 		var totalBytes = dropBytes + passBytes;
 		var dropRatio = totalBytes > 0 ? ((dropBytes / totalBytes) * 100) : 0;
-		var drColor = dropRatio > 10 ? 'var(--tm-drop-fg)' : dropRatio > 2 ? 'var(--tm-rate-fg)' : null;
+		var drColor = dropRatio > 10 ? 'var(--tc-err)' : dropRatio > 2 ? 'var(--tc-warn)' : null;
 		addRow(_('Drop ratio'), dropRatio.toFixed(1) + '%', drColor);
 	}
 
 	if (rows.length === 0) {
-		return E('div', { 'class': 'tm-ext-panel', 'style': 'color:var(--tm-text-mute)' }, _('No extended stats available for this device.'));
+		return E('div', { 'class': 'tc-ext-panel', 'style': 'color:var(--tc-muted)' }, _('No extended stats available for this device.'));
 	}
 
-	var tbl = E('table', { 'class': 'tm-table' }, [
-		E('tbody', {}, rows)
-	]);
-
-	return E('div', { 'class': 'tm-ext-panel' }, [
-		E('div', { 'class': 'tm-ext-panel__title' }, _('Extended Statistics')),
-		tbl
+	return E('div', { 'class': 'tc-ext-panel' }, [
+		E('div', { 'class': 'tc-ext-panel__title' }, _('Extended Statistics')),
+		E('div', { 'class': 'table tc-table' }, rows)
 	]);
 }
 
 function buildExtendedStatsLegend(shapeMap, dropMap) {
-	var labelStyle = 'color:var(--tm-text-mute);font-size:12px';
-	var valueStyle = 'font-family:monospace;font-weight:600;color:var(--tm-text);font-size:13px';
+	var labelStyle = 'color:var(--tc-muted);font-size:12px';
+	var valueStyle = 'font-family:monospace;font-weight:600;color:currentColor;font-size:13px';
 	var totalDrops = 0, totalOverlimits = 0, totalEcn = 0, totalMemory = 0;
 	var totalDropPkts = 0, totalDropBytes = 0;
 	var shapedCount = 0, limitedCount = 0;
@@ -1135,30 +1021,30 @@ function buildExtendedStatsLegend(shapeMap, dropMap) {
 	var rows = [];
 	function addRow(label, value, color) {
 		var vs = color ? valueStyle + ';color:' + color : valueStyle;
-		rows.push(E('div', { 'class': 'tm-ext-row' }, [
+		rows.push(E('div', { 'class': 'tc-ext-row' }, [
 			E('span', { 'style': labelStyle }, label),
 			E('span', { 'style': vs }, value)
 		]));
 	}
 
 	if (shapedCount > 0) {
-		addRow(_('Shaped devices'), String(shapedCount), 'var(--tm-shape-fg)');
-		addRow(_('Total drops'), String(totalDrops), totalDrops > 0 ? 'var(--tm-drop-fg)' : null);
-		addRow(_('Overlimits'), String(totalOverlimits), totalOverlimits > 0 ? 'var(--tm-rate-fg)' : null);
+		addRow(_('Shaped devices'), String(shapedCount), 'var(--tc-speed)');
+		addRow(_('Total drops'), String(totalDrops), totalDrops > 0 ? 'var(--tc-err)' : null);
+		addRow(_('Overlimits'), String(totalOverlimits), totalOverlimits > 0 ? 'var(--tc-warn)' : null);
 		addRow(_('ECN marks'), String(totalEcn));
 		addRow(_('Total queue memory'), fmtBytes(totalMemory));
 	}
 	if (limitedCount > 0) {
-		addRow(_('Limited devices'), String(limitedCount), 'var(--tm-rate-fg)');
-		addRow(_('Total dropped'), totalDropPkts + ' ' + _('pkts') + ' / ' + fmtBytes(totalDropBytes), totalDropPkts > 0 ? 'var(--tm-drop-fg)' : null);
+		addRow(_('Limited devices'), String(limitedCount), 'var(--tc-warn)');
+		addRow(_('Total dropped'), totalDropPkts + ' ' + _('pkts') + ' / ' + fmtBytes(totalDropBytes), totalDropPkts > 0 ? 'var(--tc-err)' : null);
 	}
 	if (rows.length === 0) {
-		rows.push(E('div', { 'style': 'padding:4px 0;color:var(--tm-text-mute)' }, _('No extended stats available.')));
+		rows.push(E('div', { 'style': 'padding:4px 0;color:var(--tc-muted)' }, _('No extended stats available.')));
 	}
 
-	return E('div', { 'class': 'tm-ext-panel tm-ext-panel--sticky' }, [
-		E('div', { 'class': 'tm-ext-panel__title' }, _('Extended Statistics') + ' (' + _('all devices') + ')'),
-		E('div', { 'class': 'tm-ext-col-flex' }, rows)
+	return E('div', { 'class': 'tc-ext-panel tc-ext-panel--sticky' }, [
+		E('div', { 'class': 'tc-ext-panel__title' }, _('Extended Statistics') + ' (' + _('all devices') + ')'),
+		E('div', { 'class': 'tc-ext-col-flex' }, rows)
 	]);
 }
 
@@ -1185,198 +1071,20 @@ function deviceIcon(type, size) {
 	return E('span', {'style':'font-size:'+(size||18)+'px;line-height:1'}, icons[type] || icons.device);
 }
 
-function buildCardGrid(devices, onSelect, speedMap, shapeMap, dropMap) {
-	var selectedValue = '__all__';
-	var wrapper = E('div', {'class':'tm-card-grid'});
-
-	function render(devs) {
-		while (wrapper.firstChild) wrapper.removeChild(wrapper.firstChild);
-
-		var allCard = E('div', {
-			'class': 'tm-card tm-card--all',
-			'data-value': '__all__'
-		}, [E('span', {'style':'font-size:20px'}, '📊'), E('span', {}, _('All devices'))]);
-		allCard.addEventListener('click', function() { selectItem('__all__'); });
-		wrapper.appendChild(allCard);
-
-		devs.forEach(function(d) {
-			var type = guessDeviceType(d);
-			var spd = speedMap && speedMap[d.ip];
-			var sm = shapeMap && shapeMap[d.ip];
-			var dm = dropMap && dropMap[d.ip];
-			var isBlocked = d.blocked;
-			var hasLimit = (sm && sm.rate_kbit > 0) || (dm && dm.rate_kbit > 0);
-
-			var statusDot = isBlocked ? '🔴' : (hasLimit ? '🟠' : (spd && spd.current > 1024 ? '🟢' : '⚪'));
-			var speedLabel = spd && spd.current > 0 ? fmtSpeed(spd.current) : '';
-			var isSelected = selectedValue === d.ip;
-			var card = E('div', {
-				'class': 'tm-card',
-				'style': isSelected ? 'border-color:var(--tm-proto);background:var(--tm-info-bg)' : '',
-				'data-value': d.ip,
-				'title': d.name + ' (' + d.ip + ')'
-			}, [
-				E('div', {'class':'tm-device-icon-wrap'}, [
-					deviceIcon(type, 22),
-					E('span', {'class':'tm-device-icon-badge'}, statusDot)
-				]),
-				E('div', {'class':'tm-card__name'}, d.name || d.ip),
-				E('div', {'class':'tm-card__ip'}, d.ip),
-				speedLabel ? E('div', {'class':'tm-card__speed'}, speedLabel) : E('span')
-			]);
-			card.addEventListener('click', function() { selectItem(d.ip); });
-			card.addEventListener('mouseenter', function() { if (selectedValue !== d.ip) this.style.borderColor = 'var(--tm-text-mute)'; });
-			card.addEventListener('mouseleave', function() { if (selectedValue !== d.ip) this.style.borderColor = 'var(--tm-border)'; });
-			wrapper.appendChild(card);
-		});
-	}
-
-	function selectItem(value) {
-		selectedValue = value;
-		render(devices);
-		onSelect(value);
-	}
-
-	render(devices);
-	return {
-		el: wrapper,
-		getValue: function() { return selectedValue; },
-		setValue: function(val) { selectedValue = val; render(devices); },
-		updateDevices: function(newDevices) { devices = newDevices; render(devices); },
-		refresh: function(sm, dm, spdm) { speedMap = spdm; shapeMap = sm; dropMap = dm; render(devices); }
-	};
-}
-
-function buildAvatarStrip(devices, onSelect, speedMap) {
-	var selectedValue = '__all__';
-	var wrapper = E('div', {'class':'tm-avatar-strip'});
-
-	function render(devs) {
-		while (wrapper.firstChild) wrapper.removeChild(wrapper.firstChild);
-
-		var allPill = E('div', {
-			'class':'tm-avatar-pill',
-			'data-value':'__all__'
-		}, [
-			E('div', {'style':'width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
-				'border:2px solid '+(selectedValue==='__all__'?'var(--tm-proto)':'var(--tm-border)')+';' +
-				'background:'+(selectedValue==='__all__'?'var(--tm-info-bg)':'var(--tm-bg)')+';font-size:18px;transition:all .15s'}, '📊'),
-			E('div', {'style':'font-size:9px;color:'+(selectedValue==='__all__'?'var(--tm-proto)':'var(--tm-text-mute)')+';font-weight:'+(selectedValue==='__all__'?'700':'400')+';text-align:center;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, _('All'))
-		]);
-		allPill.addEventListener('click', function() { selectItem('__all__'); });
-		wrapper.appendChild(allPill);
-
-		devs.forEach(function(d) {
-			var type = guessDeviceType(d);
-			var isActive = selectedValue === d.ip;
-			var spd = speedMap && speedMap[d.ip];
-			var hasSpeed = spd && spd.current > 1024;
-			var ringColor = isActive ? 'var(--tm-proto)' : (hasSpeed ? 'var(--tm-speed)' : 'var(--tm-border)');
-			var bg = isActive ? 'var(--tm-info-bg)' : 'var(--tm-bg)';
-
-			var pill = E('div', {
-				'class':'tm-avatar-pill',
-				'data-value': d.ip,
-				'title': d.name + ' — ' + d.ip
-			}, [
-				E('div', {'style':'width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
-					'border:2px solid '+ringColor+';background:'+bg+';font-size:18px;transition:all .15s'}, deviceIcon(type, 20)),
-				E('div', {'style':'font-size:9px;color:'+(isActive?'var(--tm-proto)':'var(--tm-text-mute)')+';font-weight:'+(isActive?'700':'400')+';text-align:center;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, d.name || d.ip)
-			]);
-			pill.addEventListener('click', function() { selectItem(d.ip); });
-			wrapper.appendChild(pill);
-		});
-	}
-
-	function selectItem(value) {
-		selectedValue = value;
-		render(devices);
-		onSelect(value);
-	}
-
-	render(devices);
-	return {
-		el: wrapper,
-		getValue: function() { return selectedValue; },
-		setValue: function(val) { selectedValue = val; render(devices); },
-		updateDevices: function(newDevices) { devices = newDevices; render(devices); },
-		refresh: function(spdm) { speedMap = spdm; render(devices); }
-	};
-}
-
-function buildChipCloud(devices, onSelect, speedMap, shapeMap, dropMap) {
-	var selectedValue = '__all__';
-	var wrapper = E('div', {'class':'tm-chip-cloud'});
-
-	var chipNorm    = 'tm-cloud-chip';
-	var chipActive  = 'tm-cloud-chip tm-cloud-chip--active';
-	var chipBlocked = 'tm-cloud-chip tm-cloud-chip--blocked';
-	var chipLimited = 'tm-cloud-chip tm-cloud-chip--limited';
-
-	function render(devs) {
-		while (wrapper.firstChild) wrapper.removeChild(wrapper.firstChild);
-
-		var allChip = E('span', {'class': selectedValue === '__all__' ? chipActive : chipNorm}, [
-			E('span', {'style':'font-size:13px'}, '📊'),
-			E('span', {}, _('All'))
-		]);
-		allChip.addEventListener('click', function() { selectItem('__all__'); });
-		wrapper.appendChild(allChip);
-
-		devs.forEach(function(d) {
-			var type = guessDeviceType(d);
-			var sm = shapeMap && shapeMap[d.ip];
-			var dm = dropMap && dropMap[d.ip];
-			var isBlocked = d.blocked;
-			var hasLimit = (sm && sm.rate_kbit > 0) || (dm && dm.rate_kbit > 0);
-			var spd = speedMap && speedMap[d.ip];
-			var speedTxt = spd && spd.current > 1024 ? ' ' + fmtSpeed(spd.current) : '';
-
-			var chipClass;
-			if (selectedValue === d.ip) chipClass = chipActive;
-			else if (isBlocked) chipClass = chipBlocked;
-			else if (hasLimit) chipClass = chipLimited;
-			else chipClass = chipNorm;
-
-			var chip = E('span', {'class': chipClass, 'title': d.ip + (d.mac ? ' ('+d.mac+')' : '')}, [
-				deviceIcon(type, 13),
-				E('span', {}, d.name || d.ip),
-				speedTxt ? E('span', {'class':'tm-cloud-chip__speed'}, speedTxt) : E('span')
-			]);
-			chip.addEventListener('click', function() { selectItem(d.ip); });
-			wrapper.appendChild(chip);
-		});
-	}
-
-	function selectItem(value) {
-		selectedValue = value;
-		render(devices);
-		onSelect(value);
-	}
-
-	render(devices);
-	return {
-		el: wrapper,
-		getValue: function() { return selectedValue; },
-		setValue: function(val) { selectedValue = val; render(devices); },
-		updateDevices: function(newDevices) { devices = newDevices; render(devices); },
-		refresh: function(sm, dm, spdm) { speedMap = spdm; shapeMap = sm; dropMap = dm; render(devices); }
-	};
-}
 
 function buildSearchSelect(devices, placeholder, onSelect) {
 	var selectedValue = '__all__';
 	var recentIps = [];
 	var MAX_RECENT = 5;
-	var wrapper = E('div', { 'class': 'tm-search-wrapper' });
+	var wrapper = E('div', { 'class': 'tc-search-wrapper' });
 	var input = E('input', {
 		'type': 'text',
 		'placeholder': placeholder,
 		'autocomplete': 'off',
-		'class': 'tm-search-input'
+		'class': 'tc-search-input'
 	});
-	var clearBtn = E('span', { 'class': 'tm-search-clear tm-hidden' }, '×');
-	var dropdown = E('div', { 'class': 'tm-search-dropdown tm-hidden' });
+	var clearBtn = E('span', { 'class': 'tc-search-clear tc-hidden' }, '×');
+	var dropdown = E('div', { 'class': 'tc-search-dropdown tc-hidden' });
 	wrapper.appendChild(input);
 	wrapper.appendChild(clearBtn);
 	wrapper.appendChild(dropdown);
@@ -1402,18 +1110,18 @@ function buildSearchSelect(devices, placeholder, onSelect) {
 	}
 
 	function mkItem(it, idx, q) {
-		var item = E('div', { 'class': 'tm-dropdown-item', 'data-value': it.value });
+		var item = E('div', { 'class': 'tc-dropdown-item', 'data-value': it.value });
 		if (q && it.value !== '__all__') {
 			item.innerHTML = highlightMatch(it.label, q);
 		} else {
 			item.textContent = it.label;
 		}
 		if (it.section) {
-			item.className = 'tm-dropdown-item--section';
+			item.className = 'tc-dropdown-item--section';
 			return item;
 		}
 		if (it.value === '__all__') {
-			item.className = 'tm-dropdown-item tm-dropdown-item--all';
+			item.className = 'tc-dropdown-item tc-dropdown-item--all';
 		}
 		item.addEventListener('mousedown', function(ev) {
 			ev.preventDefault();
@@ -1461,7 +1169,7 @@ function buildSearchSelect(devices, placeholder, onSelect) {
 		var actionIdx = 0;
 		Array.prototype.forEach.call(dd.children, function(el) {
 			if (el.getAttribute('data-value') && el.getAttribute('data-value').indexOf('_hdr_') === 0) return;
-			el.style.background = actionIdx === highlightIdx ? 'var(--tm-hover)' : '';
+			el.style.background = actionIdx === highlightIdx ? 'var(--tc-hover)' : '';
 			actionIdx++;
 		});
 	}
@@ -1470,32 +1178,32 @@ function buildSearchSelect(devices, placeholder, onSelect) {
 		selectedValue = value;
 		if (value === '__all__') {
 			input.value = '';
-			clearBtn.classList.add('tm-hidden');
+			clearBtn.classList.add('tc-hidden');
 		} else {
 			addToRecent(value);
 			input.value = label.replace(/\s+\(.*\)$/, '');
-			clearBtn.classList.remove('tm-hidden');
+			clearBtn.classList.remove('tc-hidden');
 		}
-		dropdown.classList.add('tm-hidden');
+		dropdown.classList.add('tc-hidden');
 		if (!silent) onSelect(value);
 	}
 
 	input.addEventListener('focus', function() {
 		this.style.cursor = 'text';
 		renderItems(input.value);
-		dropdown.classList.remove('tm-hidden');
+		dropdown.classList.remove('tc-hidden');
 	});
 	input.addEventListener('blur', function() {
 		this.style.cursor = 'pointer';
-		setTimeout(function() { dropdown.classList.add('tm-hidden'); }, 150);
+		setTimeout(function() { dropdown.classList.add('tc-hidden'); }, 150);
 	});
 	input.addEventListener('click', function() {
 		renderItems(input.value);
-		dropdown.classList.remove('tm-hidden');
+		dropdown.classList.remove('tc-hidden');
 	});
 	input.addEventListener('input', function() {
 		renderItems(input.value);
-		dropdown.classList.remove('tm-hidden');
+		dropdown.classList.remove('tc-hidden');
 	});
 	input.addEventListener('keydown', function(ev) {
 		var actionItems = [];
@@ -1518,7 +1226,7 @@ function buildSearchSelect(devices, placeholder, onSelect) {
 				selectItem(el.getAttribute('data-value'), el.textContent);
 			}
 		} else if (ev.key === 'Escape') {
-			dropdown.classList.add('tm-hidden');
+			dropdown.classList.add('tc-hidden');
 			input.blur();
 		}
 	});
@@ -1564,8 +1272,6 @@ return view.extend({
 		var opts = loadOpts();
 		opts = applyUrlParams(opts);
 		saveOpts(opts);
-		injectStyles();
-
 		var devices = [];
 		(leasesRaw || '').split('\n').forEach(function(line) {
 			var p = line.trim().split(/\s+/);
@@ -1597,16 +1303,16 @@ return view.extend({
 		// Recent devices — functions defined at top level
 
 		// Quick-access bar: [All devices] + recent device chips
-		var quickBar = E('div', {'class':'tm-quick-bar'});
+		var quickBar = E('div', {'class':'tc-quick-bar'});
 
-		var allBtn = E('span', {'class':'tm-quick-bar__all'}, ['📊 ', _('All devices')]);
+		var allBtn = E('span', {'class':'cbi-button cbi-button-action'}, ['📊 ', _('All devices')]);
 		allBtn.addEventListener('click', function() {
 			searchSelect.setValue('__all__', '');
 			onDeviceSelect('__all__');
 		});
 		quickBar.appendChild(allBtn);
 
-		var recentContainer = E('span', {'class':'tm-recent-container'});
+		var recentContainer = E('span', {'class':'tc-recent-container'});
 		quickBar.appendChild(recentContainer);
 
 
@@ -1616,9 +1322,9 @@ return view.extend({
 			var currentIp = searchSelect.getValue();
 
 			// Update All button style
-			// tm-quick-bar__all has the active (filled) look by default;
+			// cbi-button cbi-button-action has the active (filled) look by default;
 			// when a device is selected we switch to outline-only variant
-			allBtn.className = currentIp === '__all__' ? 'tm-quick-bar__all' : 'tm-quick-bar__all tm-quick-bar__all--outline';
+			allBtn.className = currentIp === '__all__' ? 'cbi-button cbi-button-action' : 'cbi-button cbi-button-action cbi-button-action';
 
 			recent.forEach(function(entry) {
 				var ip = entry.ip || entry;
@@ -1627,7 +1333,7 @@ return view.extend({
 				var label = (dev && dev.name) || storedName || ip;
 				var isActive = ip === currentIp;
 				var chip = E('span', {
-					'class': isActive ? 'tm-recent-chip tm-recent-chip--active' : 'tm-recent-chip',
+					'class': isActive ? 'tc-recent-chip tc-recent-chip--active' : 'tc-recent-chip',
 					'title': ip + (dev && dev.mac ? ' (' + dev.mac + ')' : '')
 				}, [
 					deviceIcon(guessDeviceType(dev || {name:label}), 12),
@@ -1638,7 +1344,7 @@ return view.extend({
 					searchSelect.setValue(ip, lbl);
 					onDeviceSelect(ip);
 				});
-				var removeBtn = E('span', {'class':'tm-recent-remove'}, '×');
+				var removeBtn = E('span', {'class':'tc-recent-remove'}, '×');
 				removeBtn.addEventListener('click', function(ev) {
 					ev.stopPropagation();
 					var r = getRecentDevices().filter(function(x) { return (x.ip || x) !== ip; });
@@ -1654,23 +1360,23 @@ return view.extend({
 		renderRecentChips();
 
 		function mkToggle(id, label, checked, onChange) {
-			var cb = E('input', { 'type': 'checkbox', 'id': id, 'class': 'tm-toggle-input' });
+			var cb = E('input', { 'type': 'checkbox', 'id': id, 'class': 'tc-toggle-input' });
 			cb.checked = !!checked;
 			cb.addEventListener('change', onChange);
-			var track = E('label', { 'class': 'tm-toggle', 'for': id });
-			return E('div', { 'class': 'tm-toggle-wrap' }, [
+			var track = E('label', { 'class': 'tc-toggle', 'for': id });
+			return E('div', { 'class': 'tc-toggle-wrap' }, [
 				cb, track,
-				E('label', { 'for': id, 'style': 'cursor:pointer;font-size:12px;user-select:none;color:var(--tm-text)' }, label)
+				E('label', { 'for': id, 'style': 'cursor:pointer;font-size:12px;user-select:none;color:currentColor' }, label)
 			]);
 		}
 		function mkLabel(t) {
-			return E('span', { 'class': 'tm-inline-label' }, t);
+			return E('span', { 'class': 'tc-inline-label' }, t);
 		}
 
 		function mkInlinePick(options, currentValue, onChange) {
-			var wrapper = E('span', {'class':'tm-inline-pick-wrapper'});
-			var display = E('span', {'class':'tm-inline-pick-display'});
-			var popup = E('div', {'class':'tm-inline-pick-popup tm-hidden'});
+			var wrapper = E('span', {'class':'tc-inline-pick-wrapper'});
+			var display = E('span', {'class':'tc-inline-pick-display'});
+			var popup = E('div', {'class':'tc-inline-pick-popup tc-hidden'});
 			var selectedValue = currentValue;
 
 			function updateDisplay() {
@@ -1687,17 +1393,17 @@ return view.extend({
 					var active = opt.v === selectedValue;
 					var item = E('div', {
 						'style': 'padding:4px 14px;cursor:pointer;font-size:12px;' +
-							(active ? 'color:var(--tm-proto);font-weight:600;background:var(--tm-hover)' : 'color:var(--tm-text)')
+							(active ? 'color:var(--tc-speed);font-weight:600;background:var(--tc-hover)' : 'color:currentColor')
 					}, opt.l);
 					item.addEventListener('mousedown', function(ev) {
 						ev.preventDefault();
 						selectedValue = opt.v;
 						updateDisplay();
-						popup.classList.add('tm-hidden');
+						popup.classList.add('tc-hidden');
 						onChange(opt.v);
 					});
-					item.addEventListener('mouseenter', function() { this.style.background = 'var(--tm-hover)'; });
-					item.addEventListener('mouseleave', function() { this.style.background = active ? 'var(--tm-hover)' : ''; });
+					item.addEventListener('mouseenter', function() { this.style.background = 'var(--tc-hover)'; });
+					item.addEventListener('mouseleave', function() { this.style.background = active ? 'var(--tc-hover)' : ''; });
 					popup.appendChild(item);
 				});
 			}
@@ -1705,9 +1411,9 @@ return view.extend({
 			display.addEventListener('click', function(ev) {
 				ev.stopPropagation();
 				buildPopup();
-				popup.classList.toggle('tm-hidden');
+				popup.classList.toggle('tc-hidden');
 			});
-			document.addEventListener('click', function() { popup.classList.add('tm-hidden'); });
+			document.addEventListener('click', function() { popup.classList.add('tc-hidden'); });
 
 			wrapper.appendChild(display);
 			wrapper.appendChild(popup);
@@ -1720,38 +1426,38 @@ return view.extend({
 			var selected = currentValue;
 			var chips = [];
 			options.forEach(function(opt) {
-				var chip = E('span', {'class': opt.v === selected ? 'tm-chip tm-chip--active' : 'tm-chip'}, opt.l);
+				var chip = E('span', {'class': opt.v === selected ? 'tc-chip tc-chip--active' : 'tc-chip'}, opt.l);
 				chip.addEventListener('click', function() {
 					selected = opt.v;
-					chips.forEach(function(c) { c.className = c._v === selected ? 'tm-chip tm-chip--active' : 'tm-chip'; });
+					chips.forEach(function(c) { c.className = c._v === selected ? 'tc-chip tc-chip--active' : 'tc-chip'; });
 					onChange(opt.v);
 				});
 				chip._v = opt.v;
 				chips.push(chip);
 				wrapper.appendChild(chip);
 			});
-			return { el: wrapper, getValue: function() { return selected; }, setValue: function(v) { selected = v; chips.forEach(function(c) { c.className = c._v === v ? 'tm-chip tm-chip--active' : 'tm-chip'; }); } };
+			return { el: wrapper, getValue: function() { return selected; }, setValue: function(v) { selected = v; chips.forEach(function(c) { c.className = c._v === v ? 'tc-chip tc-chip--active' : 'tc-chip'; }); } };
 		}
 
 		var showStats = mkToggle('tm-stats', _('Stats'), opts.showStats !== false, function() {
 			var o = loadOpts(); o.showStats = this.checked; saveOpts(o); updateUrlParams(o);
-			statsDiv.classList.toggle('tm-hidden', !this.checked);
+			statsDiv.classList.toggle('tc-hidden', !this.checked);
 		});
 		var showConns = mkToggle('tm-conns', _('Connections'), opts.showConns !== false, function() {
 			var o = loadOpts(); o.showConns = this.checked; saveOpts(o); updateUrlParams(o);
-			connsDiv.classList.toggle('tm-hidden', !this.checked);
+			connsDiv.classList.toggle('tc-hidden', !this.checked);
 		});
 		var rdnsCheck = mkToggle('tm-rdns', _('rDNS'), opts.rdns, function() {
 			var o = loadOpts(); o.rdns = this.checked; saveOpts(o); updateUrlParams(o);
 		});
 		var extStatsCheck = mkToggle('tm-extended', _('Extended'), opts.extendedStats, function() {
 			var o = loadOpts(); o.extendedStats = this.checked; saveOpts(o); updateUrlParams(o);
-			extStatsDiv.classList.toggle('tm-hidden', !this.checked);
+			extStatsDiv.classList.toggle('tc-hidden', !this.checked);
 			if (this.checked) updateExtendedStats();
 		});
 		var activityCheck = mkToggle('tm-activity', _('Activity'), opts.showActivity, function() {
 			var o = loadOpts(); o.showActivity = this.checked; saveOpts(o);
-			activityDiv.classList.toggle('tm-hidden', !this.checked);
+			activityDiv.classList.toggle('tc-hidden', !this.checked);
 			if (this.checked) {
 				if (!activityDiv._loaded) {
 					activityDiv._loaded = true;
@@ -1761,8 +1467,9 @@ return view.extend({
 			}
 		});
 
-		var extStatsDiv = E('div', { 'class': opts.extendedStats ? '' : 'tm-hidden' });
-		var activityDiv = E('div', { 'class': opts.showActivity ? '' : 'tm-hidden' });
+		var extStatsDiv = E('div', { 'class': opts.extendedStats ? '' : 'tc-hidden' });
+		var deviceGraphDiv = E('div', { 'class': 'tc-device-graph tc-hidden' });
+		var activityDiv = E('div', { 'class': opts.showActivity ? '' : 'tc-hidden' });
 
 		var refreshPick = mkChipPick([
 			{v:'0',l:_('Off')},{v:'5',l:'5s'},{v:'10',l:'10s'},{v:'30',l:'30s'},{v:'60',l:'60s'}
@@ -1800,48 +1507,39 @@ return view.extend({
 			var o = loadOpts(); o.groupBy = v; saveOpts(o); runQuery();
 		});
 
-		var statusDiv = E('div', { 'class': 'tm-hidden' });
-		var statsDiv  = E('div', { 'style': 'margin:8px 0', 'class': opts.showStats === false ? 'tm-hidden' : '' });
-		var connsDiv  = E('div', { 'class': opts.showConns === false ? 'tm-hidden' : '' });
+		var statusDiv = E('div', { 'class': 'tc-hidden' });
+		var statsDiv  = E('div', { 'style': 'margin:8px 0', 'class': opts.showStats === false ? 'tc-hidden' : '' });
+		var connsDiv  = E('div', { 'class': opts.showConns === false ? 'tc-hidden' : '' });
 
-		var _rdnsQueue   = [];
-		var _rdnsFlying  = 0;
-		var _rdnsMax     = 4;
-		var _rdnsDispatch = function() {
-			while (_rdnsFlying < _rdnsMax && _rdnsQueue.length > 0) {
-				var item = _rdnsQueue.shift();
-				if (item.gen !== self._queryGen) continue;
-				(function(it) {
-					_rdnsFlying++;
-					callRdns(it.dst).then(function(res) {
-						_rdnsFlying--;
-						_rdnsDispatch();
-						if (it.gen !== self._queryGen) return;
-						var host = (res && res.host) ? res.host : null;
-						self._rdnsCache[it.dst] = host || null;
-						Array.prototype.forEach.call(
-							connsDiv.querySelectorAll('td[data-dst="'+it.dst+'"]'),
-							function(cell) {
-								if (host) { cell.textContent = host; cell.style.color = ''; }
-								else { cell.innerHTML = '<span class="tm-c-faint">—</span>'; }
-							}
-						);
-					}).catch(function() {
-						_rdnsFlying--;
-						_rdnsDispatch();
-						if (it.gen !== self._queryGen) return;
-						self._rdnsCache[it.dst] = null;
-						Array.prototype.forEach.call(
-							connsDiv.querySelectorAll('td[data-dst="'+it.dst+'"]'),
-							function(cell) { cell.innerHTML = '<span class="tm-c-faint">—</span>'; }
-						);
-					});
-				})(item);
-			}
-		};
+		function _rdnsBatch(addrs, gen) {
+			if (!addrs.length) return;
+			callNetworkRrdnsLookup(addrs, 5000, addrs.length).then(function(replies) {
+				if (gen !== self._queryGen) return;
+				addrs.forEach(function(dst) {
+					var host = (replies && replies[dst]) || null;
+					self._rdnsCache[dst] = host;
+					Array.prototype.forEach.call(
+						connsDiv.querySelectorAll('[data-dst="'+dst+'"]'),
+						function(cell) {
+							if (host) { cell.textContent = host; cell.style.color = ''; }
+							else { cell.innerHTML = '<span class="tc-c-faint">—</span>'; }
+						}
+					);
+				});
+			}).catch(function() {
+				if (gen !== self._queryGen) return;
+				addrs.forEach(function(dst) {
+					self._rdnsCache[dst] = null;
+					Array.prototype.forEach.call(
+						connsDiv.querySelectorAll('[data-dst="'+dst+'"]'),
+						function(cell) { cell.innerHTML = '<span class="tc-c-faint">—</span>'; }
+					);
+				});
+			});
+		}
 
 		// Speed graph popup on spark cell hover
-		var graphPopup = E('div', {'class':'tm-graph-popup tm-hidden'});
+		var graphPopup = E('div', {'class':'tc-graph-popup tc-hidden'});
 		document.body.appendChild(graphPopup);
 		var graphPopupIp = null;
 		var graphPopupTimer = null;
@@ -1854,7 +1552,7 @@ return view.extend({
 			var rect = cell.getBoundingClientRect();
 			graphPopup.style.left = Math.max(8, rect.left - 160) + 'px';
 			graphPopup.style.top = (rect.bottom + 6) + 'px';
-			graphPopup.classList.remove('tm-hidden');
+			graphPopup.classList.remove('tc-hidden');
 			if (!graphPopupTimer) {
 				graphPopupTimer = setInterval(updateGraphPopup, 2000);
 			}
@@ -1874,15 +1572,15 @@ return view.extend({
 			if (svg) {
 				graphPopup.appendChild(svg);
 				if (lk > 0) {
-					graphPopup.appendChild(E('div', {'class':'tm-graph-popup__note'},
+					graphPopup.appendChild(E('div', {'class':'tc-graph-popup__note'},
 						_('Note: speed is measured before shaper — bursts above limit are normal')));
 				}
 			} else {
-				graphPopup.appendChild(E('span', {'class':'tm-graph-popup__empty'}, _('Not enough data yet')));
+				graphPopup.appendChild(E('span', {'class':'tc-graph-popup__empty'}, _('Not enough data yet')));
 			}
 		}
 		function hideGraphPopup() {
-			graphPopup.classList.add('tm-hidden');
+			graphPopup.classList.add('tc-hidden');
 			graphPopupIp = null;
 			if (graphPopupTimer) { clearInterval(graphPopupTimer); graphPopupTimer = null; }
 		}
@@ -1902,32 +1600,32 @@ return view.extend({
 		}, true);
 
 		var inetBtn = E('button', { 'class': 'cbi-button' }, '');
-		var wifiBtn = E('button', { 'class': 'cbi-button tm-hidden' }, '');
+		var wifiBtn = E('button', { 'class': 'cbi-button tc-hidden' }, '');
 
 		function updateInetBtn(blocked) {
 			if (blocked) {
-				inetBtn.textContent = '▶️ ' + _('Unblock Internet');
-				inetBtn.className = 'tm-btn tm-btn--unblock';
+				inetBtn.textContent = _('Unblock Internet');
+				inetBtn.className = 'cbi-button cbi-button-positive';
 				inetBtn._action = 'unblock';
 			} else {
-				inetBtn.textContent = '⏸️ ' + _('Block Internet');
-				inetBtn.className = 'tm-btn tm-btn--block';
+				inetBtn.textContent = _('Block Internet');
+				inetBtn.className = 'cbi-button cbi-button-negative';
 				inetBtn._action = 'block';
 			}
 		}
 		updateInetBtn(false);
 
 		function updateWifiBtn(wifiBlocked, hasMac) {
-			if (!hasMac) { wifiBtn.classList.add('tm-hidden'); return; }
-			wifiBtn.classList.remove('tm-hidden');
+			if (!hasMac) { wifiBtn.classList.add('tc-hidden'); return; }
+			wifiBtn.classList.remove('tc-hidden');
 			wifiBtn.disabled = false;
 			if (wifiBlocked) {
-				wifiBtn.textContent = '📡✓ ' + _('Unblock WiFi');
-				wifiBtn.className = 'tm-btn tm-btn--unblock';
+				wifiBtn.textContent = _('Unblock WiFi');
+				wifiBtn.className = 'cbi-button cbi-button-positive';
 				wifiBtn._wifiAction = 'unblock';
 			} else {
-				wifiBtn.textContent = '📡❌ ' + _('Block WiFi');
-				wifiBtn.className = 'tm-btn tm-btn--block';
+				wifiBtn.textContent = _('Block WiFi');
+				wifiBtn.className = 'cbi-button cbi-button-negative';
 				wifiBtn._wifiAction = 'block';
 			}
 		}
@@ -1936,15 +1634,15 @@ return view.extend({
 		var _rateSelected = '0';
 		var _modeSelected = 'shaper';
 
-		var rateChipsRow = E('div', {'class':'tm-rate-chips-row'});
+		var rateChipsRow = E('div', {'class':'tc-chips-row'});
 		var rateChips = [];
 		RATE_PRESETS.filter(function(p) { return p.v !== 'custom'; }).forEach(function(preset) {
-			var chip = E('span', {'class': preset.v === '0' ? 'tm-chip tm-chip--off' : 'tm-chip'}, preset.l);
+			var chip = E('span', {'class': preset.v === '0' ? 'tc-chip tc-chip' : 'tc-chip'}, preset.l);
 			chip._val = preset.v;
 			chip.addEventListener('click', function() {
 				_rateSelected = preset.v;
 				updateRateChips();
-				customRow.classList.add('tm-hidden');
+				customRow.classList.add('tc-hidden');
 				applyRate();
 			});
 			rateChips.push(chip);
@@ -1954,28 +1652,28 @@ return view.extend({
 		function updateRateChips() {
 			rateChips.forEach(function(c) {
 				if (c._val === '0') {
-					c.className = c._val === _rateSelected ? 'tm-chip tm-chip--off-active' : 'tm-chip tm-chip--off';
+					c.className = c._val === _rateSelected ? 'tc-chip tc-chip--active' : 'tc-chip tc-chip';
 				} else {
-					c.className = c._val === _rateSelected ? 'tm-chip tm-chip--active' : 'tm-chip';
+					c.className = c._val === _rateSelected ? 'tc-chip tc-chip--active' : 'tc-chip';
 				}
 			});
 			if (_rateSelected === 'custom') {
-				rateChips.forEach(function(c) { c.className = c._val === '0' ? 'tm-chip tm-chip--off' : 'tm-chip'; });
+				rateChips.forEach(function(c) { c.className = c._val === '0' ? 'tc-chip tc-chip' : 'tc-chip'; });
 			}
 		}
 
 		// Custom input row
 		var customInput = E('input', { 'type':'number', 'min':'1', 'step':'1', 'placeholder': _('value'),
-			'class': 'tm-custom-input' });
-		var customUnitBtns = E('span', {'class':'tm-custom-unit-btns'});
+			'class': 'tc-custom-input' });
+		var customUnitBtns = E('span', {'class':'tc-custom-unit-btns'});
 		var _customUnit = 'mbit';
-		var mbitBtn = E('span', {'style':'padding:4px 8px;font-size:11px;cursor:pointer;background:var(--tm-proto);color:#fff'}, 'Mbit/s');
-		var kbitBtn = E('span', {'style':'padding:4px 8px;font-size:11px;cursor:pointer;background:var(--tm-bg);color:var(--tm-text)'}, 'kbit/s');
+		var mbitBtn = E('span', {'style':'padding:4px 8px;font-size:11px;cursor:pointer;background:var(--tc-speed);color:#fff'}, 'Mbit/s');
+		var kbitBtn = E('span', {'style':'padding:4px 8px;font-size:11px;cursor:pointer;background:var(--tc-bg);color:currentColor'}, 'kbit/s');
 		function updateUnitBtns() {
-			mbitBtn.style.background = _customUnit === 'mbit' ? 'var(--tm-proto)' : 'var(--tm-bg)';
-			mbitBtn.style.color = _customUnit === 'mbit' ? '#fff' : 'var(--tm-text)';
-			kbitBtn.style.background = _customUnit === 'kbit' ? 'var(--tm-proto)' : 'var(--tm-bg)';
-			kbitBtn.style.color = _customUnit === 'kbit' ? '#fff' : 'var(--tm-text)';
+			mbitBtn.style.background = _customUnit === 'mbit' ? 'var(--tc-speed)' : 'var(--tc-bg)';
+			mbitBtn.style.color = _customUnit === 'mbit' ? '#fff' : 'currentColor';
+			kbitBtn.style.background = _customUnit === 'kbit' ? 'var(--tc-speed)' : 'var(--tc-bg)';
+			kbitBtn.style.color = _customUnit === 'kbit' ? '#fff' : 'currentColor';
 		}
 		mbitBtn.addEventListener('click', function() { _customUnit = 'mbit'; updateUnitBtns(); });
 		kbitBtn.addEventListener('click', function() { _customUnit = 'kbit'; updateUnitBtns(); });
@@ -1983,7 +1681,7 @@ return view.extend({
 		customUnitBtns.appendChild(kbitBtn);
 
 		var customApplyBtn = E('button', {
-			'class':'tm-custom-apply'
+			'class':'cbi-button cbi-button-action'
 		}, _('Apply'));
 		customApplyBtn.addEventListener('click', function() {
 			_rateSelected = 'custom';
@@ -1991,32 +1689,32 @@ return view.extend({
 			applyRate();
 		});
 
-		var customToggleBtn = E('span', {'class': 'tm-chip', 'data-tip': _('Enter a custom speed value')}, '✎ ' + _('Custom'));
+		var customToggleBtn = E('span', {'class': 'tc-chip', 'data-tip': _('Enter a custom speed value')}, '✎ ' + _('Custom'));
 		customToggleBtn.addEventListener('click', function() {
-			customRow.classList.toggle('tm-hidden');
+			customRow.classList.toggle('tc-hidden');
 		});
 		rateChipsRow.appendChild(customToggleBtn);
 
-		var customRow = E('div', {'class':'tm-custom-row tm-hidden'}, [
+		var customRow = E('div', {'class':'tc-custom-row tc-hidden'}, [
 			customInput, customUnitBtns, customApplyBtn
 		]);
 
 		// Mode: segmented toggle (Shaper default)
-		var modeToggle = E('div', {'class':'tm-mode-toggle'});
+		var modeToggle = E('div', {'class':'tc-mode-toggle'});
 		var shaperBtn = E('span', {
 			'style':'padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s',
 			'data-tip': _('Queues excess traffic (smoother streaming, lower jitter)')
-		}, '🌊 ' + _('Shaper'));
+		}, _('Shaper'));
 		var limiterBtn = E('span', {
 			'style':'padding:5px 12px;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s',
 			'data-tip': _('Drops excess packets (instant enforcement, low overhead)')
-		}, '⚡ ' + _('Limiter'));
+		}, _('Limiter'));
 		function updateModeToggle() {
-			shaperBtn.style.background = _modeSelected === 'shaper' ? 'var(--tm-proto)' : 'var(--tm-bg)';
-			shaperBtn.style.color = _modeSelected === 'shaper' ? '#fff' : 'var(--tm-text)';
+			shaperBtn.style.background = _modeSelected === 'shaper' ? 'var(--tc-speed)' : 'var(--tc-bg)';
+			shaperBtn.style.color = _modeSelected === 'shaper' ? '#fff' : 'currentColor';
 			shaperBtn.style.fontWeight = _modeSelected === 'shaper' ? '600' : '500';
-			limiterBtn.style.background = _modeSelected === 'limiter' ? 'var(--tm-rate-fg, #e67e22)' : 'var(--tm-bg)';
-			limiterBtn.style.color = _modeSelected === 'limiter' ? '#fff' : 'var(--tm-text)';
+			limiterBtn.style.background = _modeSelected === 'limiter' ? 'var(--tc-warn)' : 'var(--tc-bg)';
+			limiterBtn.style.color = _modeSelected === 'limiter' ? '#fff' : 'currentColor';
 			limiterBtn.style.fontWeight = _modeSelected === 'limiter' ? '600' : '500';
 		}
 		shaperBtn.addEventListener('click', function() { _modeSelected = 'shaper'; updateModeToggle(); });
@@ -2026,10 +1724,10 @@ return view.extend({
 		updateModeToggle();
 
 		var rateLimitRow = E('div', {
-			'class': 'tm-rate-panel tm-hidden'
+			'class': 'tc-rate-panel tc-hidden'
 		}, [
-			E('div', {'class':'tm-rate-panel__header'}, [
-				E('span', {'class':'tm-rate-panel__title'}, '⚡ ' + _('Speed Limit')),
+			E('div', {'class':'tc-rate-panel__header'}, [
+				E('span', {'class':'tc-rate-panel__title'}, _('Speed Limit')),
 				modeToggle
 			]),
 			rateChipsRow,
@@ -2094,18 +1792,18 @@ return view.extend({
 			}
 		}
 
-		var actionRow = E('div', { 'class': 'tm-action-row' },
+		var actionRow = E('div', { 'class': 'tc-action-row' },
 			[inetBtn, wifiBtn]);
 
 		function isAllMode() { return searchSelect.getValue() === '__all__'; }
 
 		function updateModeUI() {
 			var all = isAllMode();
-			actionRow.classList.toggle('tm-hidden', all);
-			rateLimitRow.classList.toggle('tm-hidden', all);
-			rdnsCheck.classList.toggle('tm-hidden', all);
-			extStatsCheck.classList.toggle('tm-hidden', all);
-			extStatsDiv.classList.toggle('tm-hidden', all || !loadOpts().extendedStats);
+			actionRow.classList.toggle('tc-hidden', all);
+			rateLimitRow.classList.toggle('tc-hidden', all);
+			rdnsCheck.classList.toggle('tc-hidden', all);
+			extStatsCheck.classList.toggle('tc-hidden', all);
+			extStatsDiv.classList.toggle('tc-hidden', all || !loadOpts().extendedStats);
 			if (typeof updateTableSectionMode === 'function') updateTableSectionMode();
 		}
 
@@ -2121,9 +1819,9 @@ return view.extend({
 				var cell = connsDiv.querySelector('td[data-speed-ip="'+ip+'"]');
 				if (!cell) return;
 				if (s.current > 1024) {
-					cell.className = 'tm-speed-active';
+					cell.className = 'tc-speed-active';
 				} else {
-					cell.className = 'tm-speed-idle';
+					cell.className = 'tc-speed-idle';
 				}
 				cell.textContent = fmtSpeed(s.current);
 				cell.title = _('Avg')+': '+fmtSpeed(s.avg)+' / '+_('Max')+': '+fmtSpeed(s.max);
@@ -2156,11 +1854,11 @@ return view.extend({
 						while (cell.firstChild) cell.removeChild(cell.firstChild);
 						if (dp > 0) {
 							cell.appendChild(E('span', {
-								'class': 'tm-c-drop tm-fw-600',
+								'class': 'tc-c-err tc-fw-bold',
 								'title': fmtBytes(db) + ' ' + _('dropped')
-							}, '🚫 ' + dp));
+							}, String(dp)));
 						} else {
-							cell.appendChild(E('span', { 'class': 'tm-c-faint' }, '—'));
+							cell.appendChild(E('span', { 'class': 'tc-c-faint' }, '—'));
 						}
 					});
 				}
@@ -2188,9 +1886,9 @@ return view.extend({
 						if (!cell) return;
 						while (cell.firstChild) cell.removeChild(cell.firstChild);
 						if (bl > 0) {
-							cell.appendChild(E('span', { 'class': 'tm-c-shape tm-fw-600', 'title': _('Bytes queued in tc') }, fmtBytes(bl)));
+							cell.appendChild(E('span', { 'class': 'tc-c-speed tc-fw-bold', 'title': _('Bytes queued in tc') }, fmtBytes(bl)));
 						} else {
-							cell.appendChild(E('span', { 'class': 'tm-c-faint' }, '—'));
+							cell.appendChild(E('span', { 'class': 'tc-c-faint' }, '—'));
 						}
 					});
 				}
@@ -2283,14 +1981,32 @@ return view.extend({
 				} else {
 					updateSpeedCells();
 				}
+				updateDeviceGraph();
 			}).catch(function(){});
+		}
+
+		function updateDeviceGraph() {
+			var ip = searchSelect.getValue();
+			if (!ip || ip === '__all__') {
+				deviceGraphDiv.classList.add('tc-hidden');
+				return;
+			}
+			var hist = self._fullHistory[ip];
+			if (!hist || hist.length < 2) return;
+			var sm = self._shapeMap[ip], dm = self._dropMap[ip];
+			var lk = (sm && sm.rate_kbit > 0) ? sm.rate_kbit : ((dm && dm.rate_kbit > 0) ? dm.rate_kbit : 0);
+			var w = deviceGraphDiv.offsetWidth || 560;
+			var svg = renderFullGraph(hist, lk, w, 160);
+			if (!svg) return;
+			while (deviceGraphDiv.firstChild) deviceGraphDiv.removeChild(deviceGraphDiv.firstChild);
+			deviceGraphDiv.appendChild(svg);
+			deviceGraphDiv.classList.remove('tc-hidden');
 		}
 
 		function runSingle(ip) {
 			var o = loadOpts();
 			var proto = (o.proto && o.proto !== 'all') ? o.proto : '';
 			self._queryGen++;
-			_rdnsQueue.length = 0;
 			var gen = self._queryGen;
 
 			setStatus(statusDiv, 'loading', _('Running…'));
@@ -2314,21 +2030,21 @@ return view.extend({
 						}
 					}
 					if ((data.shape_kbit || 0) > 0) {
-						parts.push(_('Shaped') + ': <b style="color:var(--tm-shape-fg)">🌊 '+fmtRate(data.shape_kbit)+'</b>');
+						parts.push(_('Shaped') + ': <b style="color:var(--tc-speed)">🌊 '+fmtRate(data.shape_kbit)+'</b>');
 						var sm = self._shapeMap[data.ip || searchSelect.getValue()] || {};
-						if ((sm.backlog||0) > 0) parts.push(_('Queued') + ': <b style="color:var(--tm-shape-fg)">'+fmtBytes(sm.backlog)+'</b>');
+						if ((sm.backlog||0) > 0) parts.push(_('Queued') + ': <b style="color:var(--tc-speed)">'+fmtBytes(sm.backlog)+'</b>');
 						if ((sm.bytes||0) > 0) parts.push(_('Passed') + ': <b>'+fmtBytes(sm.bytes)+'</b>');
 					} else if ((data.rate_limit_kbit || 0) > 0) {
-						parts.push(_('Speed limit') + ': <b style="color:var(--tm-rate-fg)">⚡ '+fmtRate(data.rate_limit_kbit)+'</b>');
+						parts.push(_('Speed limit') + ': <b style="color:var(--tc-warn)">⚡ '+fmtRate(data.rate_limit_kbit)+'</b>');
 						var dm = self._dropMap[data.ip || searchSelect.getValue()] || {};
 						if ((dm.packets||0) > 0) {
-							parts.push(_('Dropped') + ': <b style="color:var(--tm-drop-fg)">🚫 '+dm.packets+' pkts / '+fmtBytes(dm.bytes||0)+'</b>');
+							parts.push(_('Dropped') + ': <b style="color:var(--tc-err)">🚫 '+dm.packets+' pkts / '+fmtBytes(dm.bytes||0)+'</b>');
 						}
 					}
 					var wifiPart = data.wifi_blocked
-						? ' &nbsp;|&nbsp; <b style="color:var(--tm-state-wait)">📵 ' + _('WiFi blocked') + '</b> ('+escHtml(data.mac||'') + ')'
-						: (data.mac ? ' &nbsp;|&nbsp; <span style="color:var(--tm-text-faint)">MAC: '+escHtml(data.mac)+'</span>' : '');
-					statsDiv.className = 'tm-stats-bar ' + (data.blocked ? 'tm-stats-bar--blocked' : 'tm-stats-bar--info');
+						? ' &nbsp;|&nbsp; <b style="color:var(--tc-warn)">📵 ' + _('WiFi blocked') + '</b> ('+escHtml(data.mac||'') + ')'
+						: (data.mac ? ' &nbsp;|&nbsp; <span style="color:var(--tc-faint)">MAC: '+escHtml(data.mac)+'</span>' : '');
+					statsDiv.className = 'alert-message ' + (data.blocked ? 'error' : 'info');
 					statsDiv.innerHTML = (data.blocked
 						? '<b>⛔ ' + _('BLOCKED') + '</b> — '+data.block_packets+' pkts, '+fmtBytes(data.block_bytes)+' ' + _('dropped') + ' &nbsp;|&nbsp; '
 						: '') + parts.join(' &nbsp;|&nbsp; ') + wifiPart;
@@ -2346,27 +2062,27 @@ return view.extend({
 				var matched = RATE_PRESETS.some(function(p) { return p.v === curRateStr; });
 				if (matched) {
 					ratePick.setValue(curRateStr);
-					customRow.classList.add('tm-hidden');
+					customRow.classList.add('tc-hidden');
 				} else if (curRate > 0) {
 					ratePick.setValue('custom');
 					customInput.value = curRate;
 					_customUnit = 'kbit'; updateUnitBtns();
-					customRow.classList.remove('tm-hidden');
+					customRow.classList.remove('tc-hidden');
 				} else {
 					ratePick.setValue('0');
-					customRow.classList.add('tm-hidden');
+					customRow.classList.add('tc-hidden');
 				}
 
 				while (connsDiv.firstChild) connsDiv.removeChild(connsDiv.firstChild);
 				if (!data.connections || data.connections.length === 0) {
-					connsDiv.appendChild(E('p', {'style':'color:var(--tm-text-mute);padding:12px 0'}, _('No active connections.')));
+					connsDiv.appendChild(E('p', {'style':'color:var(--tc-muted);padding:12px 0'}, _('No active connections.')));
 				} else {
 					var groupBy = o.groupBy || 'none';
 					var tbl;
 					if (groupBy !== 'none') {
 						var groups = groupConnections(data.connections, groupBy);
 						tbl = buildGroupedTable(groups, self._sortCol === 'bytes' || self._sortCol === 'count' ? self._sortCol : 'bytes', self._sortDir);
-						Array.prototype.forEach.call(tbl.querySelectorAll('th'), function(th) {
+						Array.prototype.forEach.call(tbl.querySelectorAll('.th'), function(th) {
 							th.addEventListener('click', function() {
 								var col = th.getAttribute('data-col');
 								if (self._sortCol === col) {
@@ -2379,11 +2095,11 @@ return view.extend({
 							});
 						});
 						connsDiv.appendChild(E('div',{'style':'overflow-x:auto'},[tbl]));
-						connsDiv.appendChild(E('p',{'style':'color:var(--tm-text-faint);font-size:11px;margin-top:6px'},
+						connsDiv.appendChild(E('p',{'style':'color:var(--tc-faint);font-size:11px;margin-top:6px'},
 							groups.length + ' ' + _('groups from') + ' ' + data.connections.length + ' ' + _('connections') + '. ' + _('Click header to sort.')));
 					} else {
 						tbl = buildTable(data.connections, self._sortCol, self._sortDir, o.rdns, self._connHiddenCols);
-						Array.prototype.forEach.call(tbl.querySelectorAll('th'), function(th) {
+						Array.prototype.forEach.call(tbl.querySelectorAll('.th'), function(th) {
 							th.addEventListener('click', function() {
 								var col = th.getAttribute('data-col');
 								if (self._sortCol === col) {
@@ -2396,31 +2112,29 @@ return view.extend({
 							});
 						});
 						connsDiv.appendChild(E('div',{'style':'overflow-x:auto'},[tbl]));
-						connsDiv.appendChild(E('p',{'style':'color:var(--tm-text-faint);font-size:11px;margin-top:6px'},
+						connsDiv.appendChild(E('p',{'style':'color:var(--tc-faint);font-size:11px;margin-top:6px'},
 							data.connections.length + ' ' + _('connections') + '. ' + _('Click header to sort.')));
 
 						if (o.rdns) {
-							var seen = {};
+							var seen = {}, uncached = [];
 							data.connections.forEach(function(c) {
 								var dst = c.dst || '';
-								if (!dst || seen[dst]) return;
-								if (PRIVATE_RE.test(dst)) return;
+								if (!dst || seen[dst] || PRIVATE_RE.test(dst)) return;
 								seen[dst] = true;
-								// Use cached result if available
 								if (self._rdnsCache[dst] !== undefined) {
 									var cached = self._rdnsCache[dst];
 									Array.prototype.forEach.call(
-										connsDiv.querySelectorAll('td[data-dst="'+dst+'"]'),
+										connsDiv.querySelectorAll('[data-dst="'+dst+'"]'),
 										function(cell) {
 											if (cached) { cell.textContent = cached; cell.style.color = ''; }
-											else { cell.innerHTML = '<span class="tm-c-faint">—</span>'; }
+											else { cell.innerHTML = '<span class="tc-c-faint">—</span>'; }
 										}
 									);
-									return;
+								} else {
+									uncached.push(dst);
 								}
-								_rdnsQueue.push({dst: dst, gen: gen});
-								_rdnsDispatch();
 							});
+							_rdnsBatch(uncached, gen);
 						}
 					}
 				}
@@ -2458,7 +2172,7 @@ return view.extend({
 			var lnk = 'cursor:pointer;text-decoration:underline;text-decoration-style:dashed';
 			var activeFilter = self._tableFilter;
 
-			statsDiv.className = 'tm-stats-bar tm-stats-bar--info';
+			statsDiv.className = 'alert-message info';
 			while (statsDiv.firstChild) statsDiv.removeChild(statsDiv.firstChild);
 
 			function mkFilterVal(filter, color, text) {
@@ -2469,16 +2183,16 @@ return view.extend({
 
 			var parts = [];
 			parts.push(E('span', {}, [document.createTextNode(_('Active') + ': '), E('b', {}, String(rows.length))]));
-			parts.push(E('span', {}, [document.createTextNode(_('Blocked') + ': '), mkFilterVal('blocked', 'var(--tm-blocked-fg)', String(blocked))]));
-			parts.push(E('span', {}, [document.createTextNode(_('WiFi') + ': '), mkFilterVal('wifi_blocked', 'var(--tm-state-wait)', String(wifiBlk))]));
-			if (limited > 0) parts.push(E('span', {}, [document.createTextNode(_('Limited') + ': '), mkFilterVal('limited', 'var(--tm-rate-fg)', '⚡' + limited)]));
-			if (shaped > 0) parts.push(E('span', {}, [document.createTextNode(_('Shaped') + ': '), mkFilterVal('shaped', 'var(--tm-shape-fg)', '🌊' + shaped)]));
+			parts.push(E('span', {}, [document.createTextNode(_('Blocked') + ': '), mkFilterVal('blocked', 'var(--tc-err)', String(blocked))]));
+			parts.push(E('span', {}, [document.createTextNode(_('WiFi') + ': '), mkFilterVal('wifi_blocked', 'var(--tc-warn)', String(wifiBlk))]));
+			if (limited > 0) parts.push(E('span', {}, [document.createTextNode(_('Limited') + ': '), mkFilterVal('limited', 'var(--tc-warn)', '⚡' + limited)]));
+			if (shaped > 0) parts.push(E('span', {}, [document.createTextNode(_('Shaped') + ': '), mkFilterVal('shaped', 'var(--tc-speed)', '🌊' + shaped)]));
 			if (totalDropPkts > 0) parts.push(E('span', {}, [
-				document.createTextNode(_('Dropped') + ': '), E('b', {'style':'color:var(--tm-drop-fg)'}, '🚫' + totalDropPkts)
+				document.createTextNode(_('Dropped') + ': '), E('b', {'style':'color:var(--tc-err)'}, '🚫' + totalDropPkts)
 			]));
 
 			parts.forEach(function(el, i) {
-				if (i > 0) statsDiv.appendChild(E('span', {'style':'margin:0 6px;color:var(--tm-text-faint)'}, '|'));
+				if (i > 0) statsDiv.appendChild(E('span', {'style':'margin:0 6px;color:var(--tc-faint)'}, '|'));
 				statsDiv.appendChild(el);
 				var filterEl = el.querySelector('[data-filter]');
 				if (filterEl) {
@@ -2487,14 +2201,14 @@ return view.extend({
 			});
 
 			if (activeFilter) {
-				statsDiv.appendChild(E('span', {'style':'margin-left:10px;cursor:pointer;color:var(--tm-text-mute);font-size:11px'}, '✕ ' + _('clear filter')));
+				statsDiv.appendChild(E('span', {'style':'margin-left:10px;cursor:pointer;color:var(--tc-muted);font-size:11px'}, '✕ ' + _('clear filter')));
 				statsDiv.lastChild.addEventListener('click', function() { self._tableFilter = null; renderSummary(rows); });
 			}
 
 			var filtered = applyTableFilter(rows);
 			while (connsDiv.firstChild) connsDiv.removeChild(connsDiv.firstChild);
 			if (filtered.length === 0) {
-				connsDiv.appendChild(E('p',{'style':'color:var(--tm-text-mute);padding:12px 0'}, _('No devices match filter.')));
+				connsDiv.appendChild(E('p',{'style':'color:var(--tc-muted);padding:12px 0'}, _('No devices match filter.')));
 			} else {
 				var tbl = buildSummaryTable(
 					filtered,
@@ -2524,7 +2238,7 @@ return view.extend({
 					self._hiddenCols
 				);
 				connsDiv.appendChild(E('div',{'style':'overflow-x:auto'},[tbl]));
-				connsDiv.appendChild(E('p',{'style':'color:var(--tm-text-faint);font-size:11px;margin-top:6px'},
+				connsDiv.appendChild(E('p',{'style':'color:var(--tc-faint);font-size:11px;margin-top:6px'},
 					_('Click a row to inspect that device. Download speed updates every 2 seconds.')));
 			}
 		}
@@ -2560,6 +2274,7 @@ return view.extend({
 			updateUrlParams(o);
 			updateModeUI();
 			if (ip === '__all__') {
+				deviceGraphDiv.classList.add('tc-hidden');
 				runAll();
 			} else {
 				self._stopBytesPoll();
@@ -2642,15 +2357,15 @@ return view.extend({
 			{key:'_throttle_kbit', label:_('Speed Limit')},
 			{key:'_drop_packets', label:_('Drops')}, {key:'_backlog', label:_('Queue')}
 		];
-		var colChipsContainer = E('div', {'class':'tm-chips-wrap'});
+		var colChipsContainer = E('div', {'class':'tc-chips-wrap'});
 		colChipDefs.forEach(function(ct) {
 			var chip = E('span', {
-				'class': savedHidden[ct.key] ? 'tm-col-chip tm-col-chip--off' : 'tm-col-chip tm-col-chip--on',
+				'class': savedHidden[ct.key] ? 'tc-col-chip tc-col-chip--off' : 'tc-col-chip tc-col-chip--on',
 				'data-tip': _('Click to toggle column visibility')
 			}, ct.label);
 			chip.addEventListener('click', function() {
-				if (self._hiddenCols[ct.key]) { delete self._hiddenCols[ct.key]; chip.className = 'tm-col-chip tm-col-chip--on'; }
-				else { self._hiddenCols[ct.key] = true; chip.className = 'tm-col-chip tm-col-chip--off'; }
+				if (self._hiddenCols[ct.key]) { delete self._hiddenCols[ct.key]; chip.className = 'tc-col-chip tc-col-chip--on'; }
+				else { self._hiddenCols[ct.key] = true; chip.className = 'tc-col-chip tc-col-chip--off'; }
 				var o = loadOpts(); o.hiddenCols = self._hiddenCols; saveOpts(o);
 				if (isAllMode()) runAll();
 			});
@@ -2666,45 +2381,45 @@ return view.extend({
 		];
 		var savedConnHidden = opts.connHiddenCols || {};
 		self._connHiddenCols = savedConnHidden;
-		var connColChipsContainer = E('div', {'class':'tm-chips-wrap'});
+		var connColChipsContainer = E('div', {'class':'tc-chips-wrap'});
 		connColDefs.forEach(function(ct) {
 			var chip = E('span', {
-				'class': savedConnHidden[ct.key] ? 'tm-col-chip tm-col-chip--off' : 'tm-col-chip tm-col-chip--on',
+				'class': savedConnHidden[ct.key] ? 'tc-col-chip tc-col-chip--off' : 'tc-col-chip tc-col-chip--on',
 				'data-tip': _('Click to toggle column visibility')
 			}, ct.label);
 			chip.addEventListener('click', function() {
-				if (self._connHiddenCols[ct.key]) { delete self._connHiddenCols[ct.key]; chip.className = 'tm-col-chip tm-col-chip--on'; }
-				else { self._connHiddenCols[ct.key] = true; chip.className = 'tm-col-chip tm-col-chip--off'; }
+				if (self._connHiddenCols[ct.key]) { delete self._connHiddenCols[ct.key]; chip.className = 'tc-col-chip tc-col-chip--on'; }
+				else { self._connHiddenCols[ct.key] = true; chip.className = 'tc-col-chip tc-col-chip--off'; }
 				var o = loadOpts(); o.connHiddenCols = self._connHiddenCols; saveOpts(o);
 				if (!isAllMode()) runQuery();
 			});
 			connColChipsContainer.appendChild(chip);
 		});
 
-		var sep = function() { return E('span', {'class':'tm-sep'}); };
-		var sectionLabel = function(t) { return E('div', {'class':'tm-section-label'}, t); };
+		var sep = function() { return E('span', {'class':'tc-sep'}); };
+		var sectionLabel = function(t) { return E('div', {'class':'tc-section-label'}, t); };
 
-		var settingsBody = E('div', {'class':'tm-settings-body'});
+		var settingsBody = E('div', {'class':'tc-settings-body tc-hidden'});
 		var settingsCollapsed = true;
-		var settingsToggle = E('div', {'class':'tm-settings-toggle'}, [E('span', {'class':'tm-settings-arrow'}, '▸'), E('span', {}, _('Settings'))]);
+		var settingsToggle = E('div', {'class':'tc-settings-toggle'}, [E('span', {}, '▸'), E('span', {}, _('Settings'))]);
 
 		settingsToggle.addEventListener('click', function() {
 			settingsCollapsed = !settingsCollapsed;
-			settingsBody.classList.toggle('tm-hidden', settingsCollapsed);
+			settingsBody.classList.toggle('tc-hidden', settingsCollapsed);
 			settingsToggle.firstChild.textContent = settingsCollapsed ? '▸' : '▾';
 		});
 
 		// ── Collapsible subsection helper ──────────────────────────────────
 		function mkCollapsible(title, content, startOpen) {
-			var body = E('div', {'class': 'tm-collapsible-body' + (startOpen ? '' : ' tm-hidden')});
+			var body = E('div', {'class': 'tc-collapsible-body' + (startOpen ? '' : ' tc-hidden')});
 			if (content) body.appendChild(content);
-			var arrow = E('span', {'class':'tm-c-mute', 'style':'font-size:11px'}, startOpen ? ' ▾' : ' ▸');
+			var arrow = E('span', {'class':'tc-c-muted', 'style':'font-size:11px'}, startOpen ? ' ▾' : ' ▸');
 			var label = sectionLabel(title);
 			label.style.cursor = 'pointer';
 			label.appendChild(arrow);
 			label.addEventListener('click', function() {
-				var open = !body.classList.contains('tm-hidden');
-				body.classList.toggle('tm-hidden');
+				var open = !body.classList.contains('tc-hidden');
+				body.classList.toggle('tc-hidden');
 				arrow.textContent = open ? ' ▸' : ' ▾';
 			});
 			return {label: label, body: body, el: E('div', {}, [label, body])};
@@ -2714,14 +2429,14 @@ return view.extend({
 		var tgSection = mkCollapsible(_('Telegram Bot'), null, false);
 		var tgLoaded = false;
 		tgSection.label.addEventListener('click', function() {
-			if (!tgLoaded && !tgSection.body.classList.contains('tm-hidden')) {
+			if (!tgLoaded && !tgSection.body.classList.contains('tc-hidden')) {
 				tgLoaded = true;
 				loadTelegramUI(tgSection.body);
 			}
 		});
 
 		function loadTelegramUI(container) {
-			var statusSpan = E('span', {'style':'font-size:12px;margin-left:8px;color:var(--tm-text-mute)'}, _('Loading…'));
+			var statusSpan = E('span', {'style':'font-size:12px;margin-left:8px;color:var(--tc-muted)'}, _('Loading…'));
 			container.appendChild(statusSpan);
 
 			callTelegramGet().then(function(cfg) {
@@ -2739,7 +2454,7 @@ return view.extend({
 					if (saveTimer) clearTimeout(saveTimer);
 					saveTimer = setTimeout(function() {
 						saveStatus.textContent = _('Saving…');
-						saveStatus.style.color = 'var(--tm-text-mute)';
+						saveStatus.style.color = 'var(--tc-muted)';
 						var tk = tokenInput.value;
 						if (tk === '' && cfg.bot_token_set) tk = '***';
 						var inetEl = container.querySelector('#tm-tg-inet');
@@ -2762,7 +2477,7 @@ return view.extend({
 						).then(function(res) {
 							if (res && res.ok) {
 								saveStatus.textContent = '✓';
-								saveStatus.style.color = 'var(--tm-state-ok)';
+								saveStatus.style.color = 'var(--tc-ok)';
 								cfg.bot_token_set = !!(tk && tk !== '***') || cfg.bot_token_set;
 								if (tk && tk !== '***') {
 									tokenInput.value = '';
@@ -2771,11 +2486,11 @@ return view.extend({
 								}
 							} else {
 								saveStatus.textContent = '✗ ' + (res && res.msg || 'error');
-								saveStatus.style.color = 'var(--tm-blocked-fg)';
+								saveStatus.style.color = 'var(--tc-err)';
 							}
 						}).catch(function(e) {
 							saveStatus.textContent = '✗ ' + e.message;
-							saveStatus.style.color = 'var(--tm-blocked-fg)';
+							saveStatus.style.color = 'var(--tc-err)';
 						});
 					}, 600);
 				};
@@ -2814,14 +2529,14 @@ return view.extend({
 				testBtn.addEventListener('click', function() {
 					testBtn.disabled = true;
 					testResult.textContent = _('Sending…');
-					testResult.style.color = 'var(--tm-text-mute)';
+					testResult.style.color = 'var(--tc-muted)';
 					var tk = tokenInput.value || '***';
 					callTelegramTest(tk, chatInput.value, templateArea.value || '').then(function(res) {
 						testResult.textContent = (res && res.ok) ? '✓ ' + (res.msg || 'OK') : '✗ ' + (res && res.msg || 'error');
-						testResult.style.color = (res && res.ok) ? 'var(--tm-state-ok)' : 'var(--tm-blocked-fg)';
+						testResult.style.color = (res && res.ok) ? 'var(--tc-ok)' : 'var(--tc-err)';
 					}).catch(function(e) {
 						testResult.textContent = '✗ ' + e.message;
-						testResult.style.color = 'var(--tm-blocked-fg)';
+						testResult.style.color = 'var(--tc-err)';
 					}).then(function() { testBtn.disabled = false; });
 				});
 				section.appendChild(E('div', {'class':'tg-row'}, [
@@ -2839,7 +2554,7 @@ return view.extend({
 					controlMode = ctrl;
 					segControl.className = 'tg-segmented__item' + (ctrl ? ' tg-segmented__item--active' : '');
 					segNotify.className = 'tg-segmented__item' + (!ctrl ? ' tg-segmented__item--active' : '');
-					controlSection.classList.toggle('tm-hidden', !ctrl);
+					controlSection.classList.toggle('tc-hidden', !ctrl);
 					doSave();
 				}
 
@@ -2896,7 +2611,7 @@ return view.extend({
 				};
 				renderPreview();
 
-				var varRef = E('div', {'style':'font-size:12px;line-height:1.7;color:var(--tm-text)'}, [
+				var varRef = E('div', {'style':'font-size:12px;line-height:1.7;color:currentColor'}, [
 					E('div', {'style':'font-weight:600;margin-bottom:4px'}, _('Variables')),
 					E('div', {}, [E('code', {}, '{{ name }}'), document.createTextNode(' — ' + _('device hostname'))]),
 					E('div', {}, [E('code', {}, '{{ ip }}'), document.createTextNode(' — ' + _('IP address'))]),
@@ -2915,7 +2630,7 @@ return view.extend({
 					E('div', {}, [E('code', {}, '{{ wan_ip }}'), document.createTextNode(' — ' + _('WAN IP'))]),
 					E('div', {}, [E('code', {}, '{{ load }}'), document.createTextNode(' — ' + _('CPU load (1 min)'))]),
 					E('div', {}, [E('code', {}, '{{ conns }}'), document.createTextNode(' — ' + _('device connections'))]),
-					E('div', {'style':'margin-top:6px;color:var(--tm-text-mute);font-size:11px'}, [
+					E('div', {'style':'margin-top:6px;color:var(--tc-muted);font-size:11px'}, [
 						document.createTextNode(_('HTML:') + ' '),
 						E('code', {}, '<b>'), document.createTextNode(' '),
 						E('code', {}, '<i>'), document.createTextNode(' '),
@@ -2926,9 +2641,9 @@ return view.extend({
 				]);
 
 				var templateToggle = E('span', {
-					'style': 'font-size:12px;cursor:pointer;color:var(--tm-text-mute);user-select:none'
+					'style': 'font-size:12px;cursor:pointer;color:var(--tc-muted);user-select:none'
 				}, '▸ ' + _('Customize message'));
-				var templateBody = E('div', {'class':'tm-hidden','style':'margin-top:6px'});
+				var templateBody = E('div', {'class':'tc-hidden','style':'margin-top:6px'});
 				templateBody.appendChild(E('div', {'style':'display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap'}, [
 					E('div', {'style':'flex:1;min-width:200px'}, [templateArea]),
 					varRef
@@ -2938,8 +2653,8 @@ return view.extend({
 					previewBubble
 				]));
 				templateToggle.addEventListener('click', function() {
-					var show = templateBody.classList.contains('tm-hidden');
-					templateBody.classList.toggle('tm-hidden');
+					var show = templateBody.classList.contains('tc-hidden');
+					templateBody.classList.toggle('tc-hidden');
 					templateToggle.textContent = (show ? '▾ ' : '▸ ') + _('Customize message');
 				});
 				notifySection.appendChild(E('div', {'style':'margin-top:8px'}, [templateToggle, templateBody]));
@@ -2965,7 +2680,7 @@ return view.extend({
 					var limitOn = limitEl ? limitEl.checked : cfg.btn_limiter;
 					var shapeOn = shapeEl ? shapeEl.checked : cfg.btn_shaper;
 					if (!inetOn && !wifiOn && !limitOn && !shapeOn) {
-						kbdBubble.appendChild(E('div', {'style':'font-size:11px;color:var(--tm-text-faint);padding:4px'}, _('No action buttons enabled')));
+						kbdBubble.appendChild(E('div', {'style':'font-size:11px;color:var(--tc-faint);padding:4px'}, _('No action buttons enabled')));
 						return;
 					}
 					var row1 = [];
@@ -2976,7 +2691,7 @@ return view.extend({
 						var limitBtns = [];
 						RATE_PRESETS.forEach(function(p) {
 							if (p.v === '0' || p.v === 'custom') return;
-							limitBtns.push(E('span', {'class':'tg-kbd-btn'}, '⚡ ' + p.l.replace(' Mbit/s', 'M').replace(/\s/g, '')));
+							limitBtns.push(E('span', {'class':'tg-kbd-btn'},  + p.l.replace(' Mbit/s', 'M').replace(/\s/g, '')));
 						});
 						for (var li = 0; li < limitBtns.length; li += 3) {
 							kbdBubble.appendChild(E('div', {'class':'tg-kbd-row'}, limitBtns.slice(li, li + 3)));
@@ -3011,24 +2726,24 @@ return view.extend({
 						E('div', {}, [E('code', {}, '/status'), document.createTextNode(' — ' + _('all active blocks, limits, and shapes'))]),
 						E('div', {}, [E('code', {}, '/help'), document.createTextNode(' — ' + _('command list and bot mode'))])
 					]),
-					E('div', {'style':'font-size:10px;color:var(--tm-text-faint);margin-top:4px'},
+					E('div', {'style':'font-size:10px;color:var(--tc-faint);margin-top:4px'},
 						_('Flow: /devices → select device → inline keyboard with enabled actions above'))
 				]));
 
-				if (!controlMode) controlSection.classList.add('tm-hidden');
+				if (!controlMode) controlSection.classList.add('tc-hidden');
 				section.appendChild(controlSection);
 				section.appendChild(notifySection);
 				setupDone = true;
 			}).catch(function(e) {
 				statusSpan.textContent = '✗ ' + e.message;
-				statusSpan.style.color = 'var(--tm-blocked-fg)';
+				statusSpan.style.color = 'var(--tc-err)';
 			});
 		}
 
 		// ── Assemble settings sections ─────────────────────────────────────
 		settingsBody.appendChild(tgSection.el);
 
-		var displaySection = mkCollapsible(_('Display'), E('div', {'class':'tm-settings-section-row'}, [
+		var displaySection = mkCollapsible(_('Display'), E('div', {'class':'tc-settings-section-row'}, [
 			showStats, showConns, extStatsCheck, rdnsCheck, activityCheck,
 			sep(),
 			E('span', {'data-tip':_('Auto-refresh interval for summary table')}, [mkLabel(_('Refresh')+':'), refreshPick.el])
@@ -3039,14 +2754,14 @@ return view.extend({
 		var loggingSection = mkCollapsible(_('Logging & Persistence'), null, false);
 		var loggingLoaded = false;
 		loggingSection.label.addEventListener('click', function() {
-			if (!loggingLoaded && !loggingSection.body.classList.contains('tm-hidden')) {
+			if (!loggingLoaded && !loggingSection.body.classList.contains('tc-hidden')) {
 				loggingLoaded = true;
 				loadLoggingUI(loggingSection.body);
 			}
 		});
 
 		function loadLoggingUI(container) {
-			var statusSpan = E('span', {'style':'font-size:12px;color:var(--tm-text-mute)'}, _('Loading…'));
+			var statusSpan = E('span', {'style':'font-size:12px;color:var(--tc-muted)'}, _('Loading…'));
 			container.appendChild(statusSpan);
 
 			callLoggingGet().then(function(cfg) {
@@ -3058,7 +2773,7 @@ return view.extend({
 					if (logTimer) clearTimeout(logTimer);
 					logTimer = setTimeout(function() {
 						logStatus.textContent = _('Saving…');
-						logStatus.style.color = 'var(--tm-text-mute)';
+						logStatus.style.color = 'var(--tc-muted)';
 						callLoggingSet(
 							container.querySelector('#tm-log-enabled').checked,
 							null, null,
@@ -3071,10 +2786,10 @@ return view.extend({
 							container.querySelector('#tm-persist-rules').checked
 						).then(function(res) {
 							logStatus.textContent = (res && res.ok) ? '✓' : '✗';
-							logStatus.style.color = (res && res.ok) ? 'var(--tm-state-ok)' : 'var(--tm-blocked-fg)';
+							logStatus.style.color = (res && res.ok) ? 'var(--tc-ok)' : 'var(--tc-err)';
 						}).catch(function(e) {
 							logStatus.textContent = '✗';
-							logStatus.style.color = 'var(--tm-blocked-fg)';
+							logStatus.style.color = 'var(--tc-err)';
 						});
 					}, 400);
 				};
@@ -3089,32 +2804,112 @@ return view.extend({
 				var logTelegram = mkToggle('tm-log-telegram', _('Telegram'), cfg.log_telegram, doLogSave);
 				var logConfig = mkToggle('tm-log-config', _('Config'), cfg.log_config, doLogSave);
 
-				container.appendChild(E('div', {'class':'tm-log-row'}, [logEnabled, logSyslog, persistRules, logStatus]));
+				container.appendChild(E('div', {'class':'tc-log-row'}, [logEnabled, logSyslog, persistRules, logStatus]));
 				container.appendChild(E('div', {'style':'margin-top:6px'}, [
-					E('div', {'style':'font-size:11px;color:var(--tm-text-mute);margin-bottom:4px'}, _('Log categories')),
-					E('div', {'class':'tm-log-row'}, [logBlocks, logRatelimits, logShapes, logTelegram, logConfig])
+					E('div', {'style':'font-size:11px;color:var(--tc-muted);margin-bottom:4px'}, _('Log categories')),
+					E('div', {'class':'tc-log-row'}, [logBlocks, logRatelimits, logShapes, logTelegram, logConfig])
 				]));
 			}).catch(function(e) {
 				statusSpan.textContent = '✗ ' + e.message;
-				statusSpan.style.color = 'var(--tm-blocked-fg)';
+				statusSpan.style.color = 'var(--tc-err)';
 			});
 		}
 		settingsBody.appendChild(loggingSection.el);
 
-		var connFiltersRow = E('div', {'class':'tm-conn-filters-row'}, [
+		// ── Flow Offload section (lazy-loaded) ─────────────────────────────
+		var offloadSection = mkCollapsible(_('Flow Offload'), null, false);
+		var offloadLoaded = false;
+		offloadSection.label.addEventListener('click', function() {
+			if (!offloadLoaded && !offloadSection.body.classList.contains('tc-hidden')) {
+				offloadLoaded = true;
+				loadOffloadUI(offloadSection.body);
+			}
+		});
+
+		function loadOffloadUI(container) {
+			var statusSpan = E('span', {'style':'font-size:12px;color:var(--tc-muted)'}, _('Loading…'));
+			container.appendChild(statusSpan);
+
+			callConfigGet().then(function(cfg) {
+				while (container.firstChild) container.removeChild(container.firstChild);
+
+				var saveStatus = E('span', {'class':'tg-save-status'});
+				var saveTimer = null;
+				var swCb, hwCb;
+
+				function doSave() {
+					if (saveTimer) clearTimeout(saveTimer);
+					saveTimer = setTimeout(function() {
+						saveStatus.textContent = _('Applying…');
+						saveStatus.style.color = 'var(--tc-muted)';
+						callConfigSet(undefined, undefined, swCb.checked, hwCb.checked).then(function(res) {
+							saveStatus.textContent = (res && res.ok) ? '✓ ' + _('Applied — firewall reloading') : '✗';
+							saveStatus.style.color = (res && res.ok) ? 'var(--tc-ok)' : 'var(--tc-err)';
+						}).catch(function(e) {
+							saveStatus.textContent = '✗';
+							saveStatus.style.color = 'var(--tc-err)';
+						});
+					}, 400);
+				}
+
+				// Current mode badge
+				var modeLabels = {
+					'none':              ['⊘', _('No offload'),              'var(--tc-muted)'],
+					'software':          ['◑', _('Software offload'),        'var(--tc-speed)'],
+					'hardware-counter':  ['●', _('Hardware offload'),        'var(--tc-warn)'],
+					'hardware':          ['●', _('Hardware offload'),        'var(--tc-warn)']
+				};
+				var ml = modeLabels[cfg.offload_mode] || ['?', cfg.offload_mode, 'var(--tc-muted)'];
+				var modeBadge = E('div', {'style':'margin-bottom:10px;font-size:12px'}, [
+					E('span', {'style':'color:'+ml[2]+';font-size:15px;margin-right:4px'}, ml[0]),
+					E('span', {'style':'color:var(--tc-muted)'}, _('Current mode: ')),
+					E('b', {}, ml[1])
+				]);
+
+				// SW toggle row
+				var swToggleEl = mkToggle('tc-offload-sw', _('Software flow offload'), cfg.sw, function() {
+					hwCb.disabled = !swCb.checked;
+					if (!swCb.checked) { hwCb.checked = false; }
+					doSave();
+				});
+				swCb = swToggleEl.querySelector('input');
+				var swDesc = E('div', {'class':'tc-offload-desc'},
+					_('Accelerates routing in the kernel via nftables flowtable. Speed monitoring and traffic shaping work normally.'));
+
+				// HW toggle row
+				var hwToggleEl = mkToggle('tc-offload-hw', _('Hardware flow offload'), cfg.hw, doSave);
+				hwCb = hwToggleEl.querySelector('input');
+				if (!cfg.sw) hwCb.disabled = true;
+				var hwDesc = E('div', {'class':'tc-offload-desc'},
+					_('Offloads routing to the hardware engine (PPE/NPU). Requires software offload. ' +
+					  '⚠ On many platforms (e.g. Mediatek Filogic) the driver does not report byte counters back to the kernel — real-time speed monitoring will show zero.'));
+
+				container.appendChild(modeBadge);
+				container.appendChild(E('div', {'class':'tc-offload-row'}, [swToggleEl, saveStatus]));
+				container.appendChild(swDesc);
+				container.appendChild(E('div', {'class':'tc-offload-row tc-offload-row--hw'}, [hwToggleEl]));
+				container.appendChild(hwDesc);
+			}).catch(function(e) {
+				statusSpan.textContent = '✗ ' + (e.message || e);
+				statusSpan.style.color = 'var(--tc-err)';
+			});
+		}
+		settingsBody.appendChild(offloadSection.el);
+
+		var connFiltersRow = E('div', {'class':'tc-conn-filters-row'}, [
 			E('span', {'data-tip':_('Filter connections by protocol')}, [mkLabel(_('Proto')+':'), protoPick.el]),
 			sep(),
 			E('span', {'data-tip':_('Group connections table rows')}, [mkLabel(_('Group')+':'), groupPick.el])
 		]);
-		var tableSection = mkCollapsible(_('Table & Speed'), E('div', {'class':'tm-table-speed-inner'}, [
-			E('div', {'class':'tm-table-speed-row'}, [
+		var tableSection = mkCollapsible(_('Table & Speed'), E('div', {'class':'tc-table-speed-inner'}, [
+			E('div', {'class':'tc-table-speed-row'}, [
 				E('span', {'data-tip':_('Polling interval for per-device speed graph')}, [mkLabel(_('Poll')+':'), pollIntervalPick.el]),
 				sep(),
 				E('span', {'data-tip':_('Time window for speed averaging')}, [mkLabel(_('Window')+':'), avgWindowPick.el]),
 				sep(),
 				E('span', {'data-tip':_('Simple = arithmetic mean, EWMA = exponential weighted moving average')}, [mkLabel(_('Method')+':'), avgMethodPick.el])
 			]),
-			E('div', {'style':'font-size:11px;color:var(--tm-text-mute);margin-bottom:4px'}, _('Visible columns')),
+			E('div', {'style':'font-size:11px;color:var(--tc-muted);margin-bottom:4px'}, _('Visible columns')),
 			colChipsContainer,
 			connColChipsContainer,
 			connFiltersRow
@@ -3123,29 +2918,29 @@ return view.extend({
 
 		function updateTableSectionMode() {
 			var all = isAllMode();
-			colChipsContainer.classList.toggle('tm-hidden', !all);
-			connColChipsContainer.classList.toggle('tm-hidden', all);
-			connFiltersRow.classList.toggle('tm-hidden', all);
+			colChipsContainer.classList.toggle('tc-hidden', !all);
+			connColChipsContainer.classList.toggle('tc-hidden', all);
+			connFiltersRow.classList.toggle('tc-hidden', all);
 		}
 		updateTableSectionMode();
 
-		var settingsPanel = E('div', {'class':'tm-settings-panel'}, [settingsToggle, settingsBody]);
+		var settingsPanel = E('div', {'class':'tc-settings-panel'}, [settingsToggle, settingsBody]);
 
 		function loadActivityPanel(container) {
-			container.className = 'tm-activity-panel';
-			var statusSpan = E('span', {'style':'font-size:12px;color:var(--tm-text-mute)'}, _('Loading…'));
+			container.className = 'tc-activity-panel';
+			var statusSpan = E('span', {'style':'font-size:12px;color:var(--tc-muted)'}, _('Loading…'));
 			container.appendChild(statusSpan);
 
 			callActivityLog(100).then(function(res) {
 				while (container.firstChild) container.removeChild(container.firstChild);
 				if (!res || !res.lines || !res.lines.length) {
-					container.appendChild(E('div', {'style':'font-size:12px;color:var(--tm-text-mute)'}, _('No activity recorded yet.')));
+					container.appendChild(E('div', {'style':'font-size:12px;color:var(--tc-muted)'}, _('No activity recorded yet.')));
 					return;
 				}
-				var logArea = E('div', {'class':'tm-log-area'});
+				var logArea = E('div', {'class':'tc-log-area'});
 				var lines = res.lines.slice().reverse();
 				lines.forEach(function(line) {
-					logArea.appendChild(E('div', {'class':'tm-log-line'}, line));
+					logArea.appendChild(E('div', {'class':'tc-log-line'}, line));
 				});
 				var refreshBtn = E('button', {
 					'class': 'cbi-button',
@@ -3160,7 +2955,7 @@ return view.extend({
 				container.appendChild(refreshBtn);
 			}).catch(function(e) {
 				statusSpan.textContent = '✗ ' + e.message;
-				statusSpan.style.color = 'var(--tm-blocked-fg)';
+				statusSpan.style.color = 'var(--tc-err)';
 			});
 		}
 
@@ -3170,7 +2965,7 @@ return view.extend({
 		}
 
 		callVersion().then(function(res) {
-			var el = document.getElementById('tm-version-footer');
+			var el = document.getElementById('tc-version-footer');
 			if (el && res && res.version) {
 				el.textContent = 'trafficctl v' + res.version + ' (' + TRAFFICCTL_BUILD + ')';
 			}
@@ -3201,19 +2996,28 @@ return view.extend({
 			]);
 
 			if (mode === 'hardware-counter') {
-				bg     = 'rgba(41,128,185,0.10)';
-				border = '#2980b9';
-				icon   = '✔️';
+				bg     = 'rgba(211,84,0,0.10)';
+				border = '#d35400';
+				icon   = '⚠️';
 				body   = E('div', {}, [
-					para(bold(_('Hardware flow offloading is active — all features work.'))),
-					para([_('The router offloads packet forwarding to the hardware (NIC/SoC) for higher throughput. ' +
-						  'The flowtable '),
+					para(bold(_('Hardware flow offloading active — real-time speed monitoring unavailable.'))),
+					para([_('The flowtable '),
 						E('code', {}, 'counter'),
-						_(' flag (Linux 5.7+ / OpenWrt 22.03+ with fw4) keeps conntrack byte counts ' +
-						  'in sync — monitoring, shaping, and rate limiting all work normally.')]),
+						_(' flag should sync hardware byte counts back to conntrack, but on many ' +
+						  'platforms (e.g. Mediatek Filogic) the driver does not implement the stats ' +
+						  'callback, so conntrack counters remain frozen for active flows.')]),
+					para(bold(_('To restore speed monitoring:'))),
+					E('ul', {'class': 'tc-offload-ul'}, [
+						E('li', {}, [
+							_('Disable hardware offload (keeps software offload): '),
+							E('code', {}, 'uci set firewall.@defaults[0].flow_offloading_hw=0 && uci commit firewall && fw4 reload'),
+						]),
+						E('li', {}, _('Or disable all flow offload in LuCI → Network → Firewall → General Settings.')),
+					]),
+					para(_('Blocking, rate limiting, and traffic shaping continue to work regardless.')),
 					docLinks,
 				]);
-			} else if (mode === 'hardware') {
+				} else if (mode === 'hardware') {
 				bg     = 'rgba(211,84,0,0.10)';
 				border = '#d35400';
 				icon   = '⚠️';
@@ -3222,7 +3026,7 @@ return view.extend({
 					para(_('The router offloads established connections from the CPU to the hardware (NIC/SoC), ' +
 						  'achieving 2–3× higher throughput and lower CPU usage.')),
 					para(_('In this mode the kernel\'s conntrack, firewall, and tc are bypassed for offloaded flows:')),
-					E('ul', {'class': 'tm-offload-ul'}, [
+					E('ul', {'class': 'tc-offload-ul'}, [
 						E('li', {}, _('Speed monitoring — conntrack byte counters are not updated')),
 						E('li', {}, _('Traffic shaping (tc/HTB) — bypassed for offloaded flows')),
 						E('li', {}, _('Rate limiting — applies only to new connections')),
@@ -3254,25 +3058,25 @@ return view.extend({
 			}
 
 			var banner = E('div', {
-				'class': 'tm-offload-banner',
+				'class': 'tc-offload-banner',
 				'style': 'border:1px solid ' + border + ';background:' + bg
 			}, [
-				E('div', {'class': 'tm-offload-banner__row'}, [
-					E('span', {'class': 'tm-offload-banner__icon'}, icon),
-					E('div', {'class': 'tm-offload-banner__body'}, body),
+				E('div', {'class': 'tc-offload-banner__row'}, [
+					E('span', {'class': 'tc-offload-banner__icon'}, icon),
+					E('div', {'class': 'tc-offload-banner__body'}, body),
 					E('span', {
-						'class': 'tm-offload-banner__close',
+						'class': 'tc-offload-banner__close',
 						'title': _('Dismiss')
 					}, '×')
 				])
 			]);
 			banner.firstChild.lastChild.addEventListener('click', function() {
-				banner.classList.add('tm-hidden');
+				banner.classList.add('tc-hidden');
 			});
 			return banner;
 		};
 
-		var offloadBanner = E('div', {'id': 'tm-offload-banner', 'class': 'tm-hidden'});
+		var offloadBanner = E('div', {'id': 'tc-offload-banner', 'class': 'tc-hidden'});
 
 		// Debug: add ?offload_debug=1 to URL to preview all banner types at once
 		if (window.location.search.indexOf('offload_debug') !== -1) {
@@ -3280,18 +3084,18 @@ return view.extend({
 				var b = mkOffloadBanner(mode);
 				if (b) offloadBanner.appendChild(b);
 			});
-			offloadBanner.classList.remove('tm-hidden');
+			offloadBanner.classList.remove('tc-hidden');
 		} else {
 			callConfigGet().then(function(cfg) {
 				var b = mkOffloadBanner(cfg && cfg.offload_mode);
 				if (!b) return;
 				offloadBanner.appendChild(b);
-				offloadBanner.classList.remove('tm-hidden');
+				offloadBanner.classList.remove('tc-hidden');
 			});
 		}
 
-		return E('div', {'class':'cbi-map', 'style':'color:var(--tm-text)'}, [
-			E('h2', {'style':'color:var(--tm-text)'}, _('Traffic Control')),
+		return E('div', {'class':'cbi-map', 'style':'color:currentColor'}, [
+			E('h2', {'style':'color:currentColor'}, _('Traffic Control')),
 			E('div', {'class':'cbi-section'}, [
 				offloadBanner,
 				E('div', {'style':'margin-bottom:10px'}, [
@@ -3303,10 +3107,11 @@ return view.extend({
 				settingsPanel,
 				statsDiv,
 				extStatsDiv,
+				deviceGraphDiv,
 				connsDiv,
 				activityDiv
 			]),
-			E('div', {'id':'tm-version-footer','class':'tm-version-footer'},
+			E('div', {'id':'tc-version-footer','class':'tc-version-footer'},
 				'trafficctl (' + TRAFFICCTL_BUILD + ')')
 		]);
 	},

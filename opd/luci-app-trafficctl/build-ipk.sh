@@ -28,7 +28,7 @@ chmod +x "$DATA/usr/local/bin/trafficctl-"*.sh
 chmod +x "$DATA/usr/libexec/rpcd/luci.trafficctl"
 [ -d "$DATA/etc/init.d" ] && chmod +x "$DATA/etc/init.d/"*
 
-(cd "$DATA" && tar czf "$WORKDIR/data.tar.gz" .)
+(cd "$DATA" && COPYFILE_DISABLE=1 tar --format ustar --exclude='._*' -cf - . | gzip -9 > "$WORKDIR/data.tar.gz")
 
 # Build control.tar.gz — package metadata
 CTRL="$WORKDIR/control"
@@ -87,7 +87,7 @@ exit 0
 EOF
 chmod +x "$CTRL/prerm"
 
-(cd "$CTRL" && tar czf "$WORKDIR/control.tar.gz" .)
+(cd "$CTRL" && COPYFILE_DISABLE=1 tar --format ustar --exclude='._*' -cf - . | gzip -9 > "$WORKDIR/control.tar.gz")
 
 # Assemble ipk: gzip-compressed tar archive (OpenWrt opkg format, NOT Debian ar)
 echo "2.0" > "$WORKDIR/debian-binary"
@@ -95,6 +95,6 @@ echo "2.0" > "$WORKDIR/debian-binary"
 mkdir -p "$OUTDIR"
 IPK_FILE="$OUTDIR/${PKG_NAME}_${PKG_VERSION}-${PKG_RELEASE}_${PKG_ARCH}.ipk"
 
-(cd "$WORKDIR" && tar --numeric-owner --owner=0 --group=0 -czf "$OLDPWD/$IPK_FILE" ./debian-binary ./control.tar.gz ./data.tar.gz)
+(cd "$WORKDIR" && COPYFILE_DISABLE=1 tar --format ustar --exclude='._*' -cf - ./debian-binary ./control.tar.gz ./data.tar.gz | gzip -9 > "$OLDPWD/$IPK_FILE")
 
 echo "$IPK_FILE"

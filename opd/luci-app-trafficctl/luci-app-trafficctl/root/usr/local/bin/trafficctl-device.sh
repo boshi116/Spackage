@@ -282,23 +282,45 @@ BEGIN { n=0 }
 ')
 
 # Optionally resolve DNS for connection destinations
-if [ "$DO_RDNS" = "1" ] && command -v dig >/dev/null 2>&1; then
+if [ "$DO_RDNS" = "1" ]; then
     DST_IPS=$(echo "$CONNTRACK_DATA" | grep -oE 'dst=[0-9.]+' | sed 's/dst=//' | sort -u | grep -v "^$IP$")
-    RDNS_MAP="/tmp/trafficctl_rdns_$$"
-    : > "$RDNS_MAP"
-    for dip in $DST_IPS; do
-        host=$(dig +short +time=1 +tries=1 -x "$dip" 2>/dev/null | grep -v '^;;' | head -1 | sed 's/\.$//')
-        case "$host" in
-            *[!a-zA-Z0-9._-]*|"") continue ;;
-        esac
-        echo "$dip $host" >> "$RDNS_MAP"
-    done
-    if [ -s "$RDNS_MAP" ]; then
-        # Build sed expression from map
-        SED_EXPR=$(awk '{printf "s|\"dst\":\"%s\",\"host\":\"\"|\"dst\":\"%s\",\"host\":\"%s\"|g\n", $1, $1, $2}' "$RDNS_MAP")
-        CONNS_OUT=$(printf "%s" "$CONNS_OUT" | sed "$SED_EXPR")
+    if [ -n "$DST_IPS" ]; then
+        RDNS_MAP="/tmp/trafficctl_rdns_$$"
+        : > "$RDNS_MAP"
+        RDNS_DONE=0
+        # Batch resolve via ubus network.rrdns (same as LuCI frontend; no extra packages needed)
+        if command -v ubus >/dev/null 2>&1; then
+            ADDRS_JSON=$(echo "$DST_IPS" | awk '{printf "%s\"%s\"", (NR>1?",":""), $1}')
+            RDNS_RESULT=$(ubus call network.rrdns lookup \
+                "{\"addrs\":[$ADDRS_JSON],\"timeout\":3000,\"limit\":64}" 2>/dev/null)
+            if [ -n "$RDNS_RESULT" ]; then
+                RDNS_DONE=1
+                for dip in $DST_IPS; do
+                    host=$(printf '%s' "$RDNS_RESULT" | jsonfilter -e "@[\"$dip\"]" 2>/dev/null)
+                    case "$host" in
+                        *[!a-zA-Z0-9._-]*|"") continue ;;
+                    esac
+                    echo "$dip $host" >> "$RDNS_MAP"
+                done
+            fi
+        fi
+        # Fallback: per-IP nslookup (BusyBox, always available on OpenWrt)
+        if [ "$RDNS_DONE" = "0" ] && command -v nslookup >/dev/null 2>&1; then
+            for dip in $DST_IPS; do
+                host=$(nslookup "$dip" 2>/dev/null | sed -n 's/.*name = \(.*\)\.$/\1/p' | head -1)
+                case "$host" in
+                    *[!a-zA-Z0-9._-]*|"") continue ;;
+                esac
+                echo "$dip $host" >> "$RDNS_MAP"
+            done
+        fi
+        if [ -s "$RDNS_MAP" ]; then
+            # Build sed expression from map
+            SED_EXPR=$(awk '{printf "s|\"dst\":\"%s\",\"host\":\"\"|\"dst\":\"%s\",\"host\":\"%s\"|g\n", $1, $1, $2}' "$RDNS_MAP")
+            CONNS_OUT=$(printf "%s" "$CONNS_OUT" | sed "$SED_EXPR")
+        fi
+        rm -f "$RDNS_MAP"
     fi
-    rm -f "$RDNS_MAP"
 fi
 
 # Output final JSON

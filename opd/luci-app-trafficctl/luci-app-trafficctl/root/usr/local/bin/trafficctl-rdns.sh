@@ -19,10 +19,15 @@ if ! tctl_validate_ip "$IP"; then
 fi
 
 HOST=""
-if command -v dig >/dev/null 2>&1; then
-    HOST=$(dig -4 +short +time=1 +tries=1 -x "$IP" 2>/dev/null | grep -v '^;;' | head -1 | sed 's/\.$//')
-elif command -v nslookup >/dev/null 2>&1; then
-    HOST=$(nslookup "$IP" 2>/dev/null | grep 'name =' | awk '{print $NF}' | sed 's/\.$//')
+# Try ubus network.rrdns (same resolver the LuCI frontend uses; always available via rpcd)
+if command -v ubus >/dev/null 2>&1; then
+    HOST=$(ubus call network.rrdns lookup \
+        "{\"addrs\":[\"$IP\"],\"timeout\":2000,\"limit\":1}" 2>/dev/null \
+        | jsonfilter -e "@[\"$IP\"]" 2>/dev/null)
+fi
+# Fallback: BusyBox nslookup (always available on OpenWrt)
+if [ -z "$HOST" ] && command -v nslookup >/dev/null 2>&1; then
+    HOST=$(nslookup "$IP" 2>/dev/null | sed -n 's/.*name = \(.*\)\.$/\1/p' | head -1)
 fi
 
 # Validate hostname (only allow safe chars)

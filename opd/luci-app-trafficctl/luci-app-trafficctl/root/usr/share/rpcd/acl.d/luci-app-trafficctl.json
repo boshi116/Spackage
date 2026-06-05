@@ -25,7 +25,8 @@
 					"ratelimit", "shape_add", "shape_remove", "shape_status",
 					"config_set",
 					"telegram_config_set", "telegram_test",
-					"logging_config_set"
+					"logging_config_set",
+					"config_set"
 				]
 			},
 			"uci": [ "trafficctl" ]

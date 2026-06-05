@@ -42,7 +42,7 @@ list)
 	printf '"shape_stats":{},'
 	printf '"rdns":{"ip":"str"},'
 	printf '"config_get":{},'
-	printf '"config_set":{"enabled":"bool","default_mode":"str"},'
+	printf '"config_set":{"enabled":"bool","default_mode":"str","sw":"bool","hw":"bool"},'
 	printf '"telegram_config_get":{},'
 	printf '"telegram_config_set":{"enabled":"bool","bot_token":"str","chat_id":"str","poll_interval":"int","notify_new_device":"bool","notify_known_device":"bool","control_enabled":"bool","notify_template":"str","btn_block_inet":"bool","btn_block_wifi":"bool","btn_limiter":"bool","btn_shaper":"bool"},'
 	printf '"telegram_test":{"bot_token":"str","chat_id":"str","message":"str"},'
@@ -179,18 +179,30 @@ call)
 		enabled=$(uci -q get trafficctl.main.enabled)
 		mode=$(uci -q get trafficctl.main.default_mode)
 		offload=$(tctl_get_offload_mode)
-		printf '{"enabled":%s,"default_mode":"%s","offload_mode":"%s"}' \
+		sw=$(uci -q get firewall.@defaults[0].flow_offloading)
+		hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
+		printf '{"enabled":%s,"default_mode":"%s","offload_mode":"%s","sw":%s,"hw":%s}' \
 			"$([ "$enabled" = "1" ] && echo true || echo false)" \
 			"${mode:-limiter}" \
-			"$offload"
+			"$offload" \
+			"$([ "$sw" = "1" ] && echo true || echo false)" \
+			"$([ "$hw" = "1" ] && echo true || echo false)"
 		;;
 	config_set)
 		read -r input
 		enabled=$(echo "$input" | jsonfilter -e '@.enabled' 2>/dev/null)
 		mode=$(echo "$input" | jsonfilter -e '@.default_mode' 2>/dev/null)
+		sw=$(echo "$input" | jsonfilter -e '@.sw' 2>/dev/null)
+		hw=$(echo "$input" | jsonfilter -e '@.hw' 2>/dev/null)
 		[ -n "$enabled" ] && uci set trafficctl.main.enabled="$([ "$enabled" = "true" ] && echo 1 || echo 0)"
 		[ -n "$mode" ] && uci set trafficctl.main.default_mode="$mode"
 		uci commit trafficctl
+		if [ -n "$sw" ] || [ -n "$hw" ]; then
+			[ -n "$sw" ] && uci set "firewall.@defaults[0].flow_offloading=$([ "$sw" = "true" ] && echo 1 || echo 0)"
+			[ -n "$hw" ] && uci set "firewall.@defaults[0].flow_offloading_hw=$([ "$hw" = "true" ] && echo 1 || echo 0)"
+			uci commit firewall
+			/etc/init.d/firewall reload >/dev/null 2>&1 &
+		fi
 		echo '{"ok":true}'
 		;;
 	telegram_config_get)
