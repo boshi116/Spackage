@@ -323,9 +323,11 @@ var T = {
     'MSG_RST_DONE': _('Restore thoroughly complete! Router will auto-reboot!'),
     'MSG_RST_INVALID': _('Invalid capsule file! NetWiz signature missing, intercepted for security.'),
     'V6_NAT_ERR_TIT1': _('🚨 Severe Network Topology Conflict!'),
-    'V6_NAT_ERR_MSG1': _('System detected that IPv6 and LAN "Masquerading (NAT)" are <b>BOTH enabled</b>!<br>This will paralyze IPv6 allocation and cause routing loops.<br>👉 <b>Fix:</b> Please <b style="color:#ef4444;">Disable IPv6</b> here immediately, or go to <code>Network -> Firewall</code> to disable NAT.'),
+    'V6_NAT_ERR_MSG1': _('System detected that IPv6 and LAN "Masquerading (NAT)" are <b>BOTH enabled</b>!This will paralyze IPv6 allocation and cause routing loops.<br>👉 <b>Fix:</b> Please go to <code>Network -> Firewall</code> to disable LAN Masquerading, or <b style="color:#ef4444;">Disable IPv6</b> in the LAN settings on the Netwiz homepage.'),
     'V6_NAT_ERR_TIT2': _('⚠️ IPv6 Configuration Blocked'),
     'V6_NAT_ERR_MSG2': _('Detected that LAN "IP Masquerading (NAT)" is enabled. Forcing IPv6 on under a double-NAT topology will cause network disconnection.<br>👉 <b>Fix:</b> Please go to <code>Network -> Firewall -> Zones</code> to disable LAN Masquerading first.'),
+    'MSG_REBOOTING': _('System is rebooting, please wait...'),
+    'MSG_WAIT_OFFLINE': _('Waiting for device to disconnect...'),
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -340,8 +342,8 @@ var callSystemBoard = rpc.declare({ object: 'system', method: 'board', expect: {
 var callSmartBackup = rpc.declare({ object: 'netwiz', method: 'smart_backup', params: ['type'], expect: { '': {} } });
 var callCheckBackup = rpc.declare({ object: 'netwiz', method: 'check_backup', expect: { '': {} } });
 var callSmartRestoreExec = rpc.declare({ object: 'netwiz', method: 'smart_restore_exec', params: ['filepath'], expect: { result: 0 } });
-var callCheckStorage = rpc.declare({ object: 'netwiz', method: 'check_storage', expect: { tmp_avail_mb: 0 } });
-var callCheckRestoreStatus = rpc.declare({ object: 'netwiz', method: 'check_restore_status', expect: { status: 'unknown', msg: '' } });
+var callCheckStorage = rpc.declare({ object: 'netwiz', method: 'check_storage', expect: { '': {} } });
+var callCheckRestoreStatus = rpc.declare({ object: 'netwiz', method: 'check_restore_status', expect: { '': {} } });
 
 return view.extend({
     handleSaveApply: null,
@@ -365,6 +367,7 @@ return view.extend({
             '  .nw-top-back svg { width: 25px; height: 25px; }',
             '  .nw-step-line svg { width: 20px; height: 20px; display: block; }',
             '  body #view #netwiz-container #wiz-step-indicator .nw-step-line svg, body #maincontent #netwiz-container #wiz-step-indicator .nw-step-line svg { background: transparent !important; background-color: transparent !important; border: none !important; box-shadow: none !important; }',
+            '  body #view #netwiz-container .nw-badge svg, body #maincontent #netwiz-container .nw-badge svg { background: transparent !important; background-color: transparent !important; }',
             '  .alert-message, .alert-danger, .alert, #sysmsg { display: none !important; }', 
   
             '  #nw-wizard-modal .nw-wiz-modal-box > div:nth-child(2) { flex: 1 1 auto !important; overflow-y: auto !important; padding: 20px 25px 10px !important; }',
@@ -551,7 +554,7 @@ return view.extend({
             '                <div style="font-size: 13px; color: #64748b; line-height: 1.6; text-align: left;">',
             '                    {{TXT_FULL_BACKUP_DESC}}',
             '                    <div onclick="var t=this.querySelector(\'#nw-copy-tip\'); var el=document.createElement(\'textarea\'); el.value=\'wget -qO- https://raw.githubusercontent.com/huchd0/luci-app-netwiz/master/install.sh | sh\'; el.style.position=\'absolute\'; el.style.left=\'-9999px\'; document.body.appendChild(el); el.select(); var ok=false; try{ ok=document.execCommand(\'copy\'); }catch(e){} document.body.removeChild(el); if(ok){ t.innerHTML=\'{{TXT_COPIED}}\'; t.style.color=\'#10b981\'; setTimeout(function(){ t.innerHTML=\'{{TXT_COPY_TIP}}\'; t.style.color=\'#64748b\'; }, 2000); }else{ t.innerHTML=\'{{TXT_COPY_FAIL}}\'; setTimeout(function(){ t.innerHTML=\'{{TXT_COPY_TIP}}\'; }, 2000); }" style="margin-top: 10px; padding: 12px 15px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s ease;" onmouseover="this.style.background=\'#f1f5f9\'; this.style.borderColor=\'#5E72E4\';" onmouseout="this.style.background=\'#f8fafc\'; this.style.borderColor=\'#cbd5e1\';">',
-            '                        <code style="font-family: monospace; color: #334155; font-size: 13.5px; word-break: break-all; font-weight: bold;">wget -qO- https://raw.githubusercontent.com/huchd0/luci-app-netwiz/master/install.sh | sh</code>',
+            '                        <code style="font-family: monospace; color: #334155; font-size: 13.5px; word-break: break-all; font-weight: bold; background: #e9ecef;">wget -qO- https://raw.githubusercontent.com/huchd0/luci-app-netwiz/master/install.sh | sh</code>',
             '                        <span id="nw-copy-tip" style="flex-shrink: 0; margin-left: 15px; font-size: 12px; font-weight: bold; color: #64748b; transition: color 0.2s;">{{TXT_COPY_TIP}}</span>',
             '                    </div>',
             '                </div>',
@@ -937,8 +940,8 @@ return view.extend({
 
                 if (wizModal) wizModal.style.display = 'none';
                 openModal({
-                    title: T['WIZ_SKIP_TITLE'] || '解除鎖定',
-                    msg: '<div style="color: #64748b; font-size: 16px; font-weight:bold;">' + (T['WIZ_SKIP_MSG'] || '正在解除鎖定，進入官方后台...') + '</div>',
+                    title: T['WIZ_SKIP_TITLE'] || 'Unlock',
+                    msg: '<div style="color: #64748b; font-size: 16px; font-weight:bold;">' + (T['WIZ_SKIP_MSG'] || 'Entering official dashboard...') + '</div>',
                     spin: true
                 });
                 setTimeout(function() {
@@ -1016,17 +1019,17 @@ return view.extend({
                     var p2 = container.querySelector('#nw-admin-pwd-confirm').value;
                     if (!p1) {
                         openModal({ 
-                            title: T['M_INC_TIT'] || '提示', 
-                            msg: T['M_PWD_REQ'] || '請輸入新管理員密碼，或勾選「暫不配置」！', 
-                            okText: T['M_CLOSE'] || '關閉' 
+                            title: T['M_INC_TIT'] || 'Notice', 
+                            msg: T['M_PWD_REQ'] || 'Password required!', 
+                            okText: T['M_CLOSE'] || 'Close' 
                         });
                         return;
                     }
                     if (p1 !== p2) {
                         openModal({ 
-                            title: T['M_INC_TIT'] || '提示', 
+                            title: T['M_INC_TIT'] || 'Notice', 
                             msg: T['M_PWD_MISMATCH'], 
-                            okText: T['M_CLOSE'] || '關閉'
+                            okText: T['M_CLOSE'] || 'Close'
                         });
                         return;
                     }
@@ -1108,10 +1111,10 @@ return view.extend({
                     if (key && key.length < 8) { openModal({ title: T['M_FMT_TIT'], msg: T['M_PWD_SHORT'], okText: T['M_CLOSE'] }); return; }
                     if (key.length === 0) { 
                         openModal({
-                            title: T['M_OPEN_WARN_TIT'] || '⚠️ 无密码警告', 
-                            msg: T['M_OPEN_WARN_MSG'] || '您正在设置无密码的开放 Wi-Fi，确定要继续吗？', 
+                            title: T['M_OPEN_WARN_TIT'] || '⚠️ No Password', 
+                            msg: T['M_OPEN_WARN_MSG'] || 'Setting up an open Wi-Fi without a password. Continue?', 
                             cancelText: T['M_CLOSE'], 
-                            okText: T['BTN_NEXT'] || '继续', 
+                            okText: T['BTN_NEXT'] || 'Continue', 
                             isDanger: true,
                             onCancel: function() { container.querySelector('#nw-global-modal').style.display = 'none'; },
                             onOk: function() { 
@@ -1151,7 +1154,7 @@ return view.extend({
             var keepIpv6 = window._trueIpv6State;
 
             wizModal.style.display = 'none';
-            openModal({ title: T['WIZ_TITLE'] || '向导配置中', msg: '<div style="color: #64748b; font-size: 16px; font-weight:bold;">' + T['MSG_WRITING'] + '</div>', spin: true });
+            openModal({ title: T['WIZ_TITLE'] || 'Configuring', msg: '<div style="color: #64748b; font-size: 16px; font-weight:bold;">' + T['MSG_WRITING'] + '</div>', spin: true });
 
             // 网络配置的核心提取为一个函数，分流调用
             var doNetSetupConfig = function() {
@@ -2485,13 +2488,90 @@ return view.extend({
                 
                 var startProcess = function() {
                     var execRestore = function() {
-                        openModal({
-                            title: T['M_RST_NATIVE_TIT'],
-                            msg: '<div style="text-align:center; padding:10px 0; color:#64748b;">' + T['M_RST_NATIVE_MSG'] + '<br><div id="nw-upload-progress" style="font-size:24px; color:#3b82f6; font-weight:bold; margin-top:10px; font-family:monospace;">0%</div></div>',
-                            spin: true 
-                        });
+                    openModal({
+                        title: T['M_RST_NATIVE_TIT'],
+                        msg: '<div style="text-align:center; padding:10px 0; color:#64748b;">' + T['M_RST_NATIVE_MSG'] + '<br><div id="nw-upload-progress" style="font-size:24px; color:#3b82f6; font-weight:bold; margin-top:10px; font-family:monospace;">0%</div></div>',
+                        spin: true 
+                    });
+                    
+                    // 探测心跳包函数
+                    // 👉 终极神级版：状态机双向探测雷达 (先等断网，再等连通)
+                    var executeRebootProbe = function(newIp) {
+                        var rebootSec = 0;
+                        var h = window.location.hostname;
+                        var pEl = document.getElementById('nw-upload-progress');
+                        var isRedirecting = false;
                         
-                        var fd = new FormData();
+                        var isOffline = false;       // 状态标记：是否已经检测到断网
+                        var offlineCount = 0;        // 连续断网确认计数
+
+                        // 定义核心探测器，加入检查模式 (checkMode)
+                        var checkIp = function(targetIp, checkMode) {
+                            var controller = new AbortController();
+                            var tid = setTimeout(function() { controller.abort(); }, 1500);
+                            
+                            fetch('http://' + targetIp + '/cgi-bin/luci/?_t=' + Date.now(), { 
+                                method: 'GET', 
+                                signal: controller.signal,
+                                mode: 'no-cors' 
+                            })
+                            .then(function() {
+                                clearTimeout(tid);
+                                if (checkMode === 'wait_offline') {
+                                    // 阶段1：还在连通，说明路由器还没关机，重置断网计数
+                                    offlineCount = 0;
+                                } else if (checkMode === 'wait_online' && !isRedirecting) {
+                                    // 阶段2：已经断过网，现在又连通了！说明重启完毕！
+                                    isRedirecting = true;
+                                    window.location.href = 'http://' + targetIp + '/cgi-bin/luci/';
+                                }
+                            }).catch(function() {
+                                clearTimeout(tid);
+                                if (checkMode === 'wait_offline') {
+                                    // 阶段1：探测到掉线，增加确认计数
+                                    offlineCount++;
+                                    if (offlineCount >= 2) {
+                                        isOffline = true; // 连续2次失败，确认路由器已正式断网！
+                                    }
+                                }
+                            });
+                        };
+
+                        var rebootTimer = setInterval(function() {
+                            if (isRedirecting) {
+                                clearInterval(rebootTimer);
+                                return;
+                            }
+                            rebootSec += 2;
+                            
+                            if (!isOffline) {
+                                // ===== 阶段 1：等待路由器关机断网 =====
+                                if (pEl) pEl.innerHTML = '<span style="color:#f59e0b; font-size:16px;">⏳ ' + (T['MSG_WAIT_OFFLINE'] || 'Waiting for device to disconnect...') + ' (' + rebootSec + 's)</span>';
+                                checkIp(h, 'wait_offline');
+                                
+                                // 防呆兜底：如果等了 60 秒还没断开（可能是浏览器缓存了探针），强制进入下一阶段
+                                if (rebootSec > 60) {
+                                    isOffline = true;
+                                }
+                            } else {
+                                // ===== 阶段 2：已经断网，等待路由器重新开机连通 =====
+                                if (pEl) pEl.innerHTML = '<span style="color:#3b82f6; font-size:16px;">🔄 ' + (T['MSG_REBOOTING'] || 'System is rebooting...') + ' (' + rebootSec + 's / 300s)</span>';
+                                
+                                checkIp(h, 'wait_online');
+                                if (newIp && newIp !== h && newIp !== 'undefined' && newIp !== '') {
+                                    checkIp(newIp, 'wait_online');
+                                }
+                                
+                                if (rebootSec > 300) {
+                                    isRedirecting = true;
+                                    clearInterval(rebootTimer);
+                                    if (pEl) pEl.innerHTML = '<span style="color:#f59e0b; font-size:16px;">⚠️ ' + (T['MSG_MANUAL_VISIT'] || 'If IP changed, please update PC IP and visit manually.') + '</span>';
+                                }
+                            }
+                        }, 2000);
+                    };
+                    
+                    var fd = new FormData();
                         var sid = (typeof L !== 'undefined' && L.env && L.env.sessionid) ? L.env.sessionid : "";
                         if (!sid) {
                             var match = document.cookie.match(/sysauth_http=([^;]+)/) || document.cookie.match(/sysauth=([^;]+)/);
@@ -2525,14 +2605,15 @@ return view.extend({
                                 if (pEl) pEl.innerHTML = '<span style="color:#10b981; font-size:16px;">' + T['M_RST_DELIVERED'] + '</span>';
                                 
                                 callSmartRestoreExec(realPath).then(function() {
-                                    // 状态探针轮询，按 Code 解析字典
+                                    var errCount = 0;
+                                    var futureIp = ''; // 储存未来的新 IP
                                     var checkTimer = setInterval(function() {
                                         callCheckRestoreStatus().then(function(res) {
+                                            errCount = 0;
                                             var s = res.status;
                                             var code = res.code;
                                             var m = T[code] || code;
                                             
-                                            // 解析动态变量
                                             if (code === 'MSG_RST_OOM_INTERCEPT') {
                                                 m = m.replace('{u}', res.arg1).replace('{a}', res.arg2);
                                             }
@@ -2552,12 +2633,20 @@ return view.extend({
                                             } else if (s === 'done') {
                                                 clearInterval(checkTimer);
                                                 if (pEl) pEl.innerHTML = '<span style="color:#10b981; font-size:18px;">🎉 ' + m + '</span>';
-                                                setTimeout(function() { window.location.reload(); }, 25000); 
+                                                futureIp = res.arg1 || ''; // 从后端获取未来的新 IP
+                                                executeRebootProbe(futureIp); 
                                             }
-                                        }).catch(function() {});
+                                        }).catch(function() {
+                                            errCount++;
+                                            if (errCount >= 3) {
+                                                clearInterval(checkTimer);
+                                                if (pEl) pEl.innerHTML = '<span style="color:#10b981; font-size:18px;">🎉 ' + (T['MSG_RST_DONE'] || 'Restore thoroughly complete! Router will auto-reboot!') + '</span>';
+                                                executeRebootProbe(futureIp); // 断网发生时，带着已有记录的新 IP 启动双向探针
+                                            }
+                                        });
                                     }, 2500);
                                 }).catch(function() {
-                                    setTimeout(function() { window.location.reload(); }, 60000);
+                                    executeRebootProbe('');
                                 });
                             } else {
                                 fileSmartRestore.value = '';
@@ -2729,10 +2818,10 @@ return view.extend({
                 var bypassTog = document.getElementById('lan-bypass-toggle');
                 if (bypassTog && !bypassTog.checked) {
                     openModal({ 
-                        title: '⚠️ ' + (T['M_DETECT_OP_INV_TIT'] || '操作无效'), 
-                        msg: T['M_DETECT_OP_INV_MSG'] || '当前为主路由模式，局域网网关<b style="color:#ef4444;">必须留空</b>。<br><br>“一键探测”仅用于配置“旁路由/AP有线中继”模式！', 
+                        title: '⚠️ ' + (T['M_DETECT_OP_INV_TIT'] || 'Invalid Operation'), 
+                        msg: T['M_DETECT_OP_INV_MSG'] || 'Gateway must be blank in Main Router mode.', 
                         hideCancel: true, 
-                        okText: T['M_CLOSE'] || '关闭' 
+                        okText: T['M_CLOSE'] || 'Close' 
                     });
                     return;
                 }
@@ -2746,10 +2835,10 @@ return view.extend({
                 if (wProto === 'pppoe') {
                     var pppoeMsg = (T['M_DETECT_PPPOE_MSG'] || '').replace('{gw}', gw || '');
                     openModal({ 
-                        title: '⚠️ ' + (T['M_DETECT_PPPOE_TIT'] || '极度危险拦截'), 
+                        title: '⚠️ ' + (T['M_DETECT_PPPOE_TIT'] || 'Critical Intercept'), 
                         msg: pppoeMsg, 
                         hideCancel: true, 
-                        okText: T['M_CLOSE'] || '关闭' 
+                        okText: T['M_CLOSE'] || 'Close' 
                     });
                     return;
                 }
@@ -2770,19 +2859,19 @@ return view.extend({
                     if (inputIp) inputIp.value = suggestedIp;
                     
                     openModal({ 
-                        title: '✅ ' + (T['BTN_AUTO_DETECT'] || '探测成功'), 
-                        msg: '<div style="font-size:15px; color:#475569; margin-bottom:15px;">' + (T['MSG_DETECT_SUCC'] || '已获取上级网段，并为您分配推荐 IP') + '</div>' + 
+                        title: '✅ ' + (T['BTN_AUTO_DETECT'] || 'Detection Success'), 
+                        msg: '<div style="font-size:15px; color:#475569; margin-bottom:15px;">' + (T['MSG_DETECT_SUCC'] || 'Upstream subnet detected') + '</div>' + 
                              '<div style="background:#f8fafc; padding:10px; border-radius:8px; text-align:left;">' + 
                              'Gateway: <b style="color:#10b981;">' + gw + '</b><br>IP: <b style="color:#3b82f6;">' + suggestedIp + '</b></div>', 
                         hideCancel: true, 
-                        okText: T['M_CLOSE'] || '关闭' 
+                        okText: T['M_CLOSE'] || 'Close' 
                     });
                 } else {
                     openModal({ 
-                        title: '❌ ' + (T['M_SYS_ERR'] || '探测失败'), 
-                        msg: T['MSG_DETECT_FAIL'] || '探测失败，无法获取到上级网关信息', 
+                        title: '❌ ' + (T['M_SYS_ERR'] || 'failed'), 
+                        msg: T['MSG_DETECT_FAIL'] || 'Detection failed', 
                         hideCancel: true, 
-                        okText: T['M_CLOSE'] || '关闭' 
+                        okText: T['M_CLOSE'] || 'Close' 
                     });
                 }
             });
@@ -2815,9 +2904,9 @@ return view.extend({
                 if (tog.checked) {
                     var isDirty = tog.classList.contains('is-dirty');
                     if (isDirty) {
-                        statRow.innerHTML = "<span title='" + (T['DESC_ROAM_DIRTY']||'') + "' style='display:inline-flex; align-items:center; justify-content:center; background:rgba(16, 185, 129, 0.15); color:#10b981; border: 1px solid #10b981; font-size:14px; padding:6px 10px; border-radius:8px; font-family:sans-serif; cursor:pointer; font-weight:bold; white-space:nowrap; transition:all 0.25s ease; margin:0 auto;'>" + (T['TXT_ROAMING_ON']||'已开通漫游') + "<b style='display:inline-flex; align-items:center; justify-content:center; background:#ef4444; color:#ffffff; width:18px; height:18px; border-radius:50%; font-size:14px; font-family:Arial,sans-serif; font-weight:900; margin-left:6px; line-height:1;'>!</b> <span style='font-size:14px; font-weight:bold; color:#ef4444; margin-left:5px; text-decoration:underline;'>" + (T['TXT_CLICK_FIX']||'点击修复') + "</span></span>";
+                        statRow.innerHTML = "<span title='" + (T['DESC_ROAM_DIRTY']||'') + "' style='display:inline-flex; align-items:center; justify-content:center; background:rgba(16, 185, 129, 0.15); color:#10b981; border: 1px solid #10b981; font-size:14px; padding:6px 10px; border-radius:8px; font-family:sans-serif; cursor:pointer; font-weight:bold; white-space:nowrap; transition:all 0.25s ease; margin:0 auto;'>" + (T['TXT_ROAMING_ON']||'Roaming Enabled') + "<b style='display:inline-flex; align-items:center; justify-content:center; background:#ef4444; color:#ffffff; width:18px; height:18px; border-radius:50%; font-size:14px; font-family:Arial,sans-serif; font-weight:900; margin-left:6px; line-height:1;'>!</b> <span style='font-size:14px; font-weight:bold; color:#ef4444; margin-left:5px; text-decoration:underline;'>" + (T['TXT_CLICK_FIX']||'Click to Fix') + "</span></span>";
                     } else {
-                        statRow.innerHTML = "<span style='display:inline-flex; align-items:center; justify-content:center; background:rgba(16, 185, 129, 0.15); color:#10b981; border: 1px solid #10b981; font-size:14px; padding:6px 16px; border-radius:8px; font-family:sans-serif; font-weight:bold; white-space:nowrap; cursor:pointer; transition:all 0.25s ease; margin:0 auto;'>" + (T['TXT_ROAMING_ON']||'已开通漫游') + "</span>";
+                        statRow.innerHTML = "<span style='display:inline-flex; align-items:center; justify-content:center; background:rgba(16, 185, 129, 0.15); color:#10b981; border: 1px solid #10b981; font-size:14px; padding:6px 16px; border-radius:8px; font-family:sans-serif; font-weight:bold; white-space:nowrap; cursor:pointer; transition:all 0.25s ease; margin:0 auto;'>" + (T['TXT_ROAMING_ON']||'Roaming Enabled') + "</span>";
                     }
 
                     var badgeSpan = statRow.querySelector('span');
@@ -3367,7 +3456,7 @@ return view.extend({
                         if (targetIp === targetGw) { 
                             openModal({
                                 title: T['M_LOGIC_TIT'], 
-                                msg: T['M_SAME_BYP'] || "旁路由/AP 模式下，本设备 IP 绝对不能与网关相同！", 
+                                msg: T['M_SAME_BYP'] || 'In AP/Relay mode, Device IP MUST NOT be the same as Gateway!', 
                                 okText: T['BTN_EDIT']
                             }); 
                             return; 
@@ -3731,8 +3820,8 @@ return view.extend({
 
                         if (hasOpenWifi) {
                             openModal({ 
-                                title: T['M_OPEN_WARN_TIT'] || '⚠️ 无密码警告', 
-                                msg: T['M_OPEN_WARN_MSG'] || '您正在设置无密码的开放 Wi-Fi，附近任何人都可以随意连接并访问您的网络。<br><br>确定要继续吗？', 
+                                title: T['M_OPEN_WARN_TIT'] || '⚠️ No Password', 
+                                msg: T['M_OPEN_WARN_MSG'] || 'Setting up an open Wi-Fi without a password. Continue?', 
                                 cancelText: T['BTN_EDIT'], 
                                 okText: T['M_WARN_BTN'], 
                                 isDanger: true, 

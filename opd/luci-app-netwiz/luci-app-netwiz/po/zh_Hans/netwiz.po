@@ -1352,7 +1352,7 @@ msgid "Full Software Backup & Restore"
 msgstr "全量软件的备份与恢复"
 
 msgid "Resolves traditional backup soft-brick risks. Smart backup is cross-version compatible. After flashing new firmware, upload backup to <span style=\"color:#ef4444; font-weight:bold;\">restore all software and configs perfectly (Requires Internet)</span>. Does not delete current software during restore. For absolute purity, factory reset router first.<br>If Netwiz is missing after reset, run this in SSH:"
-msgstr "解决传统备份容易导致死机、软砖风险，智能备份兼容跨版本恢复。刷入新固件后，上传备份即可<span style=\"color:#ef4444; font-weight:bold;\">极速重装所有软件并无损还原配置（需联网）</span>。恢复时不会删除当前软件。若需达到绝对纯净，请先恢复出厂设置。<br>恢复出厂后若未安装 Netwiz，可联网后在终端执行："
+msgstr "解决传统备份容易导致死机、软砖风险，智能备份兼容跨版本恢复。刷入新固件后，上传备份即可<span style=\"color:#ef4444; font-weight:bold;\">极速重装所有软件并无损还原配置（需联网）</span>。恢复时不会删除当前软件。若需达到绝对纯净，请先恢复出厂设置。<br>「提示：若需备份非官方源插件，请手动将安装包放置于/etc/netwiz/custom_pkgs/目录下。」<br>恢复出厂后若未安装 Netwiz 或需要升级，可联网后在 SSH 终端执行以下命令："
 
 msgid "Generate Backup"
 msgstr "生成备份文件"
@@ -1543,11 +1543,38 @@ msgstr "确认要导入该配置吗？现有数据将被彻底覆盖。"
 msgid "🚨 Severe Network Topology Conflict!"
 msgstr "🚨 严重网络拓扑冲突！"
 
-msgid "System detected that IPv6 and LAN \"Masquerading (NAT)\" are <b>BOTH enabled</b>!<br>This will paralyze IPv6 allocation and cause routing loops.<br>👉 <b>Fix:</b> Please <b style=\"color:#ef4444;\">Disable IPv6</b> here immediately, or go to <code>Network -> Firewall</code> to disable NAT."
-msgstr "系统检测到 IPv6 与 LAN 区“动态伪装 (NAT)”<b>同时处于开启状态</b>！<br>这将导致 IPv6 分配瘫痪与路由死循环。<br>👉 <b>排错指南：</b>请前往官方 <code>网络->防火墙</code> 关闭 LAN 区的动态伪装，或在此处 <b style=\"color:#ef4444;\">关闭 IPv6</b>，。"
+msgid "System detected that IPv6 and LAN \"Masquerading (NAT)\" are <b>BOTH enabled</b>!This will paralyze IPv6 allocation and cause routing loops.<br>👉 <b>Fix:</b> Please go to <code>Network -> Firewall</code> to disable LAN Masquerading, or <b style=\"color:#ef4444;\">Disable IPv6</b> in the LAN settings on the Netwiz homepage."
+msgstr "系统检测到 IPv6 与 LAN 区“动态伪装 (NAT)”<b>同时处于开启状态</b>！这将导致 IPv6 分配瘫痪与路由死循环。<br>👉 <b>排错指南：</b>请前往官方 <code>网络->防火墙</code> 关闭 LAN 区的动态伪装，或在Netwiz首页的局域网设置里 <b style=\"color:#ef4444;\">关闭 IPv6</b>。"
 
 msgid "⚠️ IPv6 Configuration Blocked"
 msgstr "⚠️ IPv6 配置已被系统安全拦截"
 
 msgid "Detected that LAN \"IP Masquerading (NAT)\" is enabled. Forcing IPv6 on under a double-NAT topology will cause network disconnection.<br>👉 <b>Fix:</b> Please go to <code>Network -> Firewall -> Zones</code> to disable LAN Masquerading first."
 msgstr "检测到防火墙 LAN 区已开启“IP 动态伪装 (NAT)”。在双重 NAT 拓扑下，强行开启 IPv6 将导致断网。<br>👉 <b>排错指南：</b>请前往官方后台 <code>网络->防火墙->区域</code>，关闭 LAN 区的动态伪装后重试。"
+
+msgid "Restore Device Data"
+msgstr "还原设备数据"
+
+msgid "This action will overwrite existing device groups and static IP bindings, and restart the network.<br><br><span style=\"color:#f59e0b; font-weight:bold;\">⚠️ Security Warning: Do not upload backups from unknown sources to prevent DNS hijacking.</span><br><br>Confirm to restore?"
+msgstr "此操作将覆盖现有的设备分组与静态 IP 绑定数据，并重启网络。<br><br><span style=\"color:#f59e0b; font-weight:bold;\">⚠️ 安全警告：请勿上传来路不明的备份文件，以免 DNS 被恶意劫持。</span><br><br>确认要执行还原吗？"
+
+msgid "Success"
+msgstr "成功"
+
+msgid "Warning"
+msgstr "警告"
+
+msgid "Waking up..."
+msgstr "唤醒中..."
+
+msgid "Displaying self-assigned local IPv6 as IPv4 is unavailable"
+msgstr "由于无法获取 IPv4，显示设备底层自签的本地 IPv6"
+
+msgid "Local IPv6"
+msgstr "自签 IPv6"
+
+msgid "System is rebooting, please wait..."
+msgstr "系统重启中，请稍候..."
+
+msgid "Waiting for device to disconnect..."
+msgstr "等待设备断开连接..."
