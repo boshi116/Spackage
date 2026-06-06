@@ -1604,7 +1604,22 @@ msgid "If you proceed, these plugins WILL NOT be restored automatically!"
 msgstr "如果現在執行備份，這些插件在未來還原時將無法被自動下載與恢復！"
 
 msgid "Tip: To include them, please cancel, put their .ipk/.apk files into /etc/netwiz/custom_pkgs/, and backup again."
-msgstr "強烈建議：請先取消備份，透過 SSH 將這些插件的離線安裝包（.ipk/.apk）放入 /etc/netwiz/custom_pkgs/ 目錄下，然後再次執行全量備份。"
+msgstr "強烈建議：請先取消備份，透過 SSH 將這些插件的離線安裝包（.ipk/.apk）放入 /etc/netwiz/custom_pkgs/ 目錄下，然後再次執行備份。"
 
 msgid "Ignore & Backup Anyway"
 msgstr "忽略警告，強行備份"
+
+msgid "Missing packages:"
+msgstr "缺失安裝包（未備妥）："
+
+msgid "Already prepared in custom_pkgs:"
+msgstr "已在 custom_pkgs 保險箱中就緒："
+
+msgid "Custom Plugins Ready"
+msgstr "自定義插件已就緒"
+
+msgid "Great! Your custom plugins are safely stored in the local directory and will be included in the backup capsule."
+msgstr "太棒了！您安裝的自定義插件離線包均已妥善存放於本地保險箱中，它們將被完整打包進膠囊。"
+
+msgid "Confirm Backup"
+msgstr "確定備份"

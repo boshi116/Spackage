@@ -140,35 +140,48 @@ case "$1" in
                 ;;
             check_missing_pkgs)
                 missing_pkgs=""
+                provided_pkgs=""
                 
-                # 仅扫描 luci-app- 和 luci-theme- 插件
+                # 建立比对函数：如果在源內找不到，就去 custom_pkgs 检查有沒有离线包
+                check_pkg() {
+                    local p=$1
+                    # 模糊匹配：只要软件包含套件名称，且是 .ipk 或 .apk 就看作已就绪
+                    if ls /etc/netwiz/custom_pkgs/*${p}*.[ia]pk >/dev/null 2>&1; then
+                        provided_pkgs="$provided_pkgs $p"
+                    else
+                        missing_pkgs="$missing_pkgs $p"
+                    fi
+                }
+                
                 if command -v apk >/dev/null 2>&1; then
-                    # 已安裝的 luci 插件
                     installed=$(apk info | grep -E "^luci-(app|theme)-")
                     for pkg in $installed; do
-                        # 使用 fetch -s 模拟下载。如果远程源里没有，命令会失败并回传非 0
                         if ! apk fetch -s "$pkg" >/dev/null 2>&1; then
-                            missing_pkgs="$missing_pkgs $pkg"
+                            check_pkg "$pkg"
                         fi
                     done
                 elif command -v opkg >/dev/null 2>&1; then
                     installed=$(opkg list-installed | awk '{print $1}' | grep -E "^luci-(app|theme)-")
                     for pkg in $installed; do
-                        # 绕过 opkg list 的本地机制，检索引擎的远端源列表文件
                         if ! grep -q "^Package: $pkg$" /var/opkg-lists/* 2>/dev/null; then
-                            missing_pkgs="$missing_pkgs $pkg"
+                            check_pkg "$pkg"
                         fi
                     done
                 fi
                 
-                # 回传JSON 给前端
+                # 转 JSON 阵列
+                m_arr=""
                 if [ -n "$missing_pkgs" ]; then
-                    # 空格为分隔符转换 JSON
-                    json_arr=$(echo "$missing_pkgs" | awk '{$1=$1;print}' | sed 's/ /","/g')
-                    echo "{ \"missing\": [\"$json_arr\"] }"
-                else
-                    echo '{ "missing": [] }'
+                    m_arr='"'"$(echo "$missing_pkgs" | awk '{$1=$1;print}' | sed 's/ /","/g')"'"'
                 fi
+                
+                p_arr=""
+                if [ -n "$provided_pkgs" ]; then
+                    p_arr='"'"$(echo "$provided_pkgs" | awk '{$1=$1;print}' | sed 's/ /","/g')"'"'
+                fi
+                
+                # 回传 missing (缺失) 和 provided (已就绪) 兩个阵列
+                echo "{ \"missing\": [$m_arr], \"provided\": [$p_arr] }"
                 ;;
             confirm)
                 # 检查是否存在任何类型的备份或临时记录
