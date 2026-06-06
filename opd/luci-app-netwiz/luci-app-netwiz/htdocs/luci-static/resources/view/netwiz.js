@@ -264,7 +264,7 @@ var T = {
     'LBL_LAB_TITLE': _('Advanced & Lab Features'),
     'LBL_LAB_BETA': _('Beta'),
     'TXT_FULL_BACKUP_TIT': _('Full Software Backup & Restore'),
-    'TXT_FULL_BACKUP_DESC': _('Resolves traditional backup soft-brick risks. Smart backup is cross-version compatible. After flashing new firmware, upload backup to <span style="color:#ef4444; font-weight:bold;">restore all software and configs perfectly (Requires Internet)</span>. Does not delete current software during restore. For absolute purity, factory reset router first.<br>If Netwiz is missing after reset, run this in SSH:'),
+    'TXT_FULL_BACKUP_DESC': _('Resolves traditional backup soft-brick risks. Smart backup is cross-version compatible. After flashing new firmware, upload backup to <span style=\"color:#ef4444; font-weight:bold;\">rapidly reinstall all software and losslessly restore configs (Requires Internet)</span>. Does not delete current software during restore. For absolute purity, factory reset the router first.<br><span style=\"color:#ef4444; font-weight:bold;\">Tip: To backup custom plugins not available in your software feeds, manually place the installation packages in the /etc/netwiz/custom_pkgs/ directory.</span><br>If Netwiz is missing after a reset or needs an upgrade, connect to the internet and run this in SSH:'),
     'BTN_SMART_BACKUP': '📦 ' + _('Generate Backup'),
     'BTN_SMART_RESTORE': '⚡ ' + _('Restore System'),
     'TXT_COPY_TIP': '📋 ' + _('Click to Copy'),
@@ -328,6 +328,16 @@ var T = {
     'V6_NAT_ERR_MSG2': _('Detected that LAN "IP Masquerading (NAT)" is enabled. Forcing IPv6 on under a double-NAT topology will cause network disconnection.<br>👉 <b>Fix:</b> Please go to <code>Network -> Firewall -> Zones</code> to disable LAN Masquerading first.'),
     'MSG_REBOOTING': _('System is rebooting, please wait...'),
     'MSG_WAIT_OFFLINE': _('Waiting for device to disconnect...'),
+    'TIT_IP_CONFLICT': _('IP Conflict Warning'),
+    'MSG_IP_IN_USE': _('is already used by another device!'),
+    'MSG_SUGGEST_FIX': _('We strongly recommend changing it to avoid network crashes.'),
+    'BTN_FIX_IP': _('Fix to'),
+    'MSG_SCAN_PKGS': _('Scanning installed plugins...'),
+    'TIT_CUSTOM_PKG_WARN': _('Custom Plugins Detected'),
+    'MSG_CUSTOM_PKG_DESC': _('We detected the following plugins are NOT available in your current software feeds:'),
+    'MSG_CUSTOM_PKG_ACT': _('If you proceed, these plugins WILL NOT be restored automatically!'),
+    'MSG_CUSTOM_PKG_TIP': _('Tip: To include them, please cancel, put their .ipk/.apk files into /etc/netwiz/custom_pkgs/, and backup again.'),
+    'BTN_FORCE_BACKUP': _('Ignore & Backup Anyway'),
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -344,6 +354,8 @@ var callCheckBackup = rpc.declare({ object: 'netwiz', method: 'check_backup', ex
 var callSmartRestoreExec = rpc.declare({ object: 'netwiz', method: 'smart_restore_exec', params: ['filepath'], expect: { result: 0 } });
 var callCheckStorage = rpc.declare({ object: 'netwiz', method: 'check_storage', expect: { '': {} } });
 var callCheckRestoreStatus = rpc.declare({ object: 'netwiz', method: 'check_restore_status', expect: { '': {} } });
+var callCheckIpConflict = rpc.declare({ object: 'netwiz', method: 'check_ip_conflict', params: ['ip'], expect: { status: '' } });
+var callCheckMissingPkgs = rpc.declare({ object: 'netwiz', method: 'check_missing_pkgs', expect: { missing: [] } });
 
 return view.extend({
     handleSaveApply: null,
@@ -1465,9 +1477,26 @@ return view.extend({
                     var wifiRes = results[4] || {};
                     var rawIfaces = results[3] || {}, ifaces = Array.isArray(rawIfaces.interface) ? rawIfaces.interface : (Array.isArray(rawIfaces) ? rawIfaces : []);
                     var wProto = safeUciGet('network', 'wan', 'proto', '').toLowerCase();
-                    var activeWan = ifaces.find(function(i) { 
-                        return i && (i.interface === 'wan' || i.interface === 'wwan' || (i.interface && i.interface.indexOf('wan') !== -1 && i.interface.indexOf('lan') === -1)); 
-                    }) || {};
+                    // 1. 有线 WAN 和 无线 WWAN (中继)
+                    var phyWan = ifaces.find(function(i) { return i && i.interface === 'wan'; }) || {};
+                    var virWwan = ifaces.find(function(i) { return i && i.interface === 'wwan'; }) || {};
+
+                    // 2. 智能判定出口
+                    var activeWan = phyWan; // 先看物理 WAN
+                    var isWispActive = false; // 是否正在使用无线中继联网
+
+                    var phyWanHasIp = phyWan.up && phyWan['ipv4-address'] && phyWan['ipv4-address'].length > 0;
+                    var virWwanHasIp = virWwan.up && virWwan['ipv4-address'] && virWwan['ipv4-address'].length > 0;
+
+                    if (!phyWanHasIp && virWwanHasIp) {
+                        // 有线没通，无线通了 -> 切換到无线中继视角
+                        activeWan = virWwan;
+                        isWispActive = true;
+                    } else if (!phyWan.up && !virWwan.up) {
+                        // 兜底：找一個带 wan 名字的
+                        activeWan = ifaces.find(function(i) { return i && (i.interface === 'wan' || i.interface === 'wwan' || (i.interface && i.interface.indexOf('wan') !== -1 && i.interface.indexOf('lan') === -1)); }) || {};
+                    }
+
                     var liveWanIp = ((activeWan['ipv4-address'] && activeWan['ipv4-address'][0]) ? activeWan['ipv4-address'][0].address : '').split('/')[0];
                     window._liveWanIp = liveWanIp;
                     var liveGw = activeWan.nexthop || '';
@@ -1497,10 +1526,14 @@ return view.extend({
 
                     // 优先使用 底层物理载波状态判断网线通断
                     var isWanDown = false;
-                    if (typeof activeWan.l1up !== 'undefined') {
-                        isWanDown = (activeWan.l1up === false);
+                    if (isWispActive) {
+                        isWanDown = false; // 如果中继生效，不弹网线未插警告
                     } else {
-                        isWanDown = (activeWan.up === false && (!liveWanIp || liveWanIp === T['TXT_GETTING'] || liveWanIp === T['TXT_NOT_GOT']));
+                        if (typeof activeWan.l1up !== 'undefined') {
+                            isWanDown = (activeWan.l1up === false);
+                        } else {
+                            isWanDown = (activeWan.up === false && (!liveWanIp || liveWanIp === T['TXT_GETTING'] || liveWanIp === T['TXT_NOT_GOT']));
+                        }
                     }
 
                     // 初始化防抖计数器
@@ -2129,6 +2162,12 @@ return view.extend({
                     var sTitle = "", sDetails = "", statusBadge = "";
                     
                     if (isBypass) { sTitle = T['STAT_BYPASS']; sDetails = mkD(T['TXT_DEV_IP'], lIp, T['TXT_UP_GW'], lGw); } 
+                    else if (isWispActive) { 
+                        // 无线中继生效显示
+                        sTitle = T['TXT_WISP_ON'] || 'WISP Enabled'; 
+                        statusBadge = mkB('#10b981', T['BDG_GOT'] || 'IP Acquired') + upBadgeHtml; 
+                        sDetails = mkD(T['TXT_WAN_IP'], liveWanIp, T['TXT_UP_GW'], liveGw); 
+                    }
                     else if (wProto === 'pppoe') { sTitle = T['STAT_MAIN_PPPOE']; if (activeWan.up && liveWanIp) { statusBadge = mkB('#10b981', T['BDG_SUCC']) + upBadgeHtml; sDetails = mkD(T['TXT_PUB_IP'], liveWanIp, T['TXT_REM_GW'], liveGw); } else { statusBadge = mkB('#ef4444', T['BDG_DIAL']); sDetails = mkD(T['TXT_LAN_IP'], lIp, T['TXT_STATUS'], T['TXT_WAIT_REM']); } } 
                     else if (wProto === 'dhcp') { sTitle = T['STAT_SEC_DHCP']; if (activeWan.up && liveWanIp) { statusBadge = mkB('#10b981', T['BDG_GOT']) + upBadgeHtml; sDetails = mkD(T['TXT_WAN_IP'], liveWanIp, T['TXT_UP_GW'], liveGw); } else { statusBadge = mkB('#f59e0b', T['BDG_WAIT']); sDetails = mkD(T['TXT_LAN_IP'], lIp, T['TXT_STATUS'], T['TXT_GET_IP']); } } 
                     else if (wProto === 'static') { sTitle = T['STAT_SEC_STATIC']; statusBadge = activeWan.up ? mkB('#10b981', T['BDG_CONN']) + upBadgeHtml : mkB('#ef4444', T['BDG_UNPLUG']); sDetails = mkD(T['TXT_WAN_IP'], wIp, T['TXT_UP_GW'], wGw); } 
@@ -2384,36 +2423,84 @@ return view.extend({
                         var bType = window._selectedBackupType;
                         var hintText = bType === 'full' ? T['M_BAK_HINT_FULL'] : T['M_BAK_HINT_LIGHT'];
 
+                        // 包装真实的备份执行函数
+                        var executeRealBackup = function() {
+                            openModal({
+                                title: T['M_BAK_GEN_TIT'],
+                                msg: '<div style="text-align:center; padding:10px 0; color:#64748b;">' + T['M_BAK_GEN_MSG'] + '<br><br><span style="font-size:12px; color:#d97706;">' + hintText + '</span></div>',
+                                spin: true
+                            });
+
+                            callSmartBackup(bType).then(function(res) {
+                                if (res && res.url) {
+                                    var isDone = false;
+                                    var checkTimer = setInterval(function() {
+                                        if (isDone) { clearInterval(checkTimer); return; }
+                                        callCheckBackup().then(function(cRes) {
+                                            if (cRes && cRes.status === 'done' && !isDone) {
+                                                isDone = true;
+                                                clearInterval(checkTimer);
+                                                var a = document.createElement("a");
+                                                a.href = res.url;
+                                                a.download = res.filename || "NetWiz_SmartGhost.tar.gz";
+                                                document.body.appendChild(a);
+                                                a.click();
+                                                document.body.removeChild(a);
+                                                openModal({ title: T['M_BAK_SUCC_TIT'], msg: T['M_BAK_SUCC_MSG'], hideCancel: true, okText: T['M_CLOSE'] });
+                                            }
+                                        }).catch(function() {});
+                                    }, 3000);
+                                } else {
+                                    openModal({ title: T['M_BAK_FAIL_TIT'], msg: T['M_BAK_FAIL_MSG'], hideCancel: true, okText: T['M_CLOSE'] });
+                                }
+                            }).catch(function(err) {
+                                openModal({ title: T['M_SYS_ERR'], msg: err, hideCancel: true, okText: T['M_CLOSE'] });
+                            });
+                        };
+
+                        // 1. 显示载入动画，进行底层孤儿插件扫描
                         openModal({
                             title: T['M_BAK_GEN_TIT'],
-                            msg: '<div style="text-align:center; padding:10px 0; color:#64748b;">' + T['M_BAK_GEN_MSG'] + '<br><br><span style="font-size:12px; color:#d97706;">' + hintText + '</span></div>',
+                            msg: '<div style="text-align:center; padding:20px 0; color:#f59e0b; font-size:15px;">⏳ ' + (T['MSG_SCAN_PKGS'] || 'Scanning installed plugins...') + '</div>',
                             spin: true
                         });
 
-                        callSmartBackup(bType).then(function(res) {
-                            if (res && res.url) {
-                                var isDone = false;
-                                var checkTimer = setInterval(function() {
-                                    if (isDone) { clearInterval(checkTimer); return; }
-                                    callCheckBackup().then(function(cRes) {
-                                        if (cRes && cRes.status === 'done' && !isDone) {
-                                            isDone = true;
-                                            clearInterval(checkTimer);
-                                            var a = document.createElement("a");
-                                            a.href = res.url;
-                                            a.download = res.filename || "NetWiz_SmartGhost.tar.gz";
-                                            document.body.appendChild(a);
-                                            a.click();
-                                            document.body.removeChild(a);
-                                            openModal({ title: T['M_BAK_SUCC_TIT'], msg: T['M_BAK_SUCC_MSG'], hideCancel: true, okText: T['M_CLOSE'] });
-                                        }
-                                    }).catch(function() {});
-                                }, 3000);
+                        // 2. 呼叫后端扫描
+                        callCheckMissingPkgs().then(function(res) {
+                            var missing = res.missing || [];
+                            if (missing.length > 0) {
+                                // 发现不在源内的插件！拦截并警告用户
+                                var pkgListHtml = '<ul style="text-align:left; background:#fee2e2; padding:10px 20px; border-radius:6px; color:#b91c1c; font-family:monospace; margin-top:10px;">';
+                                for (var i = 0; i < missing.length; i++) {
+                                    pkgListHtml += '<li>' + missing[i] + '</li>';
+                                }
+                                pkgListHtml += '</ul>';
+
+                                openModal({
+                                    title: '⚠️ ' + (T['TIT_CUSTOM_PKG_WARN'] || 'Custom Plugins Detected'),
+                                    msg: '<div style="font-size:15px; color:#475569;">' + 
+                                         (T['MSG_CUSTOM_PKG_DESC'] || 'We detected the following plugins are NOT available in your current software feeds:') + 
+                                         pkgListHtml + 
+                                         '<br><span style="color:#ef4444; font-weight:bold;">' + 
+                                         (T['MSG_CUSTOM_PKG_ACT'] || 'If you proceed, these plugins WILL NOT be restored automatically!') + 
+                                         '</span><br><br>' + 
+                                         (T['MSG_CUSTOM_PKG_TIP'] || 'Tip: To include them, please cancel, put their .ipk/.apk files into /etc/netwiz/custom_pkgs/, and backup again.') + 
+                                         '</div>',
+                                    okText: '🚀 ' + (T['BTN_FORCE_BACKUP'] || 'Ignore & Backup Anyway'),
+                                    cancelText: T['BTN_CANCEL_RST'] || 'Cancel',
+                                    isDanger: true,
+                                    onOk: function() {
+                                        // 强制备份
+                                        executeRealBackup(); 
+                                    }
+                                });
                             } else {
-                                openModal({ title: T['M_BAK_FAIL_TIT'], msg: T['M_BAK_FAIL_MSG'], hideCancel: true, okText: T['M_CLOSE'] });
+                                // 源内都有，直接备份
+                                executeRealBackup();
                             }
-                        }).catch(function(err) {
-                            openModal({ title: T['M_SYS_ERR'], msg: err, hideCancel: true, okText: T['M_CLOSE'] });
+                        }).catch(function() {
+                            // 扫描失败（兜底），直接执行备份
+                            executeRealBackup();
                         });
                     }
                 });
@@ -2756,8 +2843,20 @@ return view.extend({
             var parts = gatewayIp.split('.');
             var prefix = parts[0] + '.' + parts[1] + '.' + parts[2];
             var gwTail = parseInt(parts[3], 10);
-            var safeTail = 254; // 默认从最高位 254 开始给
-            if (safeTail === gwTail) safeTail = 253; // 如果网关极其罕见地占用了 254，则顺延
+            
+            var knownTails = [gwTail]; 
+            if (window._liveWanIp && window._liveWanIp.indexOf(prefix) === 0) {
+                knownTails.push(parseInt(window._liveWanIp.split('.')[3], 10));
+            }
+
+            if (window._nwConflictBlacklist) {
+                knownTails = knownTails.concat(window._nwConflictBlacklist);
+            }
+
+            var safeTail = 254; 
+            while (knownTails.indexOf(safeTail) !== -1 && safeTail > 200) {
+                safeTail--;
+            }
             return prefix + '.' + safeTail;
         }
         function isSameSubnet(ip1, ip2) { if (!ip1 || !ip2) return false; var p1 = ip1.split('.'), p2 = ip2.split('.'); return (p1.length === 4 && p2.length === 4 && p1[0] === p2[0] && p1[1] === p2[1] && p1[2] === p2[2]); }
@@ -2849,9 +2948,7 @@ return view.extend({
                 }
                 
                 if (gw && gw.indexOf('.') > -1) {
-                    var subnet = gw.substring(0, gw.lastIndexOf('.') + 1);
-                    var suggestedIp = subnet + '254'; 
-                    if (gw === suggestedIp) suggestedIp = subnet + '253';
+                    var suggestedIp = getSafeApIp(gw); 
                     
                     var inputGw = document.getElementById('lan-gw');
                     var inputIp = document.getElementById('lan-ip');
@@ -2862,10 +2959,38 @@ return view.extend({
                         title: '✅ ' + (T['BTN_AUTO_DETECT'] || 'Detection Success'), 
                         msg: '<div style="font-size:15px; color:#475569; margin-bottom:15px;">' + (T['MSG_DETECT_SUCC'] || 'Upstream subnet detected') + '</div>' + 
                              '<div style="background:#f8fafc; padding:10px; border-radius:8px; text-align:left;">' + 
-                             'Gateway: <b style="color:#10b981;">' + gw + '</b><br>IP: <b style="color:#3b82f6;">' + suggestedIp + '</b></div>', 
+                             (T['LBL_LAN_GW'] || 'Gateway') + ': <b style="color:#10b981;">' + gw + '</b><br>' + 
+                             (T['LBL_LAN_IP'] || 'IP') + ': <b id="nw-suggested-ip-disp" style="color:#3b82f6;">' + suggestedIp + '</b></div>', 
                         hideCancel: true, 
                         okText: T['M_CLOSE'] || 'Close' 
                     });
+
+                    var checkIpAsync = function(targetIp, targetGw) {
+                        callCheckIpConflict(targetIp).then(function(res) {
+                            if (res.status === 'conflict') {
+                                if (!window._nwConflictBlacklist) window._nwConflictBlacklist = [];
+                                window._nwConflictBlacklist.push(parseInt(targetIp.split('.')[3], 10));
+
+                                var newSafeIp = getSafeApIp(targetGw);
+
+                                openModal({
+                                    title: '⚠️ ' + (T['TIT_IP_CONFLICT'] || 'IP Conflict Warning'),
+                                    msg: '<div style="color:#ef4444; font-size:15px; margin-bottom:10px;"><b>' + targetIp + '</b> ' + (T['MSG_IP_IN_USE'] || 'is already used by another device!') + '</div>' + 
+                                         '<div style="color:#475569; font-size:14px;">' + (T['MSG_SUGGEST_FIX'] || 'We strongly recommend changing it to avoid network crashes.') + '</div>',
+                                    okText: '🚀 ' + (T['BTN_FIX_IP'] || 'Fix to') + ' ' + newSafeIp,
+                                    cancelText: T['M_CANCEL'] || 'Ignore',
+                                    isDanger: true,
+                                    onOk: function() {
+                                        if (inputIp) inputIp.value = newSafeIp;
+                                        checkIpAsync(newSafeIp, targetGw);
+                                    }
+                                });
+                            }
+                        });
+                    };
+                    
+                    // 发射背景探针
+                    checkIpAsync(suggestedIp, gw);
                 } else {
                     openModal({ 
                         title: '❌ ' + (T['M_SYS_ERR'] || 'failed'), 

@@ -90,7 +90,7 @@ watchdog_pppoe_ipv6() {
 
 case "$1" in
     list)
-        echo '{ "set_network": { "mode": "string", "arg1": "string", "arg2": "string", "arg3": "string", "arg4": "string", "arg5": "string", "arg6": "string" }, "set_password": { "password": "string" }, "check_wifi": {}, "confirm": {}, "smart_backup": { "type": "string" }, "smart_restore_exec": { "filepath": "string" }, "check_backup": {}, "check_storage": {}, "check_restore_status": {} }'
+        echo '{ "set_network": { "mode": "string", "arg1": "string", "arg2": "string", "arg3": "string", "arg4": "string", "arg5": "string", "arg6": "string" }, "set_password": { "password": "string" }, "check_wifi": {}, "confirm": {}, "smart_backup": { "type": "string" }, "smart_restore_exec": { "filepath": "string" }, "check_backup": {}, "check_storage": {}, "check_restore_status": {}, "check_ip_conflict": { "ip": "192.168.1.254" }, "check_missing_pkgs": {} }'
         exit 0
         ;;
     call)
@@ -138,6 +138,38 @@ case "$1" in
                 echo "{\"has_wifi\":$has_wifi, \"lan_nat_conflict\":$lan_nat_conflict}"
                 exit 0
                 ;;
+            check_missing_pkgs)
+                missing_pkgs=""
+                
+                # 仅扫描 luci-app- 和 luci-theme- 插件
+                if command -v apk >/dev/null 2>&1; then
+                    # 已安裝的 luci 插件
+                    installed=$(apk info | grep -E "^luci-(app|theme)-")
+                    for pkg in $installed; do
+                        # 使用 fetch -s 模拟下载。如果远程源里没有，命令会失败并回传非 0
+                        if ! apk fetch -s "$pkg" >/dev/null 2>&1; then
+                            missing_pkgs="$missing_pkgs $pkg"
+                        fi
+                    done
+                elif command -v opkg >/dev/null 2>&1; then
+                    installed=$(opkg list-installed | awk '{print $1}' | grep -E "^luci-(app|theme)-")
+                    for pkg in $installed; do
+                        # 绕过 opkg list 的本地机制，检索引擎的远端源列表文件
+                        if ! grep -q "^Package: $pkg$" /var/opkg-lists/* 2>/dev/null; then
+                            missing_pkgs="$missing_pkgs $pkg"
+                        fi
+                    done
+                fi
+                
+                # 回传JSON 给前端
+                if [ -n "$missing_pkgs" ]; then
+                    # 空格为分隔符转换 JSON
+                    json_arr=$(echo "$missing_pkgs" | awk '{$1=$1;print}' | sed 's/ /","/g')
+                    echo "{ \"missing\": [\"$json_arr\"] }"
+                else
+                    echo '{ "missing": [] }'
+                fi
+                ;;
             confirm)
                 # 检查是否存在任何类型的备份或临时记录
                 if [ -f /tmp/netwiz_rollback_time ] || [ -f /tmp/netwiz_target_ip ] || \
@@ -154,6 +186,19 @@ case "$1" in
                 fi
                 echo '{"result":0}'
                 exit 0
+                ;;
+            check_ip_conflict)
+                read input
+                # 前端传來的 IP
+                req_ip=$(echo "$input" | jsonfilter -e '@.ip')
+                
+                if ping -c 1 -W 1 "$req_ip" >/dev/null 2>&1; then
+                    # Ping 通了，-> 冲突
+                    echo '{ "status": "conflict" }'
+                else
+                    # Ping 不通，-> 安全
+                    echo '{ "status": "safe" }'
+                fi
                 ;;
             set_network)
                 set +e
