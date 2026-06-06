@@ -25,7 +25,7 @@ msgstr "在本設備上直接使用寬頻帳號和密碼進行撥號。"
 msgid "LAN Settings"
 msgstr "區域網路設定"
 
-msgid "Change device LAN IP, or switch to AP Wired Relay mode."
+msgid "Change device LAN IP, switch to AP Wired Relay mode, or one-click IPv6 distribution."
 msgstr "修改設備區域網 IP，或切換至旁路由（AP有線中繼）模式，一鍵下發IPv6。"
 
 msgid "Reading underlying config..."
@@ -1594,20 +1594,20 @@ msgstr "一鍵修復為"
 msgid "Scanning installed plugins..."
 msgstr "正在掃描已安裝的插件清單..."
 
-msgid "Custom Plugins Detected"
-msgstr "檢測到自定義插件"
+msgid "Plugin Backup Status"
+msgstr "插件備份狀態檢查"
 
-msgid "We detected the following plugins are NOT available in your current software feeds:"
-msgstr "系統檢測到以下您已安裝的插件，並不存在於當前的軟體源中："
+msgid "Please verify backup packages:"
+msgstr "請核對備份安裝包："
 
-msgid "If you proceed, these plugins WILL NOT be restored automatically!"
-msgstr "如果現在執行備份，這些插件在未來還原時將無法被自動下載與恢復！"
+msgid "If you proceed, missing plugins WILL NOT be restored automatically!"
+msgstr "如果現在執行備份，缺失安裝包在還原時將無法被恢復！"
 
-msgid "Tip: To include them, please cancel, put their .ipk/.apk files into /etc/netwiz/custom_pkgs/, and backup again."
-msgstr "強烈建議：請先取消備份，透過 SSH 將這些插件的離線安裝包（.ipk/.apk）放入 /etc/netwiz/custom_pkgs/ 目錄下，然後再次執行備份。"
+msgid "Tip: Manually place missing packages .ipk/.apk into the /etc/netwiz/custom_pkgs/ directory via SSH to ensure they are automatically reinstalled during future restorations."
+msgstr "建議：透過 SSH 將缺失的安裝包 .ipk 或 .apk 放入 /etc/netwiz/custom_pkgs/ 目錄，還原時會自動恢復當前狀態。"
 
-msgid "Ignore & Backup Anyway"
-msgstr "忽略警告，強行備份"
+msgid "Ignore & Backup"
+msgstr "忽略並備份"
 
 msgid "Missing packages:"
 msgstr "缺失安裝包（未備妥）："
@@ -1623,3 +1623,12 @@ msgstr "太棒了！您安裝的自定義插件離線包均已妥善存放於本
 
 msgid "Confirm Backup"
 msgstr "確定備份"
+
+msgid "Official Plugins (Auto-Restore):"
+msgstr "官方源插件（可自動恢復）："
+
+msgid "Plugin Scan Complete"
+msgstr "插件掃描完成"
+
+msgid "System scan complete! All your installed plugins are from the official repository and will be safely recorded for automatic restoration."
+msgstr "系統掃描完畢！您當前安裝的所有第三方可視化插件，均存在於官方軟體源中。它們將被安全記錄並在未來自動聯網恢復。"
