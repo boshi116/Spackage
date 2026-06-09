@@ -352,7 +352,12 @@ var T = {
     'M_OOM_TITLE': _('⚠️ Backup Interrupted Warning'),
     'M_OOM_HEAD': _('Out of Memory (OOM Protection)!'),
     'M_OOM_DESC': _('The files you are trying to pack are too large and exceed the available memory.<br><br>To prevent device crash, the backup task has been safely canceled. Please clear unnecessary core files and try again.'),
-    'M_I_KNOW': _('I Got It')
+    'M_I_KNOW': _('I Got It'),
+    'M_SCAN_TIMEOUT_TITLE': _('⚠️ Scan Timeout Warning'),
+    'M_SCAN_TIMEOUT_HEAD': _('Communication Timeout or Network Error'),
+    'M_SCAN_TIMEOUT_DESC': _('Communication with the router timed out (possibly due to slow network source retrieval or network fluctuations).<br><br>To ensure backup integrity, the task has been safely canceled. Please try again later, or manually run opkg update via SSH.'),
+    'TXT_WISP_WAITING': _('Connecting...'),
+    'MSG_WISP_STUCK': _('⚠️ Connecting to upstream... (Check password or signal strength if stuck)'),
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -1500,6 +1505,7 @@ return view.extend({
                     // 2. 智能判定出口
                     var activeWan = phyWan; // 先看物理 WAN
                     var isWispActive = false; // 是否正在使用无线中继联网
+                    var hasWispConfigured = !!uci.sections('wireless', 'wifi-iface').find(function(i) { return i.network === 'wwan' && i.mode === 'sta'; });
 
                     var phyWanHasIp = phyWan.up && phyWan['ipv4-address'] && phyWan['ipv4-address'].length > 0;
                     var virWwanHasIp = virWwan.up && virWwan['ipv4-address'] && virWwan['ipv4-address'].length > 0;
@@ -2184,6 +2190,11 @@ return view.extend({
                         statusBadge = mkB('#10b981', T['BDG_GOT'] || 'IP Acquired') + upBadgeHtml; 
                         sDetails = mkD(T['TXT_WAN_IP'], liveWanIp, T['TXT_UP_GW'], liveGw); 
                     }
+                    else if (hasWispConfigured && !isWispActive) {
+                        sTitle = T['TXT_WISP_ON'] || 'WISP Enabled'; 
+                        statusBadge = mkB('#f59e0b', T['TXT_WISP_WAITING'] || 'Connecting...'); 
+                        sDetails = "<div style='color:#facc15; font-size:14.5px; font-weight:bold;'>" + (T['MSG_WISP_STUCK'] || '⚠️ Connecting to upstream... (Check password if stuck)') + "</div>";
+                    }
                     else if (wProto === 'pppoe') { sTitle = T['STAT_MAIN_PPPOE']; if (activeWan.up && liveWanIp) { statusBadge = mkB('#10b981', T['BDG_SUCC']) + upBadgeHtml; sDetails = mkD(T['TXT_PUB_IP'], liveWanIp, T['TXT_REM_GW'], liveGw); } else { statusBadge = mkB('#ef4444', T['BDG_DIAL']); sDetails = mkD(T['TXT_LAN_IP'], lIp, T['TXT_STATUS'], T['TXT_WAIT_REM']); } } 
                     else if (wProto === 'dhcp') { sTitle = T['STAT_SEC_DHCP']; if (activeWan.up && liveWanIp) { statusBadge = mkB('#10b981', T['BDG_GOT']) + upBadgeHtml; sDetails = mkD(T['TXT_WAN_IP'], liveWanIp, T['TXT_UP_GW'], liveGw); } else { statusBadge = mkB('#f59e0b', T['BDG_WAIT']); sDetails = mkD(T['TXT_LAN_IP'], lIp, T['TXT_STATUS'], T['TXT_GET_IP']); } } 
                     else if (wProto === 'static') { sTitle = T['STAT_SEC_STATIC']; statusBadge = activeWan.up ? mkB('#10b981', T['BDG_CONN']) + upBadgeHtml : mkB('#ef4444', T['BDG_UNPLUG']); sDetails = mkD(T['TXT_WAN_IP'], wIp, T['TXT_UP_GW'], wGw); } 
@@ -2566,8 +2577,17 @@ return view.extend({
                                 // 无任何 UI 插件，直接备份
                                 performBackup();
                             }
-                        }).catch(function() {
-                            performBackup();
+                        }).catch(function(err) {
+                            // 超时或错误直接强行阻断并弹窗提示
+                            var backupModal = document.getElementById('nw-global-modal');
+                            if (backupModal) backupModal.style.display = 'none';
+                            
+                            openModal({ 
+                                title: T['M_SCAN_TIMEOUT_TITLE'], 
+                                msg: '<div style="font-size:15px; color:#ef4444; margin-bottom:10px;"><b>' + T['M_SCAN_TIMEOUT_HEAD'] + '</b></div>' +
+                                     '<div style="font-size:14px; color:#475569;">' + T['M_SCAN_TIMEOUT_DESC'] + '</div>', 
+                                okText: T['M_I_KNOW'] 
+                            });
                         });
                     }
                 });
@@ -2834,18 +2854,31 @@ return view.extend({
                                 var checkTimer = setInterval(function() {
                                     if (isRegretDone) { clearInterval(checkTimer); return; }
                                     callCheckBackup().then(function(cRes) {
-                                        if (cRes && cRes.status === 'done' && !isRegretDone) {
-                                            isRegretDone = true;
+                                        if (cRes && cRes.status === 'done' && !isDone) {
+                                            isDone = true;
                                             clearInterval(checkTimer);
                                             var a = document.createElement("a");
                                             a.href = res.url;
-                                            a.download = "NetWiz_RegretPill_" + Date.now() + ".tar.gz";
+                                            a.download = res.filename || "NetWiz_SmartGhost.tar.gz";
                                             document.body.appendChild(a);
                                             a.click();
                                             document.body.removeChild(a);
-                                            setTimeout(execRestore, 1500);
+                                            openModal({ title: T['M_BAK_SUCC_TIT'], msg: T['M_BAK_SUCC_MSG'], hideCancel: true, okText: T['M_CLOSE'] });
                                         }
-                                    }).catch(function(){});
+                                        // 拦截后端的异常退出状态 (OOM 或其他致命错误)
+                                        else if (cRes && (cRes.status === 'error' || cRes.status === 'oom') && !isDone) {
+                                            isDone = true;
+                                            clearInterval(checkTimer);
+                                            openModal({
+                                                title: T['M_OOM_TITLE'] || '⚠️ Backup Interrupted Warning',
+                                                msg: '<div style="color: #ef4444; font-size: 16px; font-weight: bold; margin-bottom: 10px;">' + 
+                                                     (T['M_OOM_HEAD'] || 'Out of Memory (OOM Protection)!') + '</div>' + 
+                                                     '<div style="color: #475569; font-size: 14px; line-height: 1.5;">' +
+                                                     (T['M_OOM_DESC'] || 'The backup task has been canceled to prevent device crash.') + '</div>',
+                                                okText: T['M_I_KNOW'] || 'I Got It'
+                                            });
+                                        }
+                                    }).catch(function() {});
                                 }, 3000);
                             } else {
                                 execRestore();
