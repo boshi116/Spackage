@@ -349,6 +349,10 @@ var T = {
     'TXT_OFFICIAL_PKGS': _('Auto-backup plugins:'),
     'TIT_OFFICIAL_PKG_READY': _('Plugin Scan Complete'),
     'MSG_OFFICIAL_PKG_READY_DESC': _('System scan complete! All your installed plugins are from the official repository and will be safely recorded for automatic restoration.'),
+    'M_OOM_TITLE': _('⚠️ Backup Interrupted Warning'),
+    'M_OOM_HEAD': _('Out of Memory (OOM Protection)!'),
+    'M_OOM_DESC': _('The files you are trying to pack are too large and exceed the available memory.<br><br>To prevent device crash, the backup task has been safely canceled. Please clear unnecessary core files and try again.'),
+    'M_I_KNOW': _('I Got It')
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -2459,6 +2463,19 @@ return view.extend({
                                                 a.click();
                                                 document.body.removeChild(a);
                                                 openModal({ title: T['M_BAK_SUCC_TIT'], msg: T['M_BAK_SUCC_MSG'], hideCancel: true, okText: T['M_CLOSE'] });
+                                            }
+                                            // 截后端的异常退出状态 (OOM 或其他致命错误)
+                                            else if (cRes && (cRes.status === 'error' || cRes.status === 'oom') && !isDone) {
+                                                isDone = true;
+                                                clearInterval(checkTimer);
+                                                openModal({
+                                                    title: T['M_OOM_TITLE'] || '⚠️ Backup Interrupted Warning',
+                                                    msg: '<div style="color: #ef4444; font-size: 16px; font-weight: bold; margin-bottom: 10px;">' + 
+                                                        (T['M_OOM_HEAD'] || 'Out of Memory (OOM Protection)!') + '</div>' + 
+                                                        '<div style="color: #475569; font-size: 14px; line-height: 1.5;">' +
+                                                        (T['M_OOM_DESC'] || 'The backup task has been canceled to prevent device crash.') + '</div>',
+                                                    okText: T['M_I_KNOW'] || 'I Got It'
+                                                });
                                             }
                                         }).catch(function() {});
                                     }, 3000);
