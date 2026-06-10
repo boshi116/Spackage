@@ -151,45 +151,74 @@ case "$1" in
                     fi
                 done
                 
-                # 2. 比对函数：檢查系统安裝的 UI 插件，是否已经存在文件中
+                # 2. 比对函数：检查系统安装的UI插件，是否已经存在文件中
                 check_pkg_missing() {
                     local p=$1
                     if echo "$provided_pkgs" | grep -q "$p"; then
-                        : # 包含該插件名称，不做处理
+                        : # 包含该插件名称，不做处理
                     else
                         missing_pkgs="$missing_pkgs $p"
                     fi
                 }
                 
-                # 3. 扫描系统中已安裝
-                if command -v apk >/dev/null 2>&1; then
-                    if [ -z "$(apk search -q "luci-*" 2>/dev/null | head -n 1)" ]; then
-                        timeout 12 apk update >/dev/null 2>&1
+                # 3. 扫描系统中已安裝与同步源
+                if [ ! -f "/tmp/nw_pkg_updated_ok" ]; then
+                    # 正在更新，直接抛错，掐断前端的重试请求，不堵塞网络
+                    if [ -f "/tmp/nw_pkg_updating" ]; then
+                        exit 1
                     fi
-                    installed=$(apk info | grep -E "^luci-(app|theme)-")
-                    available_pkgs=$(apk search -q "luci-*" 2>/dev/null)
+                    touch "/tmp/nw_pkg_updating"
+
+                    if ping -c 1 -W 2 223.5.5.5 >/dev/null 2>&1 || ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
+                        log "[BACKUP]" "检测到网络畅通，正在同步软件源..."
+                        
+                        current_year=$(date +%Y)
+                        if [ "$current_year" -lt 2024 ]; then
+                            ntpd -n -q -p ntp.aliyun.com >/dev/null 2>&1 || ntpd -n -q -p time.apple.com >/dev/null 2>&1
+                        fi
+                        
+                        if command -v opkg >/dev/null 2>&1; then
+                            opkg update >/dev/null 2>&1
+                        elif command -v apk >/dev/null 2>&1; then
+                            apk update >/dev/null 2>&1
+                        fi
+                        
+                        touch "/tmp/nw_pkg_updated_ok"
+                        log "[BACKUP]" "软件源同步完毕！"
+                    fi
+                    rm -f "/tmp/nw_pkg_updating"
+                fi
+
+                # 4. 统一获取已安装列表与精准确比对
+                installed=""
+                # 优先使用 opkg！官方的无缝包装器
+                if command -v opkg >/dev/null 2>&1; then
+                    installed=$(opkg list-installed 2>/dev/null | awk '{print $1}' | grep -E "^luci-(app|theme)-")
+                    
+                    # 调用包装器生成官方包列表
+                    avail_pkgs=$(opkg list 2>/dev/null | awk '{print $1}')
                     
                     for pkg in $installed; do
-                        # 使用 -x 进行精准全词匹配
-                        if ! echo "$available_pkgs" | grep -qx "$pkg"; then
-                            check_pkg_missing "$pkg"
-                        else
+                        if echo "$avail_pkgs" | grep -qx "$pkg"; then
                             official_pkgs="$official_pkgs $pkg"
+                        else
+                            check_pkg_missing "$pkg"
                         fi
                     done
-                elif command -v opkg >/dev/null 2>&1; then
-                    if [ -z "$(ls -A /var/opkg-lists 2>/dev/null)" ]; then
-                        log "[BACKUP]" "检测到本地opkg索引为空，正在尝试拉取最新软件源..."
-                        timeout 12 opkg update >/dev/null 2>&1
+                    
+                elif command -v apk >/dev/null 2>&1; then
+                    # 仅在极限精简的纯血 apk 固件上才会走到这里
+                    installed=$(apk info 2>/dev/null | grep -E "^luci-(app|theme)-")
+                    if [ -z "$installed" ]; then
+                        installed=$(apk list -I 2>/dev/null | awk '{print $1}' | grep -E "^luci-(app|theme)-")
                     fi
-                    installed=$(opkg list-installed | awk '{print $1}' | grep -E "^luci-(app|theme)-")
-                    available_pkgs=$(opkg list "luci-*" 2>/dev/null | awk '{print $1}')
                     
                     for pkg in $installed; do
-                        if ! echo "$available_pkgs" | grep -qx "$pkg"; then
-                            check_pkg_missing "$pkg"
-                        else
+                        # 精确查询，逐个查验
+                        if [ -n "$(apk search -q -e "$pkg" 2>/dev/null)" ]; then
                             official_pkgs="$official_pkgs $pkg"
+                        else
+                            check_pkg_missing "$pkg"
                         fi
                     done
                 fi
@@ -342,12 +371,12 @@ case "$1" in
                 cleanup_wan_for_proto() {
                     local target="$1"
                     
-                    # 1. 切換后，统一刪除容易 netifd 死锁的 DHCP 干扰
+                    # 1. 切换后，统一刪除容易 netifd 死锁的 DHCP 干扰
                     uci delete network.wan.reqopts 2>/dev/null || true
                     uci delete network.wan.clientid 2>/dev/null || true
                     uci delete network.wan.vendorid 2>/dev/null || true
                     
-                    # 2. 根据目标协议，刪除「不相容」的參數，保留 dns、metric 等共用高級設定！
+                    # 2. 根据目标协议，删除「不兼容」的参数，保留dns、metric等共享高级设定
                     if [ "$target" = "pppoe" ]; then
                         uci delete network.wan.ipaddr 2>/dev/null || true
                         uci delete network.wan.netmask 2>/dev/null || true
@@ -1003,8 +1032,25 @@ case "$1" in
                             rel=$(echo "$dir" | sed 's/^\///')
                             tar_targets="$tar_targets $rel"
                         fi
-                    done
+                     done
                     
+                    # ----------------------------------------------------
+                    # 防呆 1：打包前生成备份核对元数据文件
+                    # ----------------------------------------------------
+                    . /etc/os-release 2>/dev/null
+                    SYS_ARCH="${OPENWRT_ARCH:-unknown}"
+                    
+                    mkdir -p /etc/netwiz
+                    cat > "/etc/netwiz/nw_backup_meta.env" <<EOF
+BACKUP_ARCH=$SYS_ARCH
+BACKUP_PKG=$PKG_TYPE
+BACKUP_VER=${VERSION:-unknown}
+BACKUP_DATE=$(date '+%Y-%m-%d %H:%M:%S')
+EOF
+                    # 将这个指纹文件加入到即将被打包的文件列表中
+                    tar_targets="$tar_targets etc/netwiz/nw_backup_meta.env"
+                    # ----------------------------------------------------
+
                     log "[BACKUP]" "即将打包的目标列表生成完毕，进行容量安全校验..."
                     
                     cd /
@@ -1073,11 +1119,23 @@ case "$1" in
                 ;;
 
             check_backup)
-                # 检查后台是否在打包
-                if [ -f /tmp/nw_backup_running ]; then
-                    printf '{"status":"running"}\n'
+                if [ -f "/tmp/nw_backup_running" ]; then
+                    echo '{ "status": "running" }'
+                elif [ -f "/tmp/nw_sys_config.tar.gz" ]; then
+                    # 防呆 2：给文件名打上架构和格式烙印，让前端 js 可以直接识别
+                    . /etc/os-release 2>/dev/null
+                    SYS_ARCH="${OPENWRT_ARCH:-unknown}"
+                    PKG_TYPE="ipk"
+                    command -v apk >/dev/null 2>&1 && PKG_TYPE="apk"
+                    DATE_STR=$(date '+%Y%m%d_%H%M')
+                    
+                    # 组合成文件名
+                    FNAME="NetWiz_${SYS_ARCH}_${PKG_TYPE}_${DATE_STR}.tar.gz"
+                    
+                    echo "{ \"status\": \"done\", \"url\": \"/luci-static/nw_sys_config.tar.gz\", \"filename\": \"$FNAME\" }"
+                    rm -f "/tmp/nw_backup_ok"
                 else
-                    printf '{"status":"done"}\n'
+                    echo '{ "status": "error" }'
                 fi
                 exit 0
                 ;;
@@ -1153,6 +1211,45 @@ fi
 
 update_status "running" "MSG_RST_SAFE"
 mkdir -p /tmp/nw_ghost_tmp
+
+# ----------------------------------------------------
+# 防呆 3：拆包核对！先提取出元数据文件进行比对
+# ----------------------------------------------------
+echo "$(date '+%F %T') [RESTORE] 正在进行安全性预检：核对架构与安装包格式..." >> "$LOG_FILE"
+
+# 只单独解压这一个配置文件，绝不触碰系统其他文件
+tar -xzf "$TARGET" -C /tmp/nw_ghost_tmp etc/netwiz/nw_backup_meta.env >/dev/null 2>&1
+
+if [ -f "/tmp/nw_ghost_tmp/etc/netwiz/nw_backup_meta.env" ]; then
+    . /etc/os-release 2>/dev/null
+    CUR_ARCH="${OPENWRT_ARCH:-unknown}"
+    CUR_PKG="ipk"
+    command -v apk >/dev/null 2>&1 && CUR_PKG="apk"
+    
+    # 读取备份包里的数据
+    . /tmp/nw_ghost_tmp/etc/netwiz/nw_backup_meta.env
+    
+    if [ "$BACKUP_PKG" != "$CUR_PKG" ]; then
+        echo "$(date '+%F %T') [RESTORE] [DANGER] 🚨 严重拦截：包管理器格式冲突！(当前: ${CUR_PKG} / 备份: ${BACKUP_PKG})" >> "$LOG_FILE"
+        update_status "error" "MSG_RST_PKG_ERR"
+        rm -rf /tmp/nw_ghost_tmp "$TARGET"
+        exit 1
+    fi
+    
+    if [ "$BACKUP_ARCH" != "$CUR_ARCH" ]; then
+        echo "$(date '+%F %T') [RESTORE] [DANGER] 🚨 严重拦截：底层架构不匹配！(当前路由器: ${CUR_ARCH} / 备份包来源: ${BACKUP_ARCH})" >> "$LOG_FILE"
+        update_status "error" "MSG_RST_ARCH_ERR"
+        rm -rf /tmp/nw_ghost_tmp "$TARGET"
+        exit 1
+    fi
+    
+    echo "$(date '+%F %T') [RESTORE] ✅ 安全性预检通过！架构 (${CUR_ARCH}) 与包管理器 (${CUR_PKG}) 完全匹配。" >> "$LOG_FILE"
+else
+    echo "$(date '+%F %T') [RESTORE] ⚠️ 警告：这是一个旧版备份包 (未包含安全预检文件)，将跳过严格核对直接放行。" >> "$LOG_FILE"
+fi
+# ----------------------------------------------------
+
+# 安全校验通过，执行真正的完整解压
 tar -xzf "$TARGET" -C /tmp/nw_ghost_tmp >> "$LOG_FILE" 2>&1
 
 if [ $? -ne 0 ]; then
@@ -1228,7 +1325,7 @@ NEW_IP=$(uci -q get network.lan.ipaddr | cut -d/ -f1)
 # 把未来的新 IP 作为 arg1 传递给前端进行双向探测
 update_status "done" "MSG_RST_DONE" "$NEW_IP"
 rm -rf /tmp/nw_ghost_tmp "$TARGET"
-# 等待 8 秒，确保前端 充足的时间把新 IP 抓走
+# 等待 8 秒，确保前端 充足的时间抓取新 IP
 sleep 8
 reboot
 EOF
