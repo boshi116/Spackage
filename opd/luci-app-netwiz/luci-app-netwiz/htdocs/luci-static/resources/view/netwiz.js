@@ -98,6 +98,7 @@ var T = {
     'NOTE_2': _('The system will auto-refresh or redirect in 15 seconds.'),
     'BTN_APPLY': _('Apply Settings'),
     'STAT_BYPASS': _('AP Wired Relay'),
+    'CURRENT_MODE': _('Current:'),
     'STAT_MAIN_PPPOE': _('Main Router (PPPoE)'),
     'STAT_SEC_DHCP': _('Secondary Router (DHCP)'),
     'STAT_SEC_STATIC': _('Secondary Router (Static IP)'),
@@ -377,6 +378,8 @@ var T = {
     'MSG_ARCH_WARN_2': _('If you have <b>manually renamed</b> this file, please ignore this warning.<br><br><span style="color:#ef4444;">If it is the wrong package, the system\'s underlying security mechanism will forcibly intercept the restoration later!</span>'),
     'BTN_WARN_CONTINUE': _('I understand, continue'),
     'TXT_SCAN_TO_CONN': _('Scan to Connect'),
+    'WARN_PPPOE_INVALID': _('⚠️ Current WAN is in Secondary Router mode. PPPoE dial-up will not take effect until applied.'),
+    'WARN_ROUTER_INVALID': _('⚠️ Current WAN is in PPPoE mode. Secondary Router mode will not take effect until applied.'),
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -974,6 +977,10 @@ return view.extend({
         // 事件委托
         container.addEventListener('input', function(e) {
             if (e.target && e.target.id && e.target.id.indexOf('wifi-') !== -1) window._updateLiveQR();
+            
+            // 记录 PPPoE 帐号密码
+            if (e.target && (e.target.id === 'pppoe-user' || e.target.id === 'wiz-pppoe-user')) sessionStorage.setItem('nw_pppoe_user', e.target.value);
+            if (e.target && (e.target.id === 'pppoe-pass' || e.target.id === 'wiz-pppoe-pass')) sessionStorage.setItem('nw_pppoe_pass', e.target.value);
         });
         container.addEventListener('change', function(e) {
             if (e.target && e.target.id && e.target.id.indexOf('wifi-') !== -1) window._updateLiveQR();
@@ -1152,7 +1159,17 @@ return view.extend({
         }
 
         container.querySelectorAll('input[name="wiz_wan_type"]').forEach(function(r) {
-            r.addEventListener('change', function() { container.querySelector('#wiz-pppoe-fields').style.display = (this.value === 'pppoe') ? 'block' : 'none'; });
+            r.addEventListener('change', function() {
+                container.querySelector('#wiz-pppoe-fields').style.display = (this.value === 'pppoe') ? 'block' : 'none';
+                
+                // 向导中切换回PPPoE时，强制恢复
+                if (this.value === 'pppoe') {
+                    var savedU = sessionStorage.getItem('nw_pppoe_user');
+                    var savedP = sessionStorage.getItem('nw_pppoe_pass');
+                    if (savedU !== null && container.querySelector('#wiz-pppoe-user')) container.querySelector('#wiz-pppoe-user').value = savedU;
+                    if (savedP !== null && container.querySelector('#wiz-pppoe-pass')) container.querySelector('#wiz-pppoe-pass').value = savedP;
+                }
+            });
         });
 
         var skipWifiCb = container.querySelector('#wiz-skip-wifi-checkbox');
@@ -1823,78 +1840,116 @@ return view.extend({
                         }
                     }
 
-                    if (container.querySelector('#pppoe-user')) container.querySelector('#pppoe-user').value = safeUciGet('network', 'wan', 'username', '');
-                    if (container.querySelector('#pppoe-pass')) container.querySelector('#pppoe-pass').value = safeUciGet('network', 'wan', 'password', '');
-                    if (container.querySelector('#router-ip')) container.querySelector('#router-ip').value = (wIp !== T['TXT_NOT_GOT']) ? wIp : '';
-                    if (container.querySelector('#router-gw')) container.querySelector('#router-gw').value = (wGw !== T['TXT_NOT_SET']) ? wGw : '';
-                    if (container.querySelector('#lan-ip')) container.querySelector('#lan-ip').value = lIp;
-                    if (container.querySelector('#lan-gw')) container.querySelector('#lan-gw').value = (lGw !== T['TXT_NOT_SET']) ? lGw : '';
-                    
-                    if (wProto === 'static') {
-                        var staticRadio = container.querySelector('input[name="router_type"][value="static"]');
-                        if (staticRadio) staticRadio.checked = true; // 选中静态 IP
-                        var staticFields = container.querySelector('#router-static-fields');
-                        if (staticFields) staticFields.style.display = 'block'; // 展开静态 IP 填写框
-                    } else {
-                        var dhcpRadio = container.querySelector('input[name="router_type"][value="dhcp"]');
-                        if (dhcpRadio) dhcpRadio.checked = true; // 默认选中 DHCP
-                        var staticFields = container.querySelector('#router-static-fields');
-                        if (staticFields) staticFields.style.display = 'none'; // 隐藏静态 IP 填写框
-                    }
-
-                    var bypassToggle = container.querySelector('#lan-bypass-toggle');
-                    if (bypassToggle) { bypassToggle.checked = isBypass; container.querySelector('#lan-bypass-warning').style.display = isBypass ? 'block' : 'none'; container.querySelector('#lan-main-warning').style.display = isBypass ? 'none' : 'block'; }
-
-                    var wispToggleEl = container.querySelector('#wisp-toggle');
-                    if (wispToggleEl) {
-                        var wispIface = uci.sections('wireless', 'wifi-iface').find(function(i) { return i.network === 'wwan' && i.mode === 'sta'; });
-                        wispToggleEl.checked = !!wispIface;
-                        var wispUi = container.querySelector('#wisp-ui-panel');
-                        
-                        if (wispUi) {
-                            wispUi.style.display = 'none';
-                            
-                            if (wispIface) {
-                                var ssidInput = container.querySelector('#wisp-target-ssid');
-                                if (ssidInput) ssidInput.value = wispIface.ssid || '';
-                                
-                                var keyInput = container.querySelector('#wisp-target-key');
-                                if (keyInput) keyInput.value = wispIface.key || '';
-                                
-                                var encInput = container.querySelector('#wisp-target-enc');
-                                if (encInput) encInput.value = wispIface.encryption || 'psk2+ccmp';
-                                
-                                var devInput = container.querySelector('#wisp-target-device');
-                                if (devInput) devInput.value = wispIface.device || 'radio0';
-                                
-                                var bssidInput = container.querySelector('#wisp-target-bssid');
-                                if (bssidInput) bssidInput.value = wispIface.bssid || '';
-                            }
-                        }
-                    }
-
+                    // ==========================================
+                    // 1. IPv6状态获取（必须在外面）
+                    // ==========================================
                     var v6Dhcp = safeUciGet('dhcp', 'lan', 'dhcpv6', 'disabled');
                     var v6Ra = safeUciGet('dhcp', 'lan', 'ra', 'disabled');
                     var v6Ndp = safeUciGet('dhcp', 'lan', 'ndp', 'disabled');
                     var v6Flags = safeUciGet('dhcp', 'lan', 'ra_flags', '');
                     if (Array.isArray(v6Flags)) v6Flags = v6Flags.join(' ');
-                    
-                    // dhcpv6, ra, ndp 必須全是 server，ra_flags 包含 M-Flag 和 O-Flag
                     var isV6Standard = (v6Dhcp === 'server' && v6Ra === 'server' && v6Ndp === 'server' && v6Flags.indexOf('managed-config') !== -1 && v6Flags.indexOf('other-config') !== -1);
-                    
                     var isV6Inconsistent = (!isV6Standard && (v6Dhcp === 'server' || v6Dhcp === 'relay' || v6Ra === 'server' || v6Ra === 'relay'));
-                    
-                    // 记录系统真实的 IPv6 状态到全局变量
                     window._trueIpv6State = (isV6Standard || isV6Inconsistent) ? '1' : '0';
-                    
-                    var ipv6Toggle = container.querySelector('#lan-ipv6-toggle');
-                    var v6Warn = container.querySelector('#tip-ipv6-warn');
-                    
-                    if (ipv6Toggle) {
-                        ipv6Toggle.checked = (window._trueIpv6State === '1');
-                    }
-                    if (v6Warn) {
-                        v6Warn.style.display = isV6Inconsistent ? 'block' : 'none';
+
+                    // ==========================================
+                    // 2. 缓存整合+阻挡后台5秒轮询覆盖
+                    // ==========================================
+                    if (!isSilent) {
+                        // 1. 记录系统底层真实的上网模式和对应文字
+                        window._nwRealWanMode = (wProto === 'pppoe') ? 'pppoe' : 'router';
+                        
+                        var protoName = '';
+                        if (wProto === 'pppoe') protoName = T['STAT_MAIN_PPPOE'] || 'Main Router (PPPoE)';
+                        else if (wProto === 'static') protoName = T['STAT_SEC_STATIC'] || 'Secondary Router (Static IP)';
+                        else protoName = T['STAT_SEC_DHCP'] || 'Secondary Router (DHCP)';
+                        window._nwCurrentProtoText = (T['CURRENT_MODE'] || 'Current:') + ' ' + protoName;
+
+                        // 辅助函数：根据状态智能切换红色警告/绿色正常
+                        var setupStatusBox = function(box, isWarning, warnText) {
+                            if (!box) return;
+                            if (isWarning) {
+                                box.style.cssText = 'color: #dc2626; background: #fef2f2; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 15px; margin-top: 5px; border-left: 4px solid #ef4444; font-weight: bold; display: block; line-height: 1.6;';
+                                box.innerHTML = warnText;
+                            } else {
+                                box.style.cssText = 'color: #059669; background: #ecfdf5; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 15px; margin-top: 5px; border-left: 4px solid #10b981; font-weight: bold; display: block; line-height: 1.6;';
+                                box.innerHTML = '✅ ' + window._nwCurrentProtoText;
+                            }
+                        };
+
+                        // 2. 动态生成 PPPoE 模式下的状态指示牌
+                        var pppoeBox = container.querySelector('#fields-pppoe');
+                        if (pppoeBox && !container.querySelector('#status-pppoe-info')) {
+                            var statP = document.createElement('div');
+                            statP.id = 'status-pppoe-info';
+                            var titleP = pppoeBox.querySelector('h3, h4, .title, legend') || pppoeBox.firstElementChild;
+                            if (titleP) titleP.insertAdjacentElement('afterend', statP);
+                            else pppoeBox.appendChild(statP);
+                        }
+                        setupStatusBox(container.querySelector('#status-pppoe-info'), window._nwRealWanMode === 'router', T['WARN_PPPOE_INVALID']);
+
+                        // 3. 动态生成二级路由模式下的状态指示牌
+                        var routerBox = container.querySelector('#fields-router');
+                        if (routerBox && !container.querySelector('#status-router-info')) {
+                            var statR = document.createElement('div');
+                            statR.id = 'status-router-info';
+                            var titleR = routerBox.querySelector('h3, h4, .title, legend') || routerBox.firstElementChild;
+                            if (titleR) titleR.insertAdjacentElement('afterend', statR);
+                            else routerBox.appendChild(statR);
+                        }
+                        setupStatusBox(container.querySelector('#status-router-info'), window._nwRealWanMode === 'pppoe', T['WARN_ROUTER_INVALID']);
+
+                        // 初次加载时：如果缓存是空的，就把路由器底层的旧帐密读进缓存里
+                        var uciUser = safeUciGet('network', 'wan', 'username', '');
+                        var uciPass = safeUciGet('network', 'wan', 'password', '');
+                        if (sessionStorage.getItem('nw_pppoe_user') === null) sessionStorage.setItem('nw_pppoe_user', uciUser);
+                        if (sessionStorage.getItem('nw_pppoe_pass') === null) sessionStorage.setItem('nw_pppoe_pass', uciPass);
+
+                        // 读取缓存数据
+                        if (container.querySelector('#pppoe-user')) container.querySelector('#pppoe-user').value = sessionStorage.getItem('nw_pppoe_user');
+                        if (container.querySelector('#pppoe-pass')) container.querySelector('#pppoe-pass').value = sessionStorage.getItem('nw_pppoe_pass');
+
+                        if (container.querySelector('#router-ip')) container.querySelector('#router-ip').value = (wIp !== T['TXT_NOT_GOT']) ? wIp : '';
+                        if (container.querySelector('#router-gw')) container.querySelector('#router-gw').value = (wGw !== T['TXT_NOT_SET']) ? wGw : '';
+                        if (container.querySelector('#lan-ip')) container.querySelector('#lan-ip').value = lIp;
+                        if (container.querySelector('#lan-gw')) container.querySelector('#lan-gw').value = (lGw !== T['TXT_NOT_SET']) ? lGw : '';
+                        
+                        if (wProto === 'static') {
+                            var staticRadio = container.querySelector('input[name="router_type"][value="static"]');
+                            if (staticRadio) staticRadio.checked = true;
+                            var staticFields = container.querySelector('#router-static-fields');
+                            if (staticFields) staticFields.style.display = 'block';
+                        } else {
+                            var dhcpRadio = container.querySelector('input[name="router_type"][value="dhcp"]');
+                            if (dhcpRadio) dhcpRadio.checked = true;
+                            var staticFields = container.querySelector('#router-static-fields');
+                            if (staticFields) staticFields.style.display = 'none';
+                        }
+
+                        var bypassToggle = container.querySelector('#lan-bypass-toggle');
+                        if (bypassToggle) { bypassToggle.checked = isBypass; container.querySelector('#lan-bypass-warning').style.display = isBypass ? 'block' : 'none'; container.querySelector('#lan-main-warning').style.display = isBypass ? 'none' : 'block'; }
+
+                        var wispToggleEl = container.querySelector('#wisp-toggle');
+                        if (wispToggleEl) {
+                            var wispIface = uci.sections('wireless', 'wifi-iface').find(function(i) { return i.network === 'wwan' && i.mode === 'sta'; });
+                            wispToggleEl.checked = !!wispIface;
+                            var wispUi = container.querySelector('#wisp-ui-panel');
+                            if (wispUi) {
+                                wispUi.style.display = 'none';
+                                if (wispIface) {
+                                    var ssidInput = container.querySelector('#wisp-target-ssid'); if (ssidInput) ssidInput.value = wispIface.ssid || '';
+                                    var keyInput = container.querySelector('#wisp-target-key'); if (keyInput) keyInput.value = wispIface.key || '';
+                                    var encInput = container.querySelector('#wisp-target-enc'); if (encInput) encInput.value = wispIface.encryption || 'psk2+ccmp';
+                                    var devInput = container.querySelector('#wisp-target-device'); if (devInput) devInput.value = wispIface.device || 'radio0';
+                                    var bssidInput = container.querySelector('#wisp-target-bssid'); if (bssidInput) bssidInput.value = wispIface.bssid || '';
+                                }
+                            }
+                        }
+
+                        var ipv6Toggle = container.querySelector('#lan-ipv6-toggle');
+                        var v6Warn = container.querySelector('#tip-ipv6-warn');
+                        if (ipv6Toggle) ipv6Toggle.checked = (window._trueIpv6State === '1');
+                        if (v6Warn) v6Warn.style.display = isV6Inconsistent ? 'block' : 'none';
                     }
 
                     // --- IPv6 NAT 冲突防呆逻辑 ---
@@ -3278,8 +3333,8 @@ return view.extend({
                         title: '✅ ' + (T['BTN_AUTO_DETECT'] || 'Detection Success'), 
                         msg: '<div style="font-size:15px; color:#475569; margin-bottom:15px;">' + (T['MSG_DETECT_SUCC'] || 'Upstream subnet detected') + '</div>' + 
                              '<div style="background:#f8fafc; padding:10px; border-radius:8px; text-align:left;">' + 
-                             (T['LBL_LAN_GW'] || 'Gateway') + ': <b style="color:#10b981;">' + gw + '</b><br>' + 
-                             (T['LBL_LAN_IP'] || 'IP') + ': <b id="nw-suggested-ip-disp" style="color:#3b82f6;">' + suggestedIp + '</b></div>', 
+                             (T['LBL_LAN_IP'] || 'IP') + ': <b id="nw-suggested-ip-disp" style="color:#3b82f6;">' + suggestedIp + '</b><br>' + 
+                             (T['LBL_LAN_GW'] || 'Gateway') + ': <b style="color:#10b981;">' + gw + '</b></div>', 
                         hideCancel: true, 
                         okText: T['M_CLOSE'] || 'Close' 
                     });
@@ -3859,14 +3914,33 @@ return view.extend({
             }, 20); // 给浏览器留20ms的重绘时间
         };
 
-        container.querySelectorAll('.nw-card').forEach(function (card) { card.addEventListener('click', function () { 
-            selectedMode = card.getAttribute('data-mode'); 
-            container.querySelector('#fields-router').style.display = (selectedMode === 'router') ? 'block' : 'none'; 
-            container.querySelector('#fields-pppoe').style.display = (selectedMode === 'pppoe') ? 'block' : 'none'; 
-            container.querySelector('#fields-lan').style.display = (selectedMode === 'lan') ? 'block' : 'none'; 
-            container.querySelector('#fields-wifi').style.display = (selectedMode === 'wifi') ? 'block' : 'none'; 
-            switchStep(step1, step2); // 切换并置顶
-        }); });
+        container.querySelectorAll('.nw-card').forEach(function (card) {
+            card.addEventListener('click', function () {
+                // 在切换离开前，把目前框里的字存进缓存
+                var currentU = container.querySelector('#pppoe-user');
+                var currentP = container.querySelector('#pppoe-pass');
+                if (currentU && currentU.value) sessionStorage.setItem('nw_pppoe_user', currentU.value);
+                if (currentP && currentP.value) sessionStorage.setItem('nw_pppoe_pass', currentP.value);
+
+                selectedMode = card.getAttribute('data-mode');
+                
+                container.querySelector('#fields-router').style.display = (selectedMode === 'router') ? 'block' : 'none';
+                container.querySelector('#fields-pppoe').style.display = (selectedMode === 'pppoe') ? 'block' : 'none';
+                container.querySelector('#fields-lan').style.display = (selectedMode === 'lan') ? 'block' : 'none';
+                container.querySelector('#fields-wifi').style.display = (selectedMode === 'wifi') ? 'block' : 'none';
+
+                // 如果是切换回PPPoE，再从缓存拿出来恢复
+                if (selectedMode === 'pppoe') {
+                    var savedU = sessionStorage.getItem('nw_pppoe_user');
+                    var savedP = sessionStorage.getItem('nw_pppoe_pass');
+                    if (savedU !== null && container.querySelector('#pppoe-user')) container.querySelector('#pppoe-user').value = savedU;
+                    if (savedP !== null && container.querySelector('#pppoe-pass')) container.querySelector('#pppoe-pass').value = savedP;
+
+                }
+
+                switchStep(step1, step2);
+            });
+        });
         container.querySelector('#btn-back-1').addEventListener('click', function () { switchStep(step2, step1); });
         container.querySelector('#top-back-1').addEventListener('click', function () { switchStep(step2, step1); });
         container.querySelector('#btn-back-2').addEventListener('click', function () { switchStep(step3, step2); });

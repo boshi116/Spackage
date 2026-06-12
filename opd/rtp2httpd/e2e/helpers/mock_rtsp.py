@@ -24,7 +24,13 @@ class _RTSPServerBase:
     """
 
     def __init__(
-        self, port: int = 0, sdp_control: str = "*", content_base: str | None = "auto", custom_sdp: str | None = None
+        self,
+        port: int = 0,
+        sdp_control: str = "*",
+        content_base: str | None = "auto",
+        custom_sdp: str | None = None,
+        options_session_id: str | None = None,
+        host: str = "127.0.0.1",
     ):
         """
         Args:
@@ -35,11 +41,17 @@ class _RTSPServerBase:
                 for relative controls); ``None`` omits the header entirely;
                 any other string is sent verbatim.
             custom_sdp: If set, replaces the auto-generated SDP body.
+            options_session_id: If set, OPTIONS responds with this Session ID
+                and every subsequent request (DESCRIBE, SETUP, PLAY, ...)
+                must echo it (simulates HMS-style servers).
+            host: Address to listen on (use "::1" for IPv6 loopback).
         """
-        self.port = port or find_free_port()
+        self.host = host
+        self.port = port or find_free_port(host)
         self._sdp_control = sdp_control
         self._content_base = content_base
         self._custom_sdp = custom_sdp
+        self._options_session_id = options_session_id
         self._server_sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -49,9 +61,10 @@ class _RTSPServerBase:
     # -- lifecycle -----------------------------------------------------------
 
     def start(self) -> None:
-        self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        family = socket.AF_INET6 if ":" in self.host else socket.AF_INET
+        self._server_sock = socket.socket(family, socket.SOCK_STREAM)
         self._server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._server_sock.bind(("127.0.0.1", self.port))
+        self._server_sock.bind((self.host, self.port))
         self._server_sock.listen(5)
         self._server_sock.settimeout(1.0)
         self._thread = threading.Thread(target=self._accept, daemon=True)
@@ -73,6 +86,10 @@ class _RTSPServerBase:
     def _after_play(self, conn: socket.socket, addr: tuple) -> None:
         """Called right after the PLAY 200 OK is sent.  Pump data here."""
         raise NotImplementedError
+
+    def _session_id(self) -> str:
+        """Session ID returned by OPTIONS/SETUP/PLAY (HMS uses OPTIONS session)."""
+        return self._options_session_id or "t1"
 
     # -- internals -----------------------------------------------------------
 
@@ -123,11 +140,24 @@ class _RTSPServerBase:
                     }
                 )
 
+                # HMS-style servers assign the session at OPTIONS time and
+                # close the connection if any later request doesn't echo it.
+                if (
+                    self._options_session_id
+                    and method != "OPTIONS"
+                    and req_headers_map.get("Session") != self._options_session_id
+                ):
+                    return
+
                 if method == "OPTIONS":
+                    session_line = ""
+                    if self._options_session_id:
+                        session_line = "Session: %s\r\n" % self._options_session_id
                     conn.sendall(
                         (
                             "RTSP/1.0 200 OK\r\nCSeq: %s\r\n"
-                            "Public: OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN\r\n\r\n" % cseq
+                            "%s"
+                            "Public: OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN\r\n\r\n" % (cseq, session_line)
                         ).encode()
                     )
                 elif method == "DESCRIBE":
@@ -164,11 +194,15 @@ class _RTSPServerBase:
                 elif method == "SETUP":
                     conn.sendall(self._setup_response(cseq, transport_hdr).encode())
                 elif method == "PLAY":
-                    conn.sendall(("RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: t1\r\n\r\n" % cseq).encode())
+                    conn.sendall(
+                        ("RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: %s\r\n\r\n" % (cseq, self._session_id())).encode()
+                    )
                     self._after_play(conn, addr)
                     return
                 elif method == "TEARDOWN":
-                    conn.sendall(("RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: t1\r\n\r\n" % cseq).encode())
+                    conn.sendall(
+                        ("RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: %s\r\n\r\n" % (cseq, self._session_id())).encode()
+                    )
                     return
         except socket.timeout, ConnectionError, OSError:
             pass
@@ -198,15 +232,24 @@ class MockRTSPServer(_RTSPServerBase):
         sdp_control: str = "*",
         content_base: str | None = "auto",
         custom_sdp: str | None = None,
+        options_session_id: str | None = None,
+        host: str = "127.0.0.1",
     ):
-        super().__init__(port, sdp_control=sdp_control, content_base=content_base, custom_sdp=custom_sdp)
+        super().__init__(
+            port,
+            sdp_control=sdp_control,
+            content_base=content_base,
+            custom_sdp=custom_sdp,
+            options_session_id=options_session_id,
+            host=host,
+        )
         self._num_packets = num_packets
 
     def _setup_response(self, cseq: str, transport_hdr: str) -> str:
         return (
             "RTSP/1.0 200 OK\r\nCSeq: %s\r\n"
             "Transport: RTP/AVP/TCP;unicast;interleaved=0-1\r\n"
-            "Session: t1\r\n\r\n" % cseq
+            "Session: %s\r\n\r\n" % (cseq, self._session_id())
         )
 
     def _after_play(self, conn: socket.socket, addr: tuple) -> None:
