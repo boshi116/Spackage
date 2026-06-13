@@ -152,6 +152,10 @@ case "$1" in
                 for file in /etc/netwiz/custom_pkgs/*.[ia]pk; do
                     if [ -f "$file" ]; then
                         filename=$(basename "$file")
+                        # 保险箱有netwiz，直接跳过，显示在「已备妥」清单
+                        if echo "$filename" | grep -qi "netwiz"; then
+                            continue
+                        fi
                         provided_pkgs="$provided_pkgs $filename"
                     fi
                 done
@@ -204,6 +208,11 @@ case "$1" in
                     avail_pkgs=$(opkg list 2>/dev/null | awk '{print $1}')
                     
                     for pkg in $installed; do
+                        # opkg扫描时遇到netwiz相关文件直接跳过，不列入比对名单
+                        if echo "$pkg" | grep -qi "netwiz"; then
+                            continue
+                        fi
+                        
                         if echo "$avail_pkgs" | grep -qx "$pkg"; then
                             official_pkgs="$official_pkgs $pkg"
                         else
@@ -219,6 +228,11 @@ case "$1" in
                     fi
                     
                     for pkg in $installed; do
+                        # apk扫描时遇到netwiz相关文件直接跳过，不列入比对名单
+                        if echo "$pkg" | grep -qi "netwiz"; then
+                            continue
+                        fi
+                        
                         # 精确查询，逐个查验
                         if [ -n "$(apk search -q -e "$pkg" 2>/dev/null)" ]; then
                             official_pkgs="$official_pkgs $pkg"
@@ -1073,7 +1087,6 @@ case "$1" in
                         /usr/share/xray
                         /etc/passwall
                         /etc/smartdns
-                        /etc/netwiz/custom_pkgs
                     "
                     
                     for dir in $check_dirs; do
@@ -1120,6 +1133,12 @@ EOF
                     
                     mkdir -p /tmp/nw_offline_pkgs
                     cd /tmp/nw_offline_pkgs
+                    
+                    # 保险箱的自定义插件提取到离线包目录，随胶囊一起直观打包在外层
+                    if ls /etc/netwiz/custom_pkgs/*.[ia]pk >/dev/null 2>&1; then
+                        log "[BACKUP]" "检测到本地保险箱有自定义插件，正在合并至备份胶囊外层..."
+                        cp -p /etc/netwiz/custom_pkgs/*.[ia]pk /tmp/nw_offline_pkgs/ 2>/dev/null
+                    fi
                     
                     log "[BACKUP]" "[2/5] 准备下载离线套件..."
                     if command -v apk >/dev/null 2>&1; then
@@ -1357,6 +1376,10 @@ if [ -d "/tmp/nw_ghost_tmp/nw_offline_pkgs" ]; then
           /tmp/nw_ghost_tmp/nw_offline_pkgs/libc-* 2>/dev/null
     # ---------------------------------------------------------------
     
+    # 全局剔除包含 netwiz / NetWiz 的安装包，防止重启 rpcd 导致脚本自杀
+    rm -f /tmp/nw_ghost_tmp/nw_offline_pkgs/*[nN]et[wW]iz*.[ia]pk 2>/dev/null
+    rm -f /etc/netwiz/custom_pkgs/*[nN]et[wW]iz*.[ia]pk 2>/dev/null
+    
     # ==========================================
     # 防呆检测：跨架构 (ipk <-> apk) 拦截机制
     # ==========================================
@@ -1385,10 +1408,6 @@ if [ -d "/tmp/nw_ghost_tmp/nw_offline_pkgs" ]; then
             echo "$(date '+%F %T') [RESTORE] [DANGER] 已自动拦截并跳过所有插件的还原，以防止底层架构损坏！请重新下载对应 ipk 版本的插件放入保险箱。" >> "$LOG_FILE"
         else
             echo "$(date '+%F %T') [RESTORE] >>> 系统架构匹配 (opkg)，开始恢复插件..." >> "$LOG_FILE"
-            
-            # 在批量安裝前，剔除包含 "netwiz" 字眼的安裝包，防止重啟 rpcd 導致腳本自殺
-            rm -f /tmp/nw_ghost_tmp/nw_offline_pkgs/*netwiz*.[ia]pk 2>/dev/null
-            rm -f /etc/netwiz/custom_pkgs/*netwiz*.[ia]pk 2>/dev/null
             
             if ls /tmp/nw_ghost_tmp/nw_offline_pkgs/*.ipk >/dev/null 2>&1; then
                 opkg install --force-reinstall --force-overwrite /tmp/nw_ghost_tmp/nw_offline_pkgs/*.ipk >> "$LOG_FILE" 2>&1
