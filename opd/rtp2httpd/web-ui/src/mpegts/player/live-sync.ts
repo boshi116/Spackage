@@ -1,15 +1,33 @@
 import type { PlayerConfig } from "../config";
 import Log from "../utils/logger";
+import { type LiveSessionAnchor, lagBehindLiveEdge } from "./wall-clock";
 
 const TAG = "LiveSync";
+const STALL_TAG = "StallJumper";
 
 /** Each live-edge underrun raises the latency floor by this much (seconds). */
 const UNDERRUN_BACKOFF_STEP = 1;
 /** Upper bound for the adaptive latency increase (seconds). */
 const UNDERRUN_BACKOFF_MAX = 6;
 
+/** Forward buffer seconds ahead of currentTime within the containing range. */
+function forwardBufferAhead(video: HTMLMediaElement): number {
+  const t = video.currentTime;
+  const buffered = video.buffered;
+  for (let i = 0; i < buffered.length; i++) {
+    if (t >= buffered.start(i) && t <= buffered.end(i)) {
+      return buffered.end(i) - t;
+    }
+  }
+  return 0;
+}
+
 /** Sets up live latency synchronization by adjusting playbackRate on timeupdate events. */
-export function setupLiveSync(video: HTMLMediaElement, config: PlayerConfig): () => void {
+export function setupLiveSync(
+  video: HTMLMediaElement,
+  config: PlayerConfig,
+  getLiveSessionAnchor: () => LiveSessionAnchor | null,
+): () => void {
   if (config.liveSync) {
     Log.v(
       TAG,
@@ -20,21 +38,15 @@ export function setupLiveSync(video: HTMLMediaElement, config: PlayerConfig): ()
     );
   }
 
-  // Adaptive backoff: every genuine live-edge underrun raises the latency we
-  // are willing to tolerate, so devices with bursty data delivery (e.g. iOS
-  // Safari, where fetch chunks arrive in 1-2s batches) settle at a latency
-  // they can sustain instead of rebuffering in a loop. Devices that never
-  // underrun keep the configured low latency.
   let extraLatency = 0;
 
   function onTimeUpdate(): void {
     if (!config.liveSync) return;
 
-    const buffered = video.buffered;
-    if (buffered.length === 0) return;
+    const anchor = getLiveSessionAnchor();
+    if (!anchor) return;
 
-    const bufferedEnd = buffered.end(buffered.length - 1);
-    const latency = bufferedEnd - video.currentTime;
+    const latency = lagBehindLiveEdge(anchor, video.currentTime);
 
     if (latency > config.liveSyncMaxLatency + extraLatency) {
       const targetRate = Math.min(2, Math.max(1, config.liveSyncPlaybackRate));
@@ -47,22 +59,28 @@ export function setupLiveSync(video: HTMLMediaElement, config: PlayerConfig): ()
         video.playbackRate = 1;
         Log.v(TAG, "Video playback rate reset to 1");
       }
+      // Recovered — drop adaptive backoff
+      if (extraLatency > 0 && latency <= config.liveSyncTargetLatency) {
+        extraLatency = 0;
+      }
     }
-    // else: between target and max, keep current playbackRate
   }
 
   function onWaiting(): void {
     if (!config.liveSync) return;
 
-    // Only count genuine live-edge underruns (playback caught up with the end
-    // of the buffer), not startup waits or seeks into unbuffered regions.
-    const buffered = video.buffered;
-    const atLiveEdge = buffered.length > 0 && buffered.end(buffered.length - 1) - video.currentTime < 0.5;
+    // Seek/Go Live often fires waiting while data is still buffered ahead — not an underrun.
+    if (video.seeking) return;
+
+    const anchor = getLiveSessionAnchor();
+    if (!anchor) return;
+
+    const lag = lagBehindLiveEdge(anchor, video.currentTime);
+    const ahead = forwardBufferAhead(video);
+    // Near session live edge AND playhead has caught up with its forward buffer.
+    const atLiveEdge = lag < 0.5 && ahead < 0.5;
     if (!atLiveEdge) return;
 
-    // Reset any boost immediately: timeupdate stops firing during the stall, so
-    // the regular latency check cannot run, and staying boosted would starve
-    // playback again as soon as it resumes.
     if (video.playbackRate !== 1 && video.playbackRate !== 0) {
       video.playbackRate = 1;
     }
@@ -93,7 +111,6 @@ export function setupLiveSync(video: HTMLMediaElement, config: PlayerConfig): ()
  * the first buffered range, seek to the start of the buffered range.
  */
 export interface StallJumper {
-  /** Re-run stall detection. Call whenever buffered ranges change (e.g. after a SourceBuffer append). */
   check(): void;
   destroy(): void;
 }
@@ -111,7 +128,7 @@ export function setupStartupStallJumper(video: HTMLMediaElement): StallJumper {
     if (isStalled || !canplayReceived || video.readyState < 2) {
       if (buffered.length > 0 && video.currentTime < buffered.start(0)) {
         const target = buffered.start(0);
-        Log.w(TAG, `Playback stuck at ${video.currentTime}, seeking to ${target}`);
+        Log.w(STALL_TAG, `Playback stuck at ${video.currentTime}, seeking to ${target}`);
         video.currentTime = target;
       }
     }
