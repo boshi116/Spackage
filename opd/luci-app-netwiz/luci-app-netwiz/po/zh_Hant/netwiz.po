@@ -874,7 +874,7 @@ msgstr "勾選：依據 IP 網段來對設備分類"
 msgid "Unchecked: Classify device types by built-in names"
 msgstr "取消：依據內建名稱來對設備分類"
 
-msgid "Group Name"
+msgid "Alias"
 msgstr "分組名稱"
 
 msgid "Group "
@@ -1114,9 +1114,6 @@ msgstr "✅ 匯出成功"
 msgid "Core network configuration file has been successfully downloaded!"
 msgstr "核心網路配置檔案已成功下載！"
 
-msgid "Close"
-msgstr "關閉"
-
 msgid "❌ Export Failed"
 msgstr "❌ 匯出失敗"
 
@@ -1296,9 +1293,6 @@ msgstr "請再次輸入密碼"
 
 msgid "Passwords do not match, please try again!"
 msgstr "兩次輸入的密碼不一致，請重新檢查！"
-
-msgid "Skip Password Setup (Keep current)"
-msgstr "暫不配置 管理員密碼 (保持現狀)"
 
 msgid "Router Admin Password (Optional)"
 msgstr "路由器管理密碼 (可選)"
@@ -1804,6 +1798,9 @@ msgstr "略過"
 msgid "Invalid MAC address format!"
 msgstr "MAC 位址格式不正確，請檢查！"
 
+msgid "e.g., AA:BB:CC:DD:EE:FF"
+msgstr "例如：AA:BB:CC:DD:EE:FF"
+
 msgid "💡 Multi-WAN detected. You can modify the account and password for each line separately (other settings remain unchanged)."
 msgstr "💡 系統偵測到多線撥號環境，可分別修改各線路的帳號密碼（其他設定保持不變）。"
 
@@ -1812,3 +1809,51 @@ msgstr "線路介面:"
 
 msgid "💡 Multi-WAN detected. Only the primary WAN will be configured here, other lines remain unchanged."
 msgstr "💡 系統偵測到多線環境，向導中僅配置主線路 (WAN)，其餘線路將保持原樣。"
+
+msgid "✏️ Custom Hosts"
+msgstr "✏️ 自訂 Hosts"
+
+msgid "Custom <a href=\"javascript:void(0)\" id=\"nw-hosts-raw-toggle\" style=\"color:red; text-decoration:underline dashed; transition:color 0.2s;\" title=\"Click to toggle pure text advanced mode\">Hosts</a>👈 (Domain Hijack)"
+msgstr "自訂 <a href=\"javascript:void(0)\" id=\"nw-hosts-raw-toggle\" style=\"color:red; text-decoration:underline dashed; transition:color 0.2s;\" title=\"點擊切換純文本高級模式\">Hosts</a>👈 (網域劫持)"
+
+msgid "💡 Quick Add:"
+msgstr "💡 快速新增紀錄:"
+
+msgid "➕ Add"
+msgstr "➕ 新增"
+
+msgid "No custom Hosts, please add below."
+msgstr "暫無自訂 Hosts，請點擊上方新增紀錄"
+
+msgid "IP (e.g., 192.168.1.50)"
+msgstr "指向 IP (如 192.168.1.50)"
+
+msgid "Domain (e.g., router.lan)"
+msgstr "劫持網域 (如 router.lan)"
+
+msgid "Comment (Optional)"
+msgstr "備註說明 (選填)"
+
+msgid "💡 <b>Pure Text Advanced Mode</b>: Supports batch pasting. Format: <code>IP Domain #Comment</code>"
+msgstr "💡 <b>純文本高級模式</b>：支援批次貼上。格式：<code>IP 網域 #備註</code>"
+
+msgid "IP and Domain cannot be empty!"
+msgstr "IP 和 網域 不能為空！"
+
+msgid "Invalid IP address format!"
+msgstr "IP 位址格式不正確！"
+
+msgid "Invalid domain format! Spaces and special characters are not allowed."
+msgstr "網域格式不正確！不允許包含空格或特殊危險字元。"
+
+msgid "No changes have been made."
+msgstr "您沒有進行任何修改！"
+
+msgid "Notice"
+msgstr "提示訊息"
+
+msgid "This IP and Domain combination already exists!"
+msgstr "此 IP 和 網域的組合已經存在，請勿重複新增！"
+
+msgid "Duplicate records found in Hosts! Please remove them before continuing."
+msgstr "Hosts文件中發現重複的 IP+網域 規則！請手動刪除重複項後再試。"
