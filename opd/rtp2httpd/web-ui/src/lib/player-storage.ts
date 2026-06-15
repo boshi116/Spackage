@@ -5,20 +5,31 @@
  * JSON serialization, error handling, and backward-compatible reads.
  */
 
+import { isIOS } from "./platform";
+
+function cloneDefaultValue<T>(value: T): T {
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 function createStore<T>(key: string, defaultValue: T): [get: () => T, save: (value: T) => void] {
+  const defaultSnapshot = JSON.stringify(defaultValue);
+
   return [
     (): T => {
       try {
         const raw = localStorage.getItem(key);
-        if (raw === null) return defaultValue;
+        if (raw === null) return cloneDefaultValue(defaultValue);
         return JSON.parse(raw) as T;
       } catch {
-        return defaultValue;
+        return cloneDefaultValue(defaultValue);
       }
     },
     (value: T): void => {
       try {
-        if (JSON.stringify(value) === JSON.stringify(defaultValue)) {
+        if (JSON.stringify(value) === defaultSnapshot) {
           localStorage.removeItem(key);
         } else {
           localStorage.setItem(key, JSON.stringify(value));
@@ -33,11 +44,8 @@ export const [getLastChannelId, saveLastChannelId] = createStore<string | null>(
   null,
 );
 export const [getSidebarVisible, saveSidebarVisible] = createStore("rtp2httpd-player-sidebar-visible", true);
-export const [getForce16x9, saveForce16x9] = createStore("rtp2httpd-player-force-16-9", true);
-export const [getMp2SoftDecode, saveMp2SoftDecode] = createStore(
-  "rtp2httpd-player-mp2-soft-decode",
-  /iPhone|iPad|iPod/.test(navigator.userAgent),
-);
+export const [getSeamlessSwitch, saveSeamlessSwitch] = createStore("rtp2httpd-player-seamless-switch", true);
+export const [getMp2SoftDecode, saveMp2SoftDecode] = createStore("rtp2httpd-player-mp2-soft-decode", isIOS());
 
 // Per-channel source index uses a JSON object map, so it needs custom logic
 const [getSourceIndexMap, saveSourceIndexMap] = createStore<Record<string, number>>(
@@ -50,7 +58,7 @@ export function getLastSourceIndex(channelId: string): number {
 }
 
 export function saveLastSourceIndex(channelId: string, sourceIndex: number): void {
-  const map = getSourceIndexMap();
+  const map = { ...getSourceIndexMap() };
   if (sourceIndex === 0) {
     delete map[channelId];
   } else {
