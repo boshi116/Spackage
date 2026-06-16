@@ -1102,8 +1102,14 @@ case "$1" in
             smart_backup)
                 # 并发防呆锁。防止用户刷新页面多次点击，导致两个进程互相删文件的惨案
                 if [ -f /tmp/nw_backup_running ]; then
-                    echo '{"error":"backup is currently running"}'
-                    exit 0
+                    # 是否锁档案已经存在超过10分钟
+                    if [ -n "$(find /tmp/nw_backup_running -mmin +10 2>/dev/null)" ]; then
+                        logger -t Netwiz "[BACKUP] 檢測到超時的死鎖，系統已自動強制解除！"
+                        rm -f /tmp/nw_backup_running
+                    else
+                        echo '{"error":"backup is currently running"}'
+                        exit 0
+                    fi
                 fi
                 
                 LOG_FILE="/etc/netwiz_recovery.log"
@@ -1143,13 +1149,14 @@ case "$1" in
                     # 关闭“遇错不动”机制
                     set +e
                     
-                    log "[BACKUP]" "[1/5] 开始备份系统设置..."
+                    log "[BACKUP]" "[1/4] 开始备份系统设置..."
                     log "[BACKUP]" "采用原生 tar 极速快照模式，防止底层进程卡死..."
                     
                     #  ash 脚本的非函数区
                     tar_targets=""
-                    base_targets="/etc/config /etc/passwd /etc/shadow /etc/group /etc/dropbear /etc/profile /etc/sysupgrade.conf"
-                    
+                    # 备份列表
+                    # 包含设置文件、软件源 rc.local, 定時任務, MAC綁定, 防火牆腳本
+                    base_targets="/etc/config /etc/passwd /etc/shadow /etc/group /etc/dropbear /etc/profile /etc/sysupgrade.conf /etc/hosts /etc/netwiz/hosts.json /etc/apk/repositories.d/distfeeds.list /etc/opkg/distfeeds.conf /etc/opkg/customfeeds.conf /etc/rc.local /etc/crontabs/root /etc/ethers /etc/firewall.user"
                     # 绝对安全过滤
                     for target in $base_targets; do
                         if [ -e "$target" ]; then
@@ -1169,6 +1176,10 @@ case "$1" in
                         /usr/share/xray
                         /etc/passwall
                         /etc/smartdns
+                        /etc/homeproxy
+                        /etc/mihomo
+                        /etc/ssrplus
+                        /etc/bypass
                     "
                     
                     for dir in $check_dirs; do
@@ -1210,8 +1221,23 @@ EOF
                         exit 1
                     fi
                     
-                    log "[BACKUP]" "内存校验通过，开始极速压缩..."
-                    tar -czf /tmp/nw_sys_config.tar.gz -C / $tar_targets >> "$LOG_FILE" 2>&1 || true
+                    log "[BACKUP]" "内存校验通过，开始极速压缩 (已智能排除日志与庞大数据库)..."
+                    
+                    # 生成排除列表文件配合 -X 参数使用
+                    cat > /tmp/nw_exclude_list.txt << 'EOF'
+*.log
+*querylog.json
+*stats.db
+*stats.db-wal
+*stats.db-shm
+*cache*
+EOF
+                    
+                    # 使用 -X 挂载排除列表
+                    tar -czf /tmp/nw_sys_config.tar.gz -X /tmp/nw_exclude_list.txt -C / $tar_targets >> "$LOG_FILE" 2>&1 || true
+                    
+                    # 打包完成，清理临时排除列表
+                    rm -f /tmp/nw_exclude_list.txt
                     
                     mkdir -p /tmp/nw_offline_pkgs
                     cd /tmp/nw_offline_pkgs
@@ -1222,7 +1248,7 @@ EOF
                         cp -p /etc/netwiz/custom_pkgs/*.[ia]pk /tmp/nw_offline_pkgs/ 2>/dev/null
                     fi
                     
-                    log "[BACKUP]" "[2/5] 准备下载离线套件..."
+                    log "[BACKUP]" "[2/4] 准备下载离线套件..."
                     if command -v apk >/dev/null 2>&1; then
                         apk update >> "$LOG_FILE" 2>&1
                         pkg_list=$(apk info | grep -e '^luci-app-' -e '^luci-theme-')
@@ -1250,7 +1276,7 @@ EOF
                         fi
                     fi
 
-                    log "[BACKUP]" "[3/5] 开始在内存中打包..."
+                    log "[BACKUP]" "[3/4] 开始在内存中打包..."
                     # 指纹配置文件复制一份到外层
                     # 打包前生成备份核对元数据文件
                     cat > "/tmp/nw_backup_meta.env" <<EOF
@@ -1268,7 +1294,7 @@ EOF
                     # 建立真实的备份成功状态锁
                     touch /tmp/nw_backup_ok
                     
-                    log "[BACKUP]" "[4/5] 打包结束，清理零碎文件。"
+                    log "[BACKUP]" "[4/4] 打包结束，清理零碎文件。"
                     rm -rf /tmp/nw_sys_config.tar.gz /tmp/nw_offline_pkgs /tmp/nw_backup_running /tmp/nw_backup_meta.env
                     
                     chmod 644 "$backup_file"
@@ -1285,7 +1311,10 @@ EOF
 
             check_backup)
                 if [ -f "/tmp/nw_backup_running" ]; then
-                    echo '{ "status": "running" }'
+                    # 提取最后4行日志，并进行严格的JSON符号安全转义
+                    log_safe=$(tail -n 4 /etc/netwiz_recovery.log 2>/dev/null | tr -d '\r' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+                    
+                    echo "{ \"status\": \"running\", \"log\": \"$log_safe\" }"
                 elif [ -f "/tmp/nw_backup_ok" ]; then
                     # 依据真实状态锁宣告打包圆满成功，且将 opkg 转换为符合前端识别的 ipk 烙印
                     SYS_ARCH=$(uname -m)

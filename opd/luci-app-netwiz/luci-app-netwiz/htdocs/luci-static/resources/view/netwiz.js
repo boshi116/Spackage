@@ -432,7 +432,7 @@ var T = {
     'LBL_HOSTS_RAW_TIP': _('💡 <b>Pure Text Mode</b>: <b>Paste</b> to import, <b>Copy</b> to export. Format: <code>IP Domain #Comment</code>'),
     'MSG_HOSTS_REQ': _('IP and Domain cannot be empty!'),
     'M_FMT_IP': _('Invalid IP address format!'),
-    'M_FMT_DOMAIN': _('Invalid domain format! Spaces and special characters are not allowed.'),
+    'M_FMT_DOMAIN': _('Invalid domain! Spaces, wildcards (*), and special characters are not allowed.'),
     'MSG_NO_CHANGE': _('No changes have been made.'),
     'M_INC_TIT': _('Notice'),
     'MSG_WAIT': _('Please wait...'),
@@ -440,7 +440,9 @@ var T = {
     'MSG_HOSTS_DUP_RAW': _('Duplicate records found in Hosts! Please remove them before continuing.'),
     'LBL_SMART_ADD': _('Smart Auto-fill'),
     'TIP_SMART_ADD': _('Auto-fill IPv4/v6 & www domain combinations'),
-    'LBL_HOSTS_DESC': _('💡 This feature forces specific domains to resolve to designated IPs. Commonly used for ad blocking or local NAS redirection.')
+    'LBL_HOSTS_DESC': _('💡 This feature forces specific domains to resolve to designated IPs. Commonly used for blocking domain access or local device redirection.'),
+    'MSG_RAW_ERR_1': _('Found invalid or duplicate records:'),
+    'MSG_RAW_ERR_2': _('Click [OK] to automatically discard them and continue, or [Cancel] to manually fix them.')
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -1193,11 +1195,11 @@ return view.extend({
                            '<div style="background:#eff6ff; border:1px dashed #93c5fd; padding:12px; border-radius:8px; margin-bottom:15px;">' +
                                '<div style="font-size:13px; color:#1e3a8a; font-weight:bold; margin-bottom:10px;">' + (T['LBL_HOSTS_VISUAL'] || '💡 Quick Add:') + '</div>' +
                                     '<div style="display:flex; gap:10px; margin-bottom:10px; width:100%; box-sizing:border-box;">' +
-                                        '<input type="text" id="nw-quick-dom" placeholder="' + (T['PH_HOSTS_DOMAIN'] || 'Domain') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13.5px; box-sizing:border-box;">' +
+                                        '<input type="text" id="nw-quick-dom" placeholder="' + (T['PH_HOSTS_DOMAIN'] || 'Domain') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13.5px; box-sizing:border-box; color: #000;">' +
                                         '<input type="text" id="nw-quick-ip" value="127.0.0.1" placeholder="' + (T['PH_HOSTS_IP'] || 'IP') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13.5px; box-sizing:border-box; color: #000;">' +
                                     '</div>' +
                                     '<div style="display:flex; gap:10px; width:100%; box-sizing:border-box; align-items:center;">' +
-                                        '<input type="text" id="nw-quick-cmt" placeholder="' + (T['PH_HOSTS_CMT'] || 'Comment') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13px; box-sizing:border-box;">' +
+                                        '<input type="text" id="nw-quick-cmt" placeholder="' + (T['PH_HOSTS_CMT'] || 'Comment') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13px; box-sizing:border-box; color: #000;">' +
                                         '<label style="display:flex; align-items:center; font-size:13px; color:#2563eb; cursor:pointer; flex-shrink:0; user-select:none;" title="' + (T['TIP_SMART_ADD'] || 'Auto-fill IPv4/v6 & www combinations') + '">' +
                                             '<input type="checkbox" id="nw-smart-add-cb" checked style="top:0px;">' +
                                             '<span class="nw-hide-mob">' + (T['LBL_SMART_ADD'] || 'Smart Auto-fill') + '</span>' +
@@ -1215,17 +1217,30 @@ return view.extend({
                     var isRawMode = false;
 
                     showAdvModal((T['LBL_HOSTS_TITLE']), html, function(box) {
+                        // 记忆触发保存时的UI状态
+                        var wasRaw = isRawMode;
+                        
                         if (isRawMode) { var tBtn = document.getElementById('nw-hosts-raw-toggle'); if(tBtn) tBtn.click(); }
                         
-                        // 修复与拦截：因为有重复项纯文本转换失败，isRawMode 会被恢复为 true。return false 阻止弹窗关闭和保存
+                        // 纯文本转换失败，此时 isRawMode 会被恢复为 true。阻止弹窗关闭和保存
                         if (isRawMode) return false;
 
                         var finalData = hostsArr.filter(function(item) { return item.ip.trim() !== '' && item.dom.trim() !== ''; });
                         var jsonStr = JSON.stringify(finalData);
                         
-                        // 拦截未修改：比对最终数据与初始数据快照
+                        // 比对数据与初始数据快照
                         if (jsonStr === initialJsonStr) {
-                            openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_NO_CHANGE'] || 'No changes have been made.', okText: T['BTN_CLOSE'] || 'Close' });
+                            openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_NO_CHANGE'] || 'No changes have been made.', okText: T['M_CLOSE'] || 'Close' });
+                            
+                            // 原本是在纯文字模式下触发的，瞬间将UI恢复回纯文字模式
+                            if (wasRaw) {
+                                isRawMode = true;
+                                document.getElementById('nw-hosts-visual-ui').style.display = 'none';
+                                document.getElementById('nw-hosts-raw-ui').style.display = 'block';
+                                var rawToggleBtn = document.getElementById('nw-hosts-raw-toggle');
+                                if (rawToggleBtn) rawToggleBtn.style.color = '#2563eb';
+                            }
+                            
                             return false; // 终止后续的写入与重启
                         }
                         
@@ -1242,7 +1257,10 @@ return view.extend({
                     
                     var toggleBtn = document.getElementById('nw-hosts-raw-toggle');
                     if (toggleBtn) {
-                        toggleBtn.addEventListener('click', function() {
+                        toggleBtn.addEventListener('click', function(e) {
+                            // 1：判断切换，是手动点，还是点击底部保存时程序自动触发
+                            var isIntentSave = (e && e.isTrusted === false); 
+                            
                             isRawMode = !isRawMode;
                             var visualUi = document.getElementById('nw-hosts-visual-ui');
                             var rawUi = document.getElementById('nw-hosts-raw-ui');
@@ -1259,10 +1277,10 @@ return view.extend({
                                 rawText.value = textContent;
                                 visualUi.style.display = 'none'; rawUi.style.display = 'block';
                             } else {
-                                // 2. 纯文本 切 UI
+                                // 2. 纯文本 切 UI (查重与格式拦截)
                                 var lines = rawText.value.split('\n');
                                 var newArr = [];
-                                var hasDupError = false; // 重复标记
+                                var errorCount = 0; 
 
                                 lines.forEach(function(line) {
                                     line = line.trim(); if (!line) return;
@@ -1271,33 +1289,68 @@ return view.extend({
                                         var uncommented = line.substring(1).trim();
                                         if (/^[a-fA-F0-9\.:]+\s+[^\s#]+/.test(uncommented)) { en = false; line = uncommented; } else { return; }
                                     }
-                                    var match = line.match(/^([a-fA-F0-9\.:]+)\s+([^\s<>"'#]+)(?:\s+#\s*(.*))?$/);
+                                    var match = line.match(/^([a-fA-F0-9\.:]+)\s+([^\s<>"'\*#]+)(?:\s+#\s*(.*))?$/);
                                     if (match) { 
                                         var parsedIp = match[1];
                                         var isIpv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(parsedIp);
                                         var isIpv6 = /^[a-fA-F0-9:]+:[a-fA-F0-9:]+$/.test(parsedIp);
                                         if (isIpv4 || isIpv6) { 
-                                            // 发现重复，立刻标记报错
                                             var isDup = newArr.some(function(x) { return x.ip === parsedIp && x.dom === match[2]; });
-                                            if (isDup) {
-                                                hasDupError = true;
-                                            } else {
-                                                newArr.push({ ip: parsedIp, dom: match[2], cmt: match[3] || '', en: en }); 
-                                            }
-                                        }
-                                    }
+                                            if (isDup) { errorCount++; } else { newArr.push({ ip: parsedIp, dom: match[2], cmt: match[3] || '', en: en }); }
+                                        } else { errorCount++; }
+                                    } else { errorCount++; }
                                 });
 
-                                // 发现重复项，使用精美弹窗警告，并强制留在纯文本模式！
-                                if (hasDupError) {
-                                    openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_HOSTS_DUP_RAW'] || 'Duplicate records found in text! Please remove them.', okText: T['BTN_CLOSE'] || 'Close' });
-                                    isRawMode = true; // 恢复状态变量
-                                    return; // 终止 UI 转换
+                                var processValidData = function() {
+                                    hostsArr = newArr;
+                                    renderHosts();
+                                    rawUi.style.display = 'none'; 
+                                    visualUi.style.display = 'block';
+                                    var tBtn = document.getElementById('nw-hosts-raw-toggle');
+                                    if (tBtn) tBtn.style.color = 'reb';
+                                };
+
+                                if (errorCount > 0) {
+                                    isRawMode = true; 
+                                    var confirmMsg = (T['MSG_RAW_ERR_1'] || 'Found invalid or duplicate records:') + ' ' + 
+                                    '<b style="color:#ef4444; font-size:16px;">' + errorCount + '</b><br><br>' + 
+                                    (T['MSG_RAW_ERR_2'] || 'Click [OK] to automatically discard them and continue, or [Cancel] to manually fix them.');
+                                    
+                                    openModal({
+                                        title: T['M_INC_TIT'] || 'Notice',
+                                        msg: '<div style="white-space:pre-wrap; line-height:1.6; font-size:14.5px; color:#475569;">' + confirmMsg + '</div>',
+                                        okText: T['BTN_OK'] || 'OK',
+                                        cancelText: T['BTN_CANCEL'] || 'Cancel',
+                                        isDanger: true, 
+                                        onCancel: function() {
+                                            var gm = document.getElementById('nw-global-modal'); if (gm) gm.style.display = 'none';
+                                        },
+                                        onOk: function() {
+                                            var cleanText = '';
+                                            newArr.forEach(function(item) {
+                                                var prefix = item.en ? '' : '# '; 
+                                                var cmt = item.cmt ? ' \t# ' + item.cmt : '';
+                                                cleanText += prefix + item.ip + '\t' + item.dom + cmt + '\n';
+                                            });
+                                            rawText.value = cleanText;
+                                            isRawMode = false; 
+                                            processValidData();
+                                            var gm = document.getElementById('nw-global-modal'); if (gm) gm.style.display = 'none';
+                                            
+                                            // 在清洗完成后，自动保存
+                                            if (isIntentSave) {
+                                                var mdlOk = document.getElementById('mdl-ok');
+                                                if (mdlOk) {
+                                                    // 100ms 后再保存
+                                                    setTimeout(function(){ mdlOk.click(); }, 100);
+                                                }
+                                            }
+                                        }
+                                    });
+                                    return; 
                                 }
 
-                                hostsArr = newArr;
-                                renderHosts();
-                                rawUi.style.display = 'none'; visualUi.style.display = 'block';
+                                processValidData();
                             }
                         });
                     }
@@ -1337,14 +1390,14 @@ return view.extend({
                                     var isIpv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(ipVal);
                                     var isIpv6 = /^[a-fA-F0-9:]+:[a-fA-F0-9:]+$/.test(ipVal);
                                     if (ipVal !== '' && !isIpv4 && !isIpv6) { 
-                                        openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['M_FMT_IP'] || 'Invalid IP format!', okText: T['BTN_CLOSE'] || 'Close' }); 
+                                        openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['M_FMT_IP'] || 'Invalid IP format!', okText: T['M_CLOSE'] || 'Close' }); 
                                         this.value = hostsArr[idx].ip; 
                                         return; 
                                     }
                                     // 查重防呆：不得与其他行的IP+域名组合完全相同
                                     var isDupIp = hostsArr.some(function(x, i) { return i !== idx && x.ip === ipVal && x.dom === hostsArr[idx].dom; });
                                     if (isDupIp) {
-                                        openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_HOSTS_DUP'] || 'Already exists!', okText: T['BTN_CLOSE'] || 'Close' }); 
+                                        openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_HOSTS_DUP'] || 'Already exists!', okText: T['M_CLOSE'] || 'Close' }); 
                                         this.value = hostsArr[idx].ip; 
                                         return;
                                     }
@@ -1353,15 +1406,15 @@ return view.extend({
                                 
                                 if(this.classList.contains('h-dom')) {
                                     var domVal = this.value.trim();
-                                    if (/[\s<>"']/.test(domVal)) { 
-                                        openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['M_FMT_DOMAIN'] || 'Invalid domain format!', okText: T['BTN_CLOSE'] || 'Close' }); 
+                                    if (/[\s<>"'\*]/.test(domVal)) {
+                                        openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['M_FMT_DOMAIN'] || 'Invalid domain format!', okText: T['M_CLOSE'] || 'Close' }); 
                                         this.value = hostsArr[idx].dom; 
                                         return; 
                                     }
                                     // 查重防呆：不得与其他行的IP+域名组合完全相同
                                     var isDupDom = hostsArr.some(function(x, i) { return i !== idx && x.ip === hostsArr[idx].ip && x.dom === domVal; });
                                     if (isDupDom) {
-                                        openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_HOSTS_DUP'] || 'Already exists!', okText: T['BTN_CLOSE'] || 'Close' }); 
+                                        openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_HOSTS_DUP'] || 'Already exists!', okText: T['M_CLOSE'] || 'Close' }); 
                                         this.value = hostsArr[idx].dom; 
                                         return;
                                     }
@@ -1403,8 +1456,8 @@ return view.extend({
                                 openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['M_FMT_IP'] || 'Invalid IP format!', okText: T['M_CLOSE'] || 'Close' }); 
                                 return; 
                             }
-                            if (/[\s<>"']/.test(domVal)) { 
-                                openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['M_FMT_DOMAIN'] || 'Invalid domain format!', okText: T['BTN_CLOSE'] || 'Close' }); 
+                            if (/[\s<>"'\*]/.test(domVal)) {
+                                openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['M_FMT_DOMAIN'] || 'Invalid domain format!', okText: T['M_CLOSE'] || 'Close' }); 
                                 return; 
                             }
                             
@@ -1448,7 +1501,7 @@ return view.extend({
 
                             // 如果计算完发现一条新规则都没加进去（全重复了）
                             if (addedCount === 0) {
-                                openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_HOSTS_DUP'] || 'Already exists!', okText: T['BTN_CLOSE'] || 'Close' }); 
+                                openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_HOSTS_DUP'] || 'Already exists!', okText: T['M_CLOSE'] || 'Close' }); 
                                 return;
                             }
                             
@@ -3396,7 +3449,33 @@ return view.extend({
                                     var checkTimer = setInterval(function() {
                                         if (isDone) { clearInterval(checkTimer); return; }
                                         callCheckBackup().then(function(cRes) {
-                                            if (cRes && cRes.status === 'done' && !isDone) {
+                                            // 判断running状态并动态生成终端机黑框
+                                            if (cRes && cRes.status === 'running' && cRes.log) {
+                                                // 前端显示“Downloading”的行
+                                                var cleanLog = cRes.log.split('\n').filter(function(line) {
+                                                    return line.indexOf('Downloading') !== -1;
+                                                }).join('\n');
+
+                                                // 显示Downloading的日志
+                                                if (cleanLog) {
+                                                    var logEl = document.getElementById('nw-backup-log');
+                                                    if (!logEl) {
+                                                        var modalMsg = document.querySelector('#nw-global-msg');
+                                                        if (modalMsg) {
+                                                            logEl = document.createElement('div');
+                                                            logEl.id = 'nw-backup-log';
+                                                            logEl.style.cssText = 'margin-top:18px; padding:12px; background:#0f172a; color:#10b981; font-family:monospace; font-size:12px; text-align:left; border-radius:8px; white-space:pre-wrap; word-break:break-all; max-height:110px; overflow-y:hidden; box-shadow:inset 0 2px 4px rgba(0,0,0,0.5); line-height:1.5; border:1px solid #1e293b;';
+                                                            modalMsg.appendChild(logEl);
+                                                        }
+                                                    }
+                                                    // 更新文字并自动滚动到底部
+                                                    if (logEl && logEl.innerText !== cleanLog) {
+                                                        logEl.innerText = cleanLog;
+                                                        logEl.scrollTop = logEl.scrollHeight; 
+                                                    }
+                                                }
+                                            }
+                                            else if (cRes && cRes.status === 'done' && !isDone) {
                                                 isDone = true;
                                                 clearInterval(checkTimer);
                                                 var a = document.createElement("a");
@@ -3421,7 +3500,7 @@ return view.extend({
                                                 });
                                             }
                                         }).catch(function() {});
-                                    }, 3000);
+                                    }, 2000);
                                 } else {
                                     openModal({ title: T['M_BAK_FAIL_TIT'], msg: T['M_BAK_FAIL_MSG'], hideCancel: true, okText: T['M_CLOSE'] });
                                 }
@@ -3742,7 +3821,7 @@ return view.extend({
                                         callCheckRestoreStatus().then(function(res) {
                                             errCount = 0;
                                             
-                                            // 🛡️ 核心修复：安全解包。处理 LuCI RPC 底层可能返回数组 [0, {data}] 的情况
+                                            // 安全解包。处理 LuCI RPC 底层可能返回数组 [0, {data}] 的情况
                                             var data = (Array.isArray(res) && res.length > 1) ? res[1] : (res || {});
                                             
                                             var s = data.status;
@@ -3820,7 +3899,33 @@ return view.extend({
                                 var checkTimer = setInterval(function() {
                                     if (isRegretDone) { clearInterval(checkTimer); return; }
                                     callCheckBackup().then(function(cRes) {
-                                        if (cRes && cRes.status === 'done' && !isDone) {
+                                        // 判断running状态并动态生成终端机黑框
+                                        if (cRes && cRes.status === 'running' && cRes.log) {
+                                            // 前端显示“Downloading”的行
+                                            var cleanLog = cRes.log.split('\n').filter(function(line) {
+                                                return line.indexOf('Downloading') !== -1;
+                                            }).join('\n');
+
+                                            // 显示Downloading的日志
+                                            if (cleanLog) {
+                                                var logEl = document.getElementById('nw-backup-log');
+                                                if (!logEl) {
+                                                    var modalMsg = document.querySelector('#nw-global-msg');
+                                                    if (modalMsg) {
+                                                        logEl = document.createElement('div');
+                                                        logEl.id = 'nw-backup-log';
+                                                        logEl.style.cssText = 'margin-top:18px; padding:12px; background:#0f172a; color:#10b981; font-family:monospace; font-size:12px; text-align:left; border-radius:8px; white-space:pre-wrap; word-break:break-all; max-height:110px; overflow-y:hidden; box-shadow:inset 0 2px 4px rgba(0,0,0,0.5); line-height:1.5; border:1px solid #1e293b;';
+                                                        modalMsg.appendChild(logEl);
+                                                    }
+                                                }
+                                                // 更新文字并自动滚动到底部
+                                                if (logEl && logEl.innerText !== cleanLog) {
+                                                    logEl.innerText = cleanLog;
+                                                    logEl.scrollTop = logEl.scrollHeight; 
+                                                }
+                                            }
+                                        }
+                                        else if (cRes && cRes.status === 'done' && !isDone) {
                                             isDone = true;
                                             clearInterval(checkTimer);
                                             var a = document.createElement("a");
@@ -3841,7 +3946,7 @@ return view.extend({
                                             });
                                         }
                                     }).catch(function() {});
-                                }, 3000);
+                                }, 2000);
                             } else {
                                 execRestore();
                             }
