@@ -1825,17 +1825,17 @@ msgstr "➕ 添加"
 msgid "No custom Hosts, please add below."
 msgstr "暂无自定义 Hosts，请点击上方添加记录"
 
-msgid "IP (e.g., 192.168.1.50)"
-msgstr "指向 IP (如 192.168.1.50)"
+msgid "IP (e.g., 127.0.0.1 or ::1)"
+msgstr "指向 IP (127.0.0.1 或 ::1)"
 
-msgid "Domain (e.g., router.lan)"
-msgstr "劫持域名 (如 router.lan)"
+msgid "Domain (e.g., abc.com)"
+msgstr "劫持域名 (如 abc.com)"
 
 msgid "Comment (Optional)"
 msgstr "备注说明 (选填)"
 
-msgid "💡 <b>Pure Text Advanced Mode</b>: Supports batch pasting. Format: <code>IP Domain #Comment</code>"
-msgstr "💡 <b>纯文本高级模式</b>：支持批量粘贴。格式：<code>IP 域名 #备注</code>"
+msgid "💡 <b>Pure Text Mode</b>: <b>Paste</b> to import, <b>Copy</b> to export. Format: <code>IP Domain #Comment</code>"
+msgstr "💡 <b>纯文本模式</b>：<b>粘贴</b>即导入，<b>全选复制</b>即导出。格式：<code>IP 域名 #备注</code>"
 
 msgid "IP and Domain cannot be empty!"
 msgstr "IP 和 域名 不能为空！"
@@ -1857,3 +1857,12 @@ msgstr "此 IP 和 域名的组合已经存在，请勿重复添加！"
 
 msgid "Duplicate records found in Hosts! Please remove them before continuing."
 msgstr "Hosts文件中发现重复的 IP+域名 规则！请手动删除重复项后再试。"
+
+msgid "Smart Auto-fill"
+msgstr "智能补全"
+
+msgid "Auto-fill IPv4/v6 & www domain combinations"
+msgstr "自动生成 IPv4/v6 以及带 www 和不带 www 的组合规则"
+
+msgid "💡 This feature forces specific domains to resolve to designated IPs. Commonly used for ad blocking or local NAS redirection."
+msgstr "💡 此功能可强制将特定域名解析到指定的 IP 地址。常用于屏蔽广告或内网 设备 定向。"

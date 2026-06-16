@@ -426,10 +426,10 @@ var T = {
     'LBL_HOSTS_VISUAL': _('💡 Quick Add:'),
     'BTN_HOSTS_ADD': _('➕ Add'),
     'TXT_HOSTS_EMPTY': _('No custom Hosts, please add below.'),
-    'PH_HOSTS_IP': _('IP (e.g., 192.168.1.50)'),
-    'PH_HOSTS_DOMAIN': _('Domain (e.g., router.lan)'),
+    'PH_HOSTS_IP': _('IP (e.g., 127.0.0.1 or ::1)'),
+    'PH_HOSTS_DOMAIN': _('Domain (e.g., abc.com)'),
     'PH_HOSTS_CMT': _('Comment (Optional)'),
-    'LBL_HOSTS_RAW_TIP': _('💡 <b>Pure Text Advanced Mode</b>: Supports batch pasting. Format: <code>IP Domain #Comment</code>'),
+    'LBL_HOSTS_RAW_TIP': _('💡 <b>Pure Text Mode</b>: <b>Paste</b> to import, <b>Copy</b> to export. Format: <code>IP Domain #Comment</code>'),
     'MSG_HOSTS_REQ': _('IP and Domain cannot be empty!'),
     'M_FMT_IP': _('Invalid IP address format!'),
     'M_FMT_DOMAIN': _('Invalid domain format! Spaces and special characters are not allowed.'),
@@ -437,7 +437,10 @@ var T = {
     'M_INC_TIT': _('Notice'),
     'MSG_WAIT': _('Please wait...'),
     'MSG_HOSTS_DUP': _('This IP and Domain combination already exists!'),
-    'MSG_HOSTS_DUP_RAW': _('Duplicate records found in Hosts! Please remove them before continuing.')
+    'MSG_HOSTS_DUP_RAW': _('Duplicate records found in Hosts! Please remove them before continuing.'),
+    'LBL_SMART_ADD': _('Smart Auto-fill'),
+    'TIP_SMART_ADD': _('Auto-fill IPv4/v6 & www domain combinations'),
+    'LBL_HOSTS_DESC': _('💡 This feature forces specific domains to resolve to designated IPs. Commonly used for ad blocking or local NAS redirection.')
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -501,6 +504,10 @@ return view.extend({
             '  .wifi-active-anim { animation: wifi-wave 2s infinite; }',
             '  .nw-modal-btn-wrap .nw-u-btn { height: auto !important; min-height: 44px !important; white-space: normal !important; word-break: break-word !important; line-height: 1.4 !important; padding: 10px 8px !important; }',
             '  .nw-qr-hover:hover { color: #3b82f6 !important; }',
+
+            '@media screen and (max-width: 600px) {' +
+            '    .nw-hide-mob { display: none !important; }' + 
+            '}' +
             '</style>',
 
             '<div class="nw-wrapper">',
@@ -954,7 +961,7 @@ return view.extend({
             bg.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(2px);';
             var box = document.createElement('div');
             box.style.cssText = 'background:#fff; width:360px; max-width:90%; border-radius:12px; padding:20px; box-shadow:0 10px 25px rgba(0,0,0,0.1); font-family:sans-serif;';
-            box.innerHTML = '<div style="font-size:17px; font-weight:bold; color:#1e293b; margin-bottom:15px;">' + title + '</div>' + 
+            box.innerHTML = '<div style="font-size:17px; font-weight:bold; color:#1e293b; margin-bottom:8px;">' + title + '</div>' + 
                             '<div style="margin-bottom:20px; color:#475569;">' + html + '</div>' +
                             '<div style="display:flex; justify-content:flex-end; gap:10px;">' +
                             '<button id="mdl-cancel" class="nw-u-btn nw-u-btn-gray" style="padding:0 15px; height:36px; min-height:36px;">' + (T['BTN_CANCEL']||'Cancel') + '</button>' +
@@ -1182,15 +1189,20 @@ return view.extend({
                     var initialJsonStr = JSON.stringify(initialData);
 
                     var html = '<div id="nw-hosts-visual-ui">' +
-                                '<div style="background:#eff6ff; border:1px dashed #93c5fd; padding:12px; border-radius:8px; margin-bottom:15px;">' +
-                                    '<div style="font-size:13px; color:#1e3a8a; font-weight:bold; margin-bottom:10px;">' + (T['LBL_HOSTS_VISUAL'] || '💡 Quick Add:') + '</div>' +
+                           '<div style="font-size:13px; color:#64748b; margin-bottom:12px; line-height:1.5;">' + (T['LBL_HOSTS_DESC'] || '💡 This feature forces specific domains to resolve to designated IPs. Commonly used for ad blocking or local NAS redirection.') + '</div>' +
+                           '<div style="background:#eff6ff; border:1px dashed #93c5fd; padding:12px; border-radius:8px; margin-bottom:15px;">' +
+                               '<div style="font-size:13px; color:#1e3a8a; font-weight:bold; margin-bottom:10px;">' + (T['LBL_HOSTS_VISUAL'] || '💡 Quick Add:') + '</div>' +
                                     '<div style="display:flex; gap:10px; margin-bottom:10px; width:100%; box-sizing:border-box;">' +
                                         '<input type="text" id="nw-quick-dom" placeholder="' + (T['PH_HOSTS_DOMAIN'] || 'Domain') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13.5px; box-sizing:border-box;">' +
                                         '<input type="text" id="nw-quick-ip" value="127.0.0.1" placeholder="' + (T['PH_HOSTS_IP'] || 'IP') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13.5px; box-sizing:border-box; color: #000;">' +
                                     '</div>' +
-                                    '<div style="display:flex; gap:10px; width:100%; box-sizing:border-box;">' +
+                                    '<div style="display:flex; gap:10px; width:100%; box-sizing:border-box; align-items:center;">' +
                                         '<input type="text" id="nw-quick-cmt" placeholder="' + (T['PH_HOSTS_CMT'] || 'Comment') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13px; box-sizing:border-box;">' +
-                                        '<button id="nw-quick-add-btn" class="nw-u-btn" style="flex:0 0 auto; flex-shrink:0; white-space:nowrap; padding:0 15px; height:36px; background:#fff; color:#2563eb; border:1px solid #2563eb; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">' + (T['BTN_HOSTS_ADD'] || '➕ Add') + '</button>' +
+                                        '<label style="display:flex; align-items:center; font-size:13px; color:#2563eb; cursor:pointer; flex-shrink:0; user-select:none;" title="' + (T['TIP_SMART_ADD'] || 'Auto-fill IPv4/v6 & www combinations') + '">' +
+                                            '<input type="checkbox" id="nw-smart-add-cb" checked style="top:0px;">' +
+                                            '<span class="nw-hide-mob">' + (T['LBL_SMART_ADD'] || 'Smart Auto-fill') + '</span>' +
+                                        '</label>' +
+                                        '<button id="nw-quick-add-btn" class="nw-u-btn" style="flex:0 0 auto; flex-shrink:0; white-space:nowrap; padding:0 15px; height:36px; background:#fff; color:#2563eb; border:1px solid #2563eb; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s; min-width: 70px; padding: 5px 10px 5px 5px !important;">' + (T['BTN_HOSTS_ADD'] || '➕ Add') + '</button>' +
                                     '</div>' +
                                 '</div>' +
                                 '<div id="nw-hosts-list" style="max-height:280px; overflow-y:auto; overflow-x:hidden; padding-right:5px; margin-bottom:10px;"></div>' +
@@ -1245,7 +1257,7 @@ return view.extend({
                                     textContent += prefix + item.ip + '\t' + item.dom + cmt + '\n';
                                 });
                                 rawText.value = textContent;
-                                visualUi.style.display = 'none'; rawUi.style.display = 'block'; this.style.color = '#2563eb'; 
+                                visualUi.style.display = 'none'; rawUi.style.display = 'block';
                             } else {
                                 // 2. 纯文本 切 UI
                                 var lines = rawText.value.split('\n');
@@ -1285,7 +1297,7 @@ return view.extend({
 
                                 hostsArr = newArr;
                                 renderHosts();
-                                rawUi.style.display = 'none'; visualUi.style.display = 'block'; this.style.color = 'inherit';
+                                rawUi.style.display = 'none'; visualUi.style.display = 'block';
                             }
                         });
                     }
@@ -1396,16 +1408,51 @@ return view.extend({
                                 return; 
                             }
                             
-                            // 查重防呆：检查数组中是否已经存在相同的IP + 域名
-                            var isDupNew = hostsArr.some(function(x) { return x.ip === ipVal && x.dom === domVal; });
-                            if (isDupNew) {
-                                openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_HOSTS_DUP'] || 'This IP and Domain combination already exists!', okText: T['BTN_CLOSE'] || 'Close' }); 
+                            var isSmartAdd = document.getElementById('nw-smart-add-cb').checked;
+                            var cmtVal = cmtInput.value.trim().replace(/[<>"']/g, '');
+                            var addList = [];
+                            
+                            if (isSmartAdd) {
+                                // 智能解析：去除域名前面的 www.，提取主域名
+                                var rootDom = domVal.replace(/^www\./i, '');
+                                var doms = [rootDom, 'www.' + rootDom]; // 组合 1：无 www，组合 2：有 www
+                                var ips = [ipVal];
+                                
+                                // 智能判断：如果用户填的是屏蔽/回环 IP，自动裂变出 IPv4 和 IPv6 两个版本
+                                if (ipVal === '127.0.0.1' || ipVal === '::1' || ipVal === '0.0.0.0' || ipVal === '::') {
+                                    ips = ['127.0.0.1', '::1'];
+                                }
+                                
+                                // 交叉组合所有 IP 和域名
+                                ips.forEach(function(i) {
+                                    doms.forEach(function(d) {
+                                        addList.push({ ip: i, dom: d, cmt: cmtVal, en: true });
+                                    });
+                                });
+                            } else {
+                                // 未开启智能补全，只添加当前输入的一条
+                                addList.push({ ip: ipVal, dom: domVal, cmt: cmtVal, en: true });
+                            }
+
+                            var addedCount = 0;
+                            // 倒序遍历插入，保证生成的 4 条规则在列表里看起来排版舒适且符合逻辑
+                            for (var i = addList.length - 1; i >= 0; i--) {
+                                var item = addList[i];
+                                // 查重防呆：如果 4 条规则中有一部分已经存在了，自动跳过重复的，只加上缺失的
+                                var isDup = hostsArr.some(function(x) { return x.ip === item.ip && x.dom === item.dom; });
+                                if (!isDup) {
+                                    hostsArr.unshift(item);
+                                    addedCount++;
+                                }
+                            }
+
+                            // 如果计算完发现一条新规则都没加进去（全重复了）
+                            if (addedCount === 0) {
+                                openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_HOSTS_DUP'] || 'Already exists!', okText: T['BTN_CLOSE'] || 'Close' }); 
                                 return;
                             }
                             
-                            hostsArr.unshift({ ip: ipVal, dom: domVal, cmt: cmtInput.value.trim().replace(/[<>"']/g, ''), en: true });
                             renderHosts();
-                            
                             ipInput.value = '127.0.0.1'; domInput.value = ''; cmtInput.value = '';
                             document.getElementById('nw-hosts-list').scrollTop = 0;
                         };
