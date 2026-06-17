@@ -442,7 +442,32 @@ var T = {
     'TIP_SMART_ADD': _('Auto-fill IPv4/v6 & www domain combinations'),
     'LBL_HOSTS_DESC': _('💡 This feature forces specific domains to resolve to designated IPs. Commonly used for blocking domain access or local device redirection.'),
     'MSG_RAW_ERR_1': _('Found invalid or duplicate records:'),
-    'MSG_RAW_ERR_2': _('Click [OK] to automatically discard them and continue, or [Cancel] to manually fix them.')
+    'MSG_RAW_ERR_2': _('Click [OK] to automatically discard them and continue, or [Cancel] to manually fix them.'),
+    // --- 插件修复急救箱 ---
+    'LBL_REPAIR_BTN': _('🚑 Plugin Repair'),
+    'M_REP_SCAN_TIT': _('Please wait'),
+    'M_REP_SCAN_MSG': _('Scanning for repairable plugins...'),
+    'M_REP_DESC': _('Standard uninstallation does not remove plugin configuration files. If a plugin malfunctions after reinstallation, select it below to reset it to its initial state.'),
+    'M_REP_OPT': _('Factory Default'),
+    'M_REP_TIT': _('🚑 Plugin Repair Toolkit'),
+    'M_REP_OK': _('Repair Now'),
+    'M_REP_PROC_TIT': _('Processing'),
+    'M_REP_PROC_MSG1': _('Repairing and restarting'),
+    'M_REP_SUCC_TIT': _('Repair Successful'),
+    'M_REP_SUCC_MSG': _('has been successfully restored'),
+    'M_REP_FAIL_TIT': _('Repair Failed'),
+    'M_REP_FAIL_MSG': _('Unable to repair this plugin'),
+    'M_REP_ERR_TIT': _('System Error'),
+    'M_REP_ERR_MSG': _('Request timeout or error'),
+    'M_REP_NOTICE_TIT': _('Notice'),
+    'M_REP_EMPTY_MSG': _('No repairable plugins found'),
+    'M_REP_GET_ERR': _('Failed to get plugin list'),
+    // ---------------------------
+    'M_PORT_RANGE': _('⚠️ Port number must be between 1 and 65535'),
+    'M_PORT_ERR1': _('⚠️ For system security, do not use'),
+    'M_PORT_ERR2': _('as the external port. It is a reserved high-risk port.'),
+    'M_PORT_SUGG': _('It is recommended to use 8080 or a port above 10000.'),
+    'LBL_WEB_PORT_TITLE': _('Enter custom external port number'),
 };
 
 var callNetSetup = rpc.declare({ object: 'netwiz', method: 'set_network', params: ['mode', 'arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'], expect: { result: 0 } });
@@ -673,12 +698,16 @@ return view.extend({
             '    <div style="margin-top: 15px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; padding: 15px; text-align: left;">',
             '        <div style="font-size:14px; font-weight:bold; color:#475569; margin-bottom:12px;">{{LBL_ADV_UTILS_TITLE}}</div>',
             '        <div style="display:flex; flex-wrap:wrap; gap:20px; align-items:center; margin-bottom:12px; padding-bottom:12px; border-bottom: 1px dashed #cbd5e1;">',
-            '            <a href="javascript:void(0)" id="link-mac-clone" style="color:#0284c7; text-decoration:none; font-size:14.5px; font-weight:500;">{{LBL_MAC_CLONE_LINK}}</a>',
             '            <a href="javascript:void(0)" id="link-cron-reboot" style="color:#0284c7; text-decoration:none; font-size:14.5px; font-weight:500;">{{LBL_CRON_REBOOT_LINK}}</a>',
+            '            <a href="javascript:void(0)" id="link-mac-clone" style="color:#0284c7; text-decoration:none; font-size:14.5px; font-weight:500;">{{LBL_MAC_CLONE_LINK}}</a>',
             '            <a href="javascript:void(0)" id="link-modify-hosts" style="color:#0284c7; text-decoration:none; font-size:14.5px; font-weight:500;">{{LBL_HOSTS_LINK}}</a>',
+            '            <a href="javascript:void(0)" id="link-repair-plugin" style="color:#ef4444; text-decoration:none; font-size:14.5px; font-weight:500;">{{LBL_REPAIR_BTN}}</a>',
             '        </div>',
             '        <div style="display:flex; justify-content:space-between; align-items:center;">',
-            '            <div style="font-size:14.5px; font-weight:500; color:#0284c7;">{{LBL_WEB_ACCESS_TOGGLE}}</div>',
+            '            <div style="display:flex; align-items:center; gap:0;">',
+            '                <div style="font-size:14.5px; font-weight:500; color:#0284c7;">{{LBL_WEB_ACCESS_TOGGLE}}</div>',
+            '                <input type="number" id="adv-web-port" placeholder="80" title="{{LBL_WEB_PORT_TITLE}}" style="width:70px; height:26px; border:1px solid #cbd5e1; border-radius:4px; padding:0 8px; font-size:13px; outline:none; background-color: #fff; color: #000;" min="1" max="65535">',
+            '            </div>',
             '            <label class="nw-switch"><input type="checkbox" id="adv-web-toggle"><span class="nw-slider"></span></label>',
             '        </div>',
             '    </div>',
@@ -1066,7 +1095,7 @@ return view.extend({
                     var html ='<div style="font-size:13px; color:#64748b; margin-bottom:12px; line-height:1.5; background:#f8fafc; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">' +
                                (T['MSG_MAC_CLONE_TIP'] || '💡 <b>Tip:</b> If dial-up fails, enter the cloned MAC here.') +
                                '</div>' +
-                               '<input type="text" id="mdl-mac-val" value="' + currentMac + '" placeholder="' + (T['PH_MAC'] || 'e.g., AA:BB:CC:DD:EE:FF') + '" style="width:100%; height:40px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; margin-bottom:10px; font-size:14px; box-sizing:border-box; color: #000;">' +
+                               '<input type="text" id="mdl-mac-val" value="' + currentMac + '" placeholder="' + (T['PH_MAC'] || 'e.g., AA:BB:CC:DD:EE:FF') + '" style="width:100%; height:40px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; margin-bottom:10px; font-size:14px; box-sizing:border-box; background-color: #fff !important; color: #000 !important;">' +
                                '<div style="display:flex; justify-content:space-between; align-items:center;">' +
                                '<a href="javascript:void(0)" id="mdl-get-mac" style="color:#0284c7; font-size:13.5px; text-decoration:none;">' + (T['BTN_GET_MAC'] || '⚡ Auto-fill MAC') + '</a>' +
                                '<a href="javascript:void(0)" id="mdl-clear-mac" style="color:#ef4444; font-size:13.5px; text-decoration:none;">' + (T['BTN_CLEAR'] || 'Clear (Restore Default)') + '</a>' +
@@ -1119,23 +1148,23 @@ return view.extend({
                     var chk = function(val) { return dArr.indexOf(val) !== -1 ? 'checked' : ''; };
                     
                     // 复选框抵消 LuCI 全局主题的 top: .4rem 偏移
-                    var cbBoxStyle = 'margin:0; position:relative; top:0; transform:none; cursor:pointer;';
+                    var cbBoxStyle = 'margin:0; position:relative; top:0; transform:none; cursor:pointer; background-color: var(--primary) !important;';
                     
-                    var html = '<label style="display:flex; align-items:center; gap:8px; margin-bottom:15px; font-weight:bold; color:#334155; cursor:pointer;">' +
+                    var html = '<label style="display:flex; align-items:center; gap:3px; margin-bottom:15px; font-weight:bold; color:#334155; cursor:pointer;">' +
                                '<input type="checkbox" id="mdl-cron-en" style="' + cbBoxStyle + ' width:16px; height:16px;" '+(isOff?'':'checked')+'>' +
                                '<span style="line-height:1; margin-top:-2px;">' + (T['LBL_CRON_ENABLE'] || 'Enable') + '</span></label>' +
                                '<div id="mdl-cron-box" style="display:'+(isOff?'none':'block')+';">' +
                                '<div style="font-size:13.5px; color:#64748b; margin-bottom:8px;">' + (T['LBL_CRON_TIME'] || 'Time:') + '</div>' +
-                               '<input type="time" id="mdl-cron-time" value="'+h+':'+m+'" style="width:100%; height:40px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:14.5px; font-family:monospace; margin-bottom:15px; box-sizing:border-box;">' +
+                               '<input type="time" id="mdl-cron-time" value="'+h+':'+m+'" style="width:100%; height:40px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:14.5px; font-family:monospace; margin-bottom:15px; box-sizing:border-box; background-color: #64748B !important; color: #fff !important;">' +
                                '<div style="font-size:13.5px; color:#64748b; margin-bottom:8px;">' + (T['LBL_CRON_DAYS'] || 'Days:') + '</div>' +
-                               '<div id="mdl-cron-days" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:5px;">' +
-                               '<label style="display:flex; align-items:center; gap:4px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="1" '+chk('1')+'>' + (T['LBL_DAY_1'] || '1') + '</label>' +
-                               '<label style="display:flex; align-items:center; gap:4px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="2" '+chk('2')+'>' + (T['LBL_DAY_2'] || '2') + '</label>' +
-                               '<label style="display:flex; align-items:center; gap:4px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="3" '+chk('3')+'>' + (T['LBL_DAY_3'] || '3') + '</label>' +
-                               '<label style="display:flex; align-items:center; gap:4px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="4" '+chk('4')+'>' + (T['LBL_DAY_4'] || '4') + '</label>' +
-                               '<label style="display:flex; align-items:center; gap:4px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="5" '+chk('5')+'>' + (T['LBL_DAY_5'] || '5') + '</label>' +
-                               '<label style="display:flex; align-items:center; gap:4px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="6" '+chk('6')+'>' + (T['LBL_DAY_6'] || '6') + '</label>' +
-                               '<label style="display:flex; align-items:center; gap:4px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="0" '+chk('0')+'>' + (T['LBL_DAY_0'] || '0') + '</label>' +
+                               '<div id="mdl-cron-days" style="display:flex; flex-wrap:wrap; gap:17px; margin-bottom:5px;">' +
+                               '<label style="display:flex; align-items:center; gap:0px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="1" '+chk('1')+'>' + (T['LBL_DAY_1'] || '1') + '</label>' +
+                               '<label style="display:flex; align-items:center; gap:0px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="2" '+chk('2')+'>' + (T['LBL_DAY_2'] || '2') + '</label>' +
+                               '<label style="display:flex; align-items:center; gap:0px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="3" '+chk('3')+'>' + (T['LBL_DAY_3'] || '3') + '</label>' +
+                               '<label style="display:flex; align-items:center; gap:0px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="4" '+chk('4')+'>' + (T['LBL_DAY_4'] || '4') + '</label>' +
+                               '<label style="display:flex; align-items:center; gap:0px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="5" '+chk('5')+'>' + (T['LBL_DAY_5'] || '5') + '</label>' +
+                               '<label style="display:flex; align-items:center; gap:0px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="6" '+chk('6')+'>' + (T['LBL_DAY_6'] || '6') + '</label>' +
+                               '<label style="display:flex; align-items:center; gap:0px; font-size:14.5px; cursor:pointer;"><input type="checkbox" style="' + cbBoxStyle + '" class="c-day" value="0" '+chk('0')+'>' + (T['LBL_DAY_0'] || '0') + '</label>' +
                                '</div></div>';
                                
                     showAdvModal((T['LBL_CRON_REBOOT'] || 'Scheduled Reboot'), html, function(box) {
@@ -1171,12 +1200,171 @@ return view.extend({
             });
         }
 
-        // 外网访问开关
+        // 外网访问开关与自定义端口
         if(container.querySelector('#adv-web-toggle')) {
-            callGetAdvSettings().then(function(res) { if(res && res.web === '1') container.querySelector('#adv-web-toggle').checked = true; });
-            container.querySelector('#adv-web-toggle').addEventListener('change', function() { callSetAdvSettings('', this.checked ? '1' : '0', ''); });
+            var webTog = container.querySelector('#adv-web-toggle');
+            var webPort = container.querySelector('#adv-web-port');
+            var lastValidPort = '';
+            var isSaving = false; // 防重复提交锁
+
+            // 校验与保存通道
+            function validateAndSavePort(portStr) {
+                if (isSaving) return;
+
+                var pText = portStr.trim();
+                if (pText !== '') {
+                    var pNum = parseInt(pText);
+                    
+                    // 拦截非法数字范围
+                    if (isNaN(pNum) || pNum < 1 || pNum > 65535) {
+                        openModal({ title: T['M_REP_NOTICE_TIT'] || 'Notice', msg: T['M_PORT_RANGE'] || '⚠️ Port number must be between 1 and 65535', okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                        webPort.value = lastValidPort; // 恢复旧端口
+                        webTog.checked = false;        // 强制把被点开的开关关回去
+                        return;
+                    }
+                    
+                    // 拦截高危系统端口
+                    var dangerPorts = [21, 22, 23, 53, 67, 68];
+                    if (dangerPorts.indexOf(pNum) !== -1) {
+                        var e1 = T['M_PORT_ERR1'] || '⚠️ For system security, do not use';
+                        var e2 = T['M_PORT_ERR2'] || 'as the external port. It is a reserved high-risk port.';
+                        var sg = T['M_PORT_SUGG'] || 'It is recommended to use 8080 or a port above 10000.';
+                        openModal({ title: T['M_REP_NOTICE_TIT'] || 'Notice', msg: e1 + ' <span style="color:#ef4444; font-weight:bold;">' + pNum + '</span> ' + e2 + '<br><br>' + sg, okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                        webPort.value = lastValidPort; // 恢复旧端口
+                        webTog.checked = false;        // 强制把被点开的开关关回去
+                        return;
+                    }
+                }
+
+                // 通过所有安检，开始执行保存
+                isSaving = true;
+                var val = pText ? pText : '1';
+                lastValidPort = val;
+                webTog.checked = true; // 确保开关 UI 处于打开状态
+                
+                openModal({ title: T['LBL_ADV_UTILS_TITLE'] || '⚙️ Advanced Utilities', msg: T['MSG_WRITING'] || 'Please wait...', spin: true });
+                var gm2 = document.getElementById('nw-global-modal'); if (gm2) gm2.style.zIndex = '100000';
+                callSetAdvSettings('', val, '', '').then(function() { setTimeout(function(){ window.location.reload(); }, 3500); });
+            }
+
+            // 1. 页面初始化加载历史状态
+            callGetAdvSettings().then(function(res) { 
+                if (res) {
+                    if (res.last_port && res.last_port !== '80' && res.last_port !== '1' && res.last_port !== '0') {
+                        webPort.value = res.last_port;
+                        lastValidPort = res.last_port;
+                    }
+                    if (res.web && res.web !== '0') { 
+                        webTog.checked = true; 
+                        if (res.web !== '1') {
+                            webPort.value = res.web;
+                            lastValidPort = res.web;
+                        }
+                    }
+                } 
+            });
+            
+            // 2. 点击开关事件
+            webTog.addEventListener('change', function() { 
+                if (this.checked) {
+                    // 开关打开时，强制把框内的值送去中央安检站
+                    validateAndSavePort(webPort.value);
+                } else {
+                    // 开关关闭时
+                    if (isSaving) return;
+                    isSaving = true;
+                    openModal({ title: T['LBL_ADV_UTILS_TITLE'] || '⚙️ Advanced Utilities', msg: T['MSG_WRITING'] || 'Please wait...', spin: true });
+                    var gm2 = document.getElementById('nw-global-modal'); if (gm2) gm2.style.zIndex = '100000';
+                    callSetAdvSettings('', '0', '', '').then(function() { setTimeout(function(){ window.location.reload(); }, 3500); });
+                }
+            });
+
+            // 3. 回车键主动触发
+            webPort.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.blur(); 
+                }
+            });
+
+            // 4. 输入框内容改变且失去焦点事件
+            webPort.addEventListener('change', function() {
+                var self = this;
+                setTimeout(function() {
+                    // 如果此时开关处于关闭状态，说明用户不想保存，直接退出
+                    if (!webTog.checked) return;
+                    validateAndSavePort(self.value);
+                }, 200);
+            });
         }
         // ====================================================
+
+        // 插件修复弹窗与逻辑
+        if(container.querySelector('#link-repair-plugin')) {
+            container.querySelector('#link-repair-plugin').addEventListener('click', function() {
+                openModal({ title: T['M_REP_SCAN_TIT'] || 'Please wait', msg: T['M_REP_SCAN_MSG'] || 'Scanning for repairable plugins...', hideCancel: true, hideOk: true });
+
+                rpc.declare({ object: 'netwiz', method: 'get_repairable_configs', expect: { '': {} } })().then(function(res) {
+                    if (res && res.configs && res.configs.length > 0) {
+                        
+                        var descText = T['M_REP_DESC'] || 'Standard uninstallation does not remove plugin configuration files. If a plugin malfunctions after reinstallation, select it below to reset it to its initial state.';
+                        var descHtml = '<p style="color:#64748b; font-size:13px; margin-bottom:15px; line-height:1.5;">' + descText + '</p>';
+                        
+                        var optText = ' (' + (T['M_REP_OPT'] || 'Factory Default') + ')';
+                        var selectHtml = '<select id="nw-repair-select" style="width:100%; height:40px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:14px; outline:none; margin-bottom:10px; background-color: #fff !important; color: #000;">';
+                        res.configs.forEach(function(pluginName) {
+                            selectHtml += '<option value="' + pluginName + '">' + pluginName + optText + '</option>';
+                        });
+                        selectHtml += '</select>';
+
+                        var titleText = T['M_REP_TIT'] || '🚑 Plugin Repair Toolkit';
+                        var titleWithX = '<div style="display:flex; justify-content:space-between; align-items:center;"><span>' + titleText + '</span><span onclick="document.getElementById(\'nw-global-modal\').style.display=\'none\'" style="cursor:pointer; color:#ffffff; font-size:40px; line-height:1; margin-right:15px;">&times;</span></div>';
+
+                        openModal({
+                            title: titleWithX,
+                            msg: descHtml + selectHtml,
+                            okText: T['M_REP_OK'] || 'Repair Now',
+                            cancelText: T['M_CLOSE'] || 'Close',
+                            isDanger: true,
+                            onOk: function() {
+                                var selectedPlugin = document.getElementById('nw-repair-select');
+                                if (!selectedPlugin || !selectedPlugin.value) return;
+                                var pName = selectedPlugin.value;
+                                
+                                var pTit = T['M_REP_PROC_TIT'] || 'Processing';
+                                var pMsg1 = T['M_REP_PROC_MSG1'] || 'Repairing and restarting';
+                                var pMsg2 = T['M_REP_SCAN_TIT'] || 'please wait';
+                                openModal({ title: pTit, msg: pMsg1 + ' ' + pName + ' ' + pMsg2, hideCancel: true, hideOk: true });
+                                
+                                rpc.declare({ object: 'netwiz', method: 'repair_config', params: ['plugin'], expect: { '': {} } })(pName).then(function(r) {
+                                    if (r && r.result === 0) {
+                                        var sTit = T['M_REP_SUCC_TIT'] || 'Repair Successful';
+                                        var sMsg = T['M_REP_SUCC_MSG'] || 'has been successfully restored';
+                                        openModal({ title: sTit, msg: pName + ' ' + sMsg, okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                                    } else {
+                                        var fTit = T['M_REP_FAIL_TIT'] || 'Repair Failed';
+                                        var fMsg = T['M_REP_FAIL_MSG'] || 'Unable to repair this plugin';
+                                        openModal({ title: fTit, msg: fMsg, okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                                    }
+                                }).catch(function() {
+                                    var eTit = T['M_REP_ERR_TIT'] || 'System Error';
+                                    var eMsg = T['M_REP_ERR_MSG'] || 'Request timeout or error';
+                                    openModal({ title: eTit, msg: eMsg, okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                                });
+                            }
+                        });
+                    } else {
+                        var nTit = T['M_REP_NOTICE_TIT'] || 'Notice';
+                        var nMsg = T['M_REP_EMPTY_MSG'] || 'No repairable plugins found';
+                        openModal({ title: nTit, msg: nMsg, okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                    }
+                }).catch(function() {
+                    var errTit = T['M_ERR'] || 'Error';
+                    var errMsg = T['M_REP_GET_ERR'] || 'Failed to get plugin list';
+                    openModal({ title: errTit, msg: errMsg, okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                });
+            });
+        }
 
         // 修改 Hosts
         if(container.querySelector('#link-modify-hosts')) {
@@ -1195,13 +1383,13 @@ return view.extend({
                            '<div style="background:#eff6ff; border:1px dashed #93c5fd; padding:12px; border-radius:8px; margin-bottom:15px;">' +
                                '<div style="font-size:13px; color:#1e3a8a; font-weight:bold; margin-bottom:10px;">' + (T['LBL_HOSTS_VISUAL'] || '💡 Quick Add:') + '</div>' +
                                     '<div style="display:flex; gap:10px; margin-bottom:10px; width:100%; box-sizing:border-box;">' +
-                                        '<input type="text" id="nw-quick-dom" placeholder="' + (T['PH_HOSTS_DOMAIN'] || 'Domain') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13.5px; box-sizing:border-box; color: #000;">' +
-                                        '<input type="text" id="nw-quick-ip" value="127.0.0.1" placeholder="' + (T['PH_HOSTS_IP'] || 'IP') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13.5px; box-sizing:border-box; color: #000;">' +
+                                        '<input type="text" id="nw-quick-dom" placeholder="' + (T['PH_HOSTS_DOMAIN'] || 'Domain') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13.5px; box-sizing:border-box; background-color: #ffffff !important; color: #000 !important;">' +
+                                        '<input type="text" id="nw-quick-ip" value="127.0.0.1" placeholder="' + (T['PH_HOSTS_IP'] || 'IP') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13.5px; box-sizing:border-box; background-color: #ffffff !important; color: #000 !important;">' +
                                     '</div>' +
                                     '<div style="display:flex; gap:10px; width:100%; box-sizing:border-box; align-items:center;">' +
-                                        '<input type="text" id="nw-quick-cmt" placeholder="' + (T['PH_HOSTS_CMT'] || 'Comment') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13px; box-sizing:border-box; color: #000;">' +
+                                        '<input type="text" id="nw-quick-cmt" placeholder="' + (T['PH_HOSTS_CMT'] || 'Comment') + '" style="flex:1 1 0%; min-width:0; height:36px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; font-size:13px; box-sizing:border-box; background-color: #ffffff !important; color: #000 !important;">' +
                                         '<label style="display:flex; align-items:center; font-size:13px; color:#2563eb; cursor:pointer; flex-shrink:0; user-select:none;" title="' + (T['TIP_SMART_ADD'] || 'Auto-fill IPv4/v6 & www combinations') + '">' +
-                                            '<input type="checkbox" id="nw-smart-add-cb" checked style="top:0px;">' +
+                                            '<input type="checkbox" id="nw-smart-add-cb" checked style="top:0px; background-color: var(--primary) !important;">' +
                                             '<span class="nw-hide-mob">' + (T['LBL_SMART_ADD'] || 'Smart Auto-fill') + '</span>' +
                                         '</label>' +
                                         '<button id="nw-quick-add-btn" class="nw-u-btn" style="flex:0 0 auto; flex-shrink:0; white-space:nowrap; padding:0 15px; height:36px; background:#fff; color:#2563eb; border:1px solid #2563eb; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s; min-width: 70px; padding: 5px 10px 5px 5px !important;">' + (T['BTN_HOSTS_ADD'] || '➕ Add') + '</button>' +
@@ -1210,7 +1398,7 @@ return view.extend({
                                 '<div id="nw-hosts-list" style="max-height:280px; overflow-y:auto; overflow-x:hidden; padding-right:5px; margin-bottom:10px;"></div>' +
                             '</div>' +
                             '<div id="nw-hosts-raw-ui" style="display:none; margin-bottom:10px;">' +
-                                '<div style="font-size:13px; color:#64748b; margin-bottom:10px;">' + (T['LBL_HOSTS_RAW_TIP'] || '💡 <b>Pure Text Advanced Mode</b>: Supports batch pasting. Format: <code>IP Domain #Comment</code>') + '</div>' +
+                                '<div style="font-size:13px; color:#64748b; margin-bottom:10px; line-height: 1.6;">' + (T['LBL_HOSTS_RAW_TIP'] || '💡 <b>Pure Text Advanced Mode</b>: Supports batch pasting. Format: <code>IP Domain #Comment</code>') + '</div>' +
                                 '<textarea id="nw-hosts-raw-text" spellcheck="false" style="width:100%; height:320px; border:1px solid #cbd5e1; border-radius:8px; padding:12px; font-family:monospace; font-size:13.5px; box-sizing:border-box; background:#f8fafc; color:#334155; line-height:1.6; resize:none;"></textarea>' +
                             '</div>';
                             
@@ -1571,57 +1759,6 @@ return view.extend({
             var bandEl = container.querySelector('#nw-live-qr-band'); if (bandEl) bandEl.innerText = '(' + bandName + ')';
             renderWiFiQR('nw-live-qr-code', ssid, pwd, enc);
         };
-
-        // =================高级设置折叠与数据加载=================
-        var advHeader = container.querySelector('#nw-adv-utils-header');
-        var advBody = container.querySelector('#nw-adv-utils-body');
-        var advIcon = container.querySelector('#nw-adv-utils-icon');
-        var advLoaded = false;
-
-        if (advHeader) {
-            advHeader.addEventListener('click', function() {
-                if (advBody.style.display === 'none') {
-                    advBody.style.display = 'block';
-                    advIcon.style.transform = 'rotate(180deg)';
-                    if (!advLoaded) {
-                        callGetAdvSettings().then(function(res) {
-                            if (res) {
-                                if (res.mac && res.mac !== 'none') container.querySelector('#adv-mac-input').value = res.mac;
-                                container.querySelector('#adv-web-toggle').checked = (res.web === '1');
-                                container.querySelector('#adv-cron-select').value = res.cron || 'off';
-                                advLoaded = true;
-                            }
-                        });
-                    }
-                } else {
-                    advBody.style.display = 'none';
-                    advIcon.style.transform = 'rotate(0deg)';
-                }
-            });
-        }
-        
-        if (container.querySelector('#btn-save-mac')) {
-            container.querySelector('#btn-save-mac').addEventListener('click', function() {
-                var m = container.querySelector('#adv-mac-input').value.trim();
-                if (m && !/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/i.test(m)) { alert(T['M_FMT_IP'] || 'Format Error'); return; }
-                openModal({ title: T['LBL_ADV_UTILS'], msg: T['MSG_WRITING'], spin: true });
-                callSetAdvSettings(m || 'none', '', '').then(function() { setTimeout(function(){ window.location.reload(); }, 2000); });
-            });
-        }
-        if (container.querySelector('#btn-clear-mac')) {
-            container.querySelector('#btn-clear-mac').addEventListener('click', function() {
-                container.querySelector('#adv-mac-input').value = '';
-                openModal({ title: T['LBL_ADV_UTILS'], msg: T['MSG_WRITING'], spin: true });
-                callSetAdvSettings('none', '', '').then(function() { setTimeout(function(){ window.location.reload(); }, 2000); });
-            });
-        }
-        if (container.querySelector('#adv-web-toggle')) {
-            container.querySelector('#adv-web-toggle').addEventListener('change', function() { callSetAdvSettings('', this.checked ? '1' : '0', ''); });
-        }
-        if (container.querySelector('#adv-cron-select')) {
-            container.querySelector('#adv-cron-select').addEventListener('change', function() { callSetAdvSettings('', '', this.value); });
-        }
-        // ========================================================
 
         // 鼠标跟随，无视底层 CSS 干扰
         var updateQRPos = function(e) {
@@ -3692,7 +3829,7 @@ return view.extend({
                     title: '<div style="position:relative; display:flex; justify-content:center; align-items:center; width:100%;"><span id="btn-restore-close" style="position:absolute; right: 10px; font-size:35px; color:rgba(255,255,255,0.8); cursor:pointer; line-height:1; font-family:Arial,sans-serif; padding:0 5px;" onmouseover="this.style.color=\'#fff\'" onmouseout="this.style.color=\'rgba(255,255,255,0.8)\'">×</span><span>' + T['M_RST_CONFIRM_TIT'] + '</span></div>',
                     msg: '<div style="text-align:left;">' + (T['M_RST_CONFIRM_MSG'] || '') +
                          '    <label style="display:flex; align-items:center; justify-content:center; cursor:pointer; background:#f8fafc; padding:12px; border-radius:8px; border:1px dashed #cbd5e1; margin:0;">' +
-                         '        <input type="checkbox" id="chk-regret-pill" checked style="-webkit-appearance:checkbox !important; appearance:checkbox !important; opacity:1 !important; visibility:visible !important; display:block !important; margin:0 8px 0 0 !important; width:16px !important; height:16px !important; min-width:16px !important; flex-shrink:0 !important; position:static !important; top:auto !important; transform:none !important;">' +
+                         '        <input type="checkbox" id="chk-regret-pill" checked style="-webkit-appearance:checkbox !important; appearance:checkbox !important; opacity:1 !important; visibility:visible !important; display:block !important; margin:0 5px 2px 0 !important; width:16px !important; height:16px !important; min-width:16px !important; flex-shrink:0 !important; position:static !important; top:auto !important; transform:none !important;">' +
                          '        <span style="color:#3b82f6; font-weight:bold; font-size:13.5px; line-height:1.4; text-align:left; display:block;">' + (T['M_RST_REGRET_PILL'] || 'Auto-download current state backup before restore (Regret Pill)') + '</span>' +
                          '    </label>' +
                          '</div>',

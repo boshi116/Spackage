@@ -10,7 +10,6 @@ import {
   PictureInPicture2,
   Play,
   Tv,
-  Volume,
   Volume1,
   Volume2,
   VolumeX,
@@ -19,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePlayerTranslation } from "../../hooks/use-player-translation";
 import type { Locale } from "../../lib/locale";
 import type { Channel, EPGProgram } from "../../types/player";
+import { PLAYER_OVERLAY_SURFACE_CLASS } from "./classnames";
 
 interface PlayerControlsProps {
   // Channel information
@@ -286,10 +286,8 @@ export function PlayerControls({
               className="rounded-full p-1.5 md:p-2 text-white transition cursor-pointer hover:bg-white/20 active:scale-95"
               title={isMuted ? t("unmute") : t("mute")}
             >
-              {isMuted ? (
+              {isMuted || volume === 0 ? (
                 <VolumeX className="h-5 w-5 md:h-7 md:w-7" />
-              ) : volume === 0 ? (
-                <Volume className="h-5 w-5 md:h-7 md:w-7" />
               ) : volume < 0.5 ? (
                 <Volume1 className="h-5 w-5 md:h-7 md:w-7" />
               ) : (
@@ -298,7 +296,12 @@ export function PlayerControls({
             </button>
 
             {/* Volume Slider */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 rounded bg-black/60 backdrop-blur-sm px-2 md:px-3 py-2 shadow-lg cursor-pointer opacity-0 invisible group-hover/volume:opacity-100 group-hover/volume:visible transition-[opacity,visibility] duration-150">
+            <div
+              className={clsx(
+                PLAYER_OVERLAY_SURFACE_CLASS,
+                "invisible absolute bottom-full left-1/2 -translate-x-1/2 cursor-pointer rounded-lg px-2 py-2 opacity-0 transition-[opacity,visibility] duration-150 group-hover/volume:visible group-hover/volume:opacity-100 md:px-3",
+              )}
+            >
               <input
                 type="range"
                 min="0"
@@ -355,7 +358,12 @@ export function PlayerControls({
               >
                 {channel.sources[activeSourceIndex]?.label || `${t("source")} ${activeSourceIndex + 1}`}
               </button>
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 rounded bg-black/60 backdrop-blur-sm py-1 shadow-lg opacity-0 invisible group-hover/source:opacity-100 group-hover/source:visible group-focus-within/source:opacity-100 group-focus-within/source:visible transition-[opacity,visibility] duration-150">
+              <div
+                className={clsx(
+                  PLAYER_OVERLAY_SURFACE_CLASS,
+                  "invisible absolute bottom-full left-1/2 -translate-x-1/2 rounded-lg py-1 opacity-0 transition-[opacity,visibility] duration-150 group-hover/source:visible group-hover/source:opacity-100 group-focus-within/source:visible group-focus-within/source:opacity-100",
+                )}
+              >
                 {channel.sources
                   .map((source, index) => ({ source, index }))
                   .filter(({ source }) => isLive || (source.catchup && source.catchupSource))
