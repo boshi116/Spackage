@@ -328,7 +328,7 @@ case "$1" in
                     uci commit network
                     /etc/init.d/network restart &
                 fi
-                
+
                 # ========== 1. 外网访问配置逻辑 (包含 Procd 保活) ==========
                 if [ -n "$web" ]; then
                     
@@ -430,7 +430,7 @@ EOF
                         /etc/init.d/uhttpd restart >/dev/null 2>&1
                         /etc/init.d/firewall restart >/dev/null 2>&1
                         # 等待防火墙完全启动后再次唤醒依赖网络的高级应用
-                        sleep 2
+                        sleep 8
                         restart_depend_apps >/dev/null 2>&1
                     ) &
                 fi
