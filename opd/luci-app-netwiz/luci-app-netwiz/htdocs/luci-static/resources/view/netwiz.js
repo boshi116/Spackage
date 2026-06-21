@@ -505,6 +505,7 @@ var T = {
     'ADV_ERR_UP': '❌ ' + _('Upload failed ({code}): {name}'),
     'ADV_ERR_NET': '❌ ' + _('Network disconnected: {name}'),
     'ADV_BTN_RETRY': _('Continue to retry remaining files'),
+    'ADV_SAFE_BACKUP': _('Keep a permanent backup in /etc/netwiz/custom_pkgs'),
     'ADV_BTN_REMOVE': _('Remove'),
     'ADV_ERR_SAVE_LAYOUT': _('Save layout failed'),
     'ADV_WARN_NO_WIFI': _('Warning: No Wi-Fi hardware detected, Wi-Fi configuration card is hidden.')
@@ -1209,7 +1210,13 @@ return view.extend({
                     '</div>' +
                     // 档案暂存列表缓存
                     '<div id="nw-file-list" style="margin-top:15px; max-height:130px; overflow-y:auto; font-size:13px; color:#334155; display:flex; flex-direction:column; gap:6px;"></div>' +
-                    // 手动确认上传按钮
+                    // 手动确认上传按钮,是否备份到实体的勾选框
+                    '<div style="margin-top:6px; text-align:center;">' +
+                        '<label style="display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:13px; color:#475569; user-select:none;">' +
+                            '<input type="checkbox" id="nw-chk-backup" style="width:16px; height:16px; margin-right:6px; accent-color:#10b981; cursor:pointer; top: 0px !important; right: 0px; background-color: var(--primary) !important;">' +
+                            (T['ADV_SAFE_BACKUP'] || 'Keep a permanent backup in /etc/netwiz/custom_pkgs') +
+                        '</label>' +
+                    '</div>' +
                     '<div style="margin-top:15px; text-align:center;">' +
                         '<button id="nw-btn-upload" class="cbi-button cbi-button-action" style="display:none; padding:10px 30px; background:#10b981; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; transition:background 0.2s;">' + (T['ADV_BTN_START'] || '🚀 Start Upload & Secure') + '</button>' +
                         '<div id="nw-upload-progress" style="margin-top:12px; font-family:monospace; font-weight:bold; color:#ef4444;"></div>' +
@@ -1349,10 +1356,15 @@ return view.extend({
                         xhr.onload = function() {
                             if (xhr.status === 200) {
                                 prog.innerHTML = (T['ADV_MSG_BG_SECURE'] || '⚙️ Securing in background: {name}').replace('{name}', file.name);
-                                // 呼叫后端移入保险箱
-                                rpc.declare({ object: 'netwiz', method: 'store_offline_pkg', params: ['filename'] })(file.name).then(function() {
-                                    // 成功后，递归呼叫处理下一个档案
-                                    processUploadQueue(idx + 1); 
+
+                                // 获取复选框的状态 ('1' 为勾选备份，'0' 为仅临时运行)
+                                var chkEl = document.getElementById('nw-chk-backup');
+                                var isBackup = (chkEl && chkEl.checked) ? '1' : '0';
+
+                                // 修改 RPC 声明，追加 backup 参数传给后端
+                                rpc.declare({ object: 'netwiz', method: 'store_offline_pkg', params: ['filename', 'backup'] })(file.name, isBackup).then(function() {
+                                    // 成功，递归呼叫处理下一个档案
+                                    processUploadQueue(idx + 1);
                                 }).catch(function() {
                                     handleError((T['ADV_ERR_MV'] || '❌ Backend transfer failed: {name}').replace('{name}', file.name));
                                 });
@@ -1362,7 +1374,7 @@ return view.extend({
                         };
                         xhr.onerror = function() { handleError((T['ADV_ERR_NET'] || '❌ Network disconnected: {name}').replace('{name}', file.name)); };
                         xhr.send(fd);
-                        
+
                         function handleError(errMsg) {
                             prog.style.color = '#ef4444'; prog.innerHTML = errMsg;
                             btnUpload.disabled = false; btnUpload.style.background = '#10b981';
@@ -2979,23 +2991,32 @@ return view.extend({
 
             // ================== 弹出向导 ==================
             if (typeof uci !== 'undefined') {
-                uci.load('netwiz').then(function() {
+                // 连同 network 一起加载，用于探测底层真实拨号状态
+                Promise.all([uci.load('netwiz'), uci.load('network')]).then(function() {
                     var isConfigured = safeUciGet('netwiz', 'global', 'configured', '0');
                     var isWizEnabled = safeUciGet('netwiz', 'main', 'wizard_enable', '1');
-                    window._realIsConfigured = String(isConfigured);
-
-                    // 读取本地浏览器是否勾选过“不再提示”
                     var neverShow = safeGetLocal('nw_wizard_never_show');
+
+                    // 发现已经是 pppoe 或 static 拨号
+                    var wProto = safeUciGet('network', 'wan', 'proto', '').toLowerCase();
+                    if (isConfigured !== '1' && (wProto === 'pppoe' || wProto === 'static')) {
+                        isConfigured = '1';
+                        isWizEnabled = '0'; // 在內存中同步关闭向导，防止下方else if误判弹出
+                        // 静默向后端发送完成指令，永久解除CGI劫持
+                        silentSaveWizardState('1');
+                    }
+
+                    window._realIsConfigured = String(isConfigured);
 
                     // 核心判断逻辑：
                     if (window._realIsConfigured !== '1') {
-                        // 1. 第一次开机，显示向导
+                        // 1. 第一次开机 (且无历史拨号)，强制显示向导
                         if (wizModal) wizModal.style.display = 'flex';
                     } else if (String(isWizEnabled) === '1' && neverShow !== '1') {
                         // 2.平常，没有勾选“不再提示”
                         if (wizModal) wizModal.style.display = 'flex';
                     } else {
-                        // 3. 平常勾选“不再提示”
+                        // 3. 平常勾选“不再提示” 或 静默解除劫持成功
                         if (wizModal) wizModal.style.display = 'none';
                     }
                 }).catch(function() {
@@ -3007,7 +3028,7 @@ return view.extend({
                 if (wizModal) wizModal.style.display = 'flex';
             }
             // ==========================================================
-            
+
             if (btnReopenWiz) {
                 btnReopenWiz.style.display = '';
             }
