@@ -107,6 +107,50 @@ tctl_get_lan_device() {
     echo "$dev"
 }
 
+# Enumerate all LAN-side IPv4 subnets, one per L3 interface.
+#
+# "LAN" = firewall zones that are NOT internet-facing. A zone is treated as LAN
+# if it is named "lan", or if it is neither a wan zone nor masqueraded. This
+# deliberately excludes VPN/tunnel zones (e.g. WireGuard/AmneziaWG awg*, which
+# carry their own IPv4 and would otherwise be mistaken for LANs) because those
+# are masqueraded out. Covers bridges (br-lan), bridge-VLANs and plain VLAN
+# interfaces (eth0.20) uniformly via each interface's l3_device.
+#
+# Output: one line per subnet, "l3_device netbase_int block_size router_int"
+# where membership can be tested without awk bit-ops:
+#   ip in subnet  <=>  ipint - (ipint % block) == netbase
+tctl_lan_subnets() {
+    local i=0 zname zmasq nets net st l3 addr mask
+    local o1 o2 o3 o4 ipint block netbase
+    while zname=$(uci -q get "firewall.@zone[$i].name" 2>/dev/null); [ -n "$zname" ]; do
+        zmasq=$(uci -q get "firewall.@zone[$i].masq" 2>/dev/null)
+        nets=$(uci -q get "firewall.@zone[$i].network" 2>/dev/null)
+        i=$((i + 1))
+        case "$zname" in wan|wan6) continue ;; esac
+        [ "$zname" != "lan" ] && [ "$zmasq" = "1" ] && continue
+        for net in $nets; do
+            st=$(ubus call "network.interface.$net" status 2>/dev/null)
+            l3=$(echo "$st" | jsonfilter -e '@.l3_device' 2>/dev/null)
+            addr=$(echo "$st" | jsonfilter -e '@["ipv4-address"][0].address' 2>/dev/null)
+            mask=$(echo "$st" | jsonfilter -e '@["ipv4-address"][0].mask' 2>/dev/null)
+            [ -n "$l3" ] && [ -n "$addr" ] && [ -n "$mask" ] || continue
+            [ "$mask" -ge 1 ] && [ "$mask" -le 32 ] 2>/dev/null || continue
+            o1=${addr%%.*}; rest=${addr#*.}
+            o2=${rest%%.*}; rest=${rest#*.}
+            o3=${rest%%.*}; o4=${rest##*.}
+            ipint=$(( (o1 << 24) + (o2 << 16) + (o3 << 8) + o4 ))
+            block=$(( 1 << (32 - mask) ))
+            netbase=$(( ipint - (ipint % block) ))
+            echo "$l3 $netbase $block $ipint"
+        done
+    done
+}
+
+# LAN L3 device names only (deduplicated), e.g. "br-lan br-guest eth0.20".
+tctl_get_lan_devices() {
+    tctl_lan_subnets | awk '{print $1}' | sort -u
+}
+
 tctl_validate_ip() {
     echo "$1" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' || return 1
     local IFS='.'

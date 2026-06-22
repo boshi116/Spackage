@@ -286,6 +286,8 @@ if [ "$DO_RDNS" = "1" ]; then
     DST_IPS=$(echo "$CONNTRACK_DATA" | grep -oE 'dst=[0-9.]+' | sed 's/dst=//' | sort -u | grep -v "^$IP$")
     if [ -n "$DST_IPS" ]; then
         RDNS_MAP="/tmp/trafficctl_rdns_$$"
+        # shellcheck disable=SC2064
+        trap "rm -f '$RDNS_MAP'" EXIT INT TERM
         : > "$RDNS_MAP"
         RDNS_DONE=0
         # Batch resolve via ubus network.rrdns (same as LuCI frontend; no extra packages needed)

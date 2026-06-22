@@ -181,6 +181,8 @@ fi
 
 # Write qdisc data to temp file for awk to read
 QDISC_TMP=$(mktemp /tmp/tctl_qdisc.XXXXXX)
+# shellcheck disable=SC2064
+trap "rm -f '$QDISC_TMP'" EXIT INT TERM
 echo "$QDISC_PARSED" > "$QDISC_TMP"
 
 # Merge class and qdisc data, output JSON

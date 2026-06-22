@@ -9,6 +9,11 @@ KNOWN_FILE="/etc/trafficctl/telegram_known.json"
 OFFSET_FILE="/tmp/trafficctl_tg_offset"
 CACHE_FILE="/tmp/trafficctl_tg_devices.json"
 CACHE_TTL=5
+# How often to scan for new devices. discover_macs forks ip/iw/awk, so running
+# it on every short poll loop wastes CPU continuously; 30s is plenty for a
+# "new device joined" alert. Real-time joins still arrive via DHCP hotplug
+# triggers (process_dhcp_triggers), which stay on every loop.
+NEWDEV_INTERVAL=30
 
 TG_ENABLED=0
 TG_TOKEN=""
@@ -665,13 +670,18 @@ main() {
 
 	local offset response ok update_count i
 	local update update_id msg_chat_id msg_text cb_id cb_data cb_msg_id
-	local config_reload_at
+	local config_reload_at newdev_check_at
 	config_reload_at=$(($(date +%s) + 60))
+	newdev_check_at=0
 
 	offset=$(cat "$OFFSET_FILE" 2>/dev/null || echo "0")
 
 	while true; do
-		check_new_devices
+		# Periodic full device scan (rate-limited); hotplug path stays real-time.
+		if [ "$(date +%s)" -ge "$newdev_check_at" ]; then
+			check_new_devices
+			newdev_check_at=$(($(date +%s) + NEWDEV_INTERVAL))
+		fi
 		process_dhcp_triggers
 
 		response=$(tg_api "getUpdates" \

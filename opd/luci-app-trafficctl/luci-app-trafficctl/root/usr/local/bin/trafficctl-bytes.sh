@@ -12,20 +12,35 @@
 _offload=$(tctl_get_offload_mode)
 [ "$_offload" != "none" ] && [ "$TCTL_FW" = "nft" ] && exec /usr/local/bin/trafficctl-bytes-nft.sh
 
-LAN_DEV=$(tctl_get_lan_device)
-LAN_SUBNET=$(ip -4 addr show dev "$LAN_DEV" 2>/dev/null | grep -oE 'inet [0-9.]+' | head -1 | awk '{print $2}')
-LAN_PREFIX=$(echo "$LAN_SUBNET" | cut -d. -f1-3)
+# All LAN subnets (multi-bridge / multi-VLAN aware), as awk membership spec.
+MATCH_SPEC=$(tctl_lan_subnets | awk '{printf "%s%s:%s:%s",(NR>1?" ":""),$2,$3,$4}')
+[ -z "$MATCH_SPEC" ] && { echo '[]'; exit 0; }
 
-[ -z "$LAN_PREFIX" ] && { echo '[]'; exit 0; }
-
-cat /proc/net/nf_conntrack 2>/dev/null | awk -v prefix="$LAN_PREFIX" '
-BEGIN { printf "[" }
+cat /proc/net/nf_conntrack 2>/dev/null | awk -v spec="$MATCH_SPEC" '
+function ip2int(ip,   a) {
+    split(ip, a, ".")
+    return a[1]*16777216 + a[2]*65536 + a[3]*256 + a[4]
+}
+function is_lan(ip,   si, k) {
+    si = ip2int(ip)
+    for (k = 1; k <= ns; k++)
+        if (si - (si % blk[k]) == base[k]) return 1
+    return 0
+}
+BEGIN {
+    printf "["
+    ns = split(spec, parts, " ")
+    for (k = 1; k <= ns; k++) {
+        split(parts[k], kv, ":")
+        base[k] = kv[1] + 0; blk[k] = kv[2] + 0
+    }
+}
 {
     src=""; bytes_orig=0; bytes_reply=0; bc=0
     for (i=1; i<=NF; i++) {
         if ($i ~ /^src=/) {
             v = substr($i, 5)
-            if (v ~ "^"prefix"\\." && src == "") src = v
+            if (src == "" && is_lan(v)) src = v
         }
         if ($i ~ /^bytes=/) {
             v = substr($i, 7) + 0
@@ -34,7 +49,7 @@ BEGIN { printf "[" }
             else if (src != "" && bc == 2) bytes_reply = v
         }
     }
-    if (src != "" && src ~ "^"prefix"\\.") {
+    if (src != "") {
         key = src
         in_total[key] += bytes_reply
         out_total[key] += bytes_orig
