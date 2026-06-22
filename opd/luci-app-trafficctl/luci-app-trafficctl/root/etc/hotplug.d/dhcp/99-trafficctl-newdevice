@@ -17,4 +17,7 @@ grep -q "\"$MACADDR\"" "$KNOWN_FILE" 2>/dev/null && exit 0
 
 # Signal the bot by writing to a trigger file
 mkdir -p "$(dirname "$NOTIFY_FLAG")"
+# HOSTNAME comes from the dnsmasq dhcp hotplug environment (see header), not a
+# POSIX shell builtin — so shellcheck's SC3028 is a false positive here.
+# shellcheck disable=SC3028
 printf '%s\t%s\t%s\n' "$MACADDR" "${IPADDR:-?}" "${HOSTNAME:-unknown}" >> "$NOTIFY_FLAG"

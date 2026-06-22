@@ -1373,54 +1373,6 @@ return view.extend({
 			return E('span', { 'class': 'tc-inline-label' }, t);
 		}
 
-		function mkInlinePick(options, currentValue, onChange) {
-			var wrapper = E('span', {'class':'tc-inline-pick-wrapper'});
-			var display = E('span', {'class':'tc-inline-pick-display'});
-			var popup = E('div', {'class':'tc-inline-pick-popup tc-hidden'});
-			var selectedValue = currentValue;
-
-			function updateDisplay() {
-				var label = selectedValue;
-				for (var i = 0; i < options.length; i++) {
-					if (options[i].v === selectedValue) { label = options[i].l; break; }
-				}
-				display.textContent = label;
-			}
-
-			function buildPopup() {
-				while (popup.firstChild) popup.removeChild(popup.firstChild);
-				options.forEach(function(opt) {
-					var active = opt.v === selectedValue;
-					var item = E('div', {
-						'style': 'padding:4px 14px;cursor:pointer;font-size:12px;' +
-							(active ? 'color:var(--tc-speed);font-weight:600;background:var(--tc-hover)' : 'color:currentColor')
-					}, opt.l);
-					item.addEventListener('mousedown', function(ev) {
-						ev.preventDefault();
-						selectedValue = opt.v;
-						updateDisplay();
-						popup.classList.add('tc-hidden');
-						onChange(opt.v);
-					});
-					item.addEventListener('mouseenter', function() { this.style.background = 'var(--tc-hover)'; });
-					item.addEventListener('mouseleave', function() { this.style.background = active ? 'var(--tc-hover)' : ''; });
-					popup.appendChild(item);
-				});
-			}
-
-			display.addEventListener('click', function(ev) {
-				ev.stopPropagation();
-				buildPopup();
-				popup.classList.toggle('tc-hidden');
-			});
-			document.addEventListener('click', function() { popup.classList.add('tc-hidden'); });
-
-			wrapper.appendChild(display);
-			wrapper.appendChild(popup);
-			updateDisplay();
-			return { el: wrapper, getValue: function() { return selectedValue; }, setValue: function(v) { selectedValue = v; updateDisplay(); } };
-		}
-
 		function mkChipPick(options, currentValue, onChange) {
 			var wrapper = E('span', {'style':'display:inline-flex;flex-wrap:wrap;gap:2px;align-items:center'});
 			var selected = currentValue;
@@ -1745,8 +1697,6 @@ return view.extend({
 			setValue: function(v) { _modeSelected = v; updateModeToggle(); },
 			el: modeToggle
 		};
-		var rateBtn = { disabled: false, addEventListener: function() {} };
-
 		function getRateKbit() {
 			if (_rateSelected !== 'custom') return _rateSelected;
 			var n = parseFloat(customInput.value);
@@ -2187,9 +2137,11 @@ return view.extend({
 			parts.push(E('span', {}, [document.createTextNode(_('WiFi') + ': '), mkFilterVal('wifi_blocked', 'var(--tc-warn)', String(wifiBlk))]));
 			if (limited > 0) parts.push(E('span', {}, [document.createTextNode(_('Limited') + ': '), mkFilterVal('limited', 'var(--tc-warn)', '⚡' + limited)]));
 			if (shaped > 0) parts.push(E('span', {}, [document.createTextNode(_('Shaped') + ': '), mkFilterVal('shaped', 'var(--tc-speed)', '🌊' + shaped)]));
-			if (totalDropPkts > 0) parts.push(E('span', {}, [
-				document.createTextNode(_('Dropped') + ': '), E('b', {'style':'color:var(--tc-err)'}, '🚫' + totalDropPkts)
-			]));
+			if (totalDropPkts > 0) {
+				parts.push(E('span', {}, [
+					document.createTextNode(_('Dropped') + ': '), E('b', {'style':'color:var(--tc-err)'}, '🚫' + totalDropPkts)
+				]));
+			}
 
 			parts.forEach(function(el, i) {
 				if (i > 0) statsDiv.appendChild(E('span', {'style':'margin:0 6px;color:var(--tc-faint)'}, '|'));
@@ -2970,8 +2922,6 @@ return view.extend({
 				el.textContent = 'trafficctl v' + res.version + ' (' + TRAFFICCTL_BUILD + ')';
 			}
 		});
-
-		var docsUrl = 'https://openwrt.org/docs/guide-user/perf_and_log/flow_offloading';
 
 		var mkOffloadBanner = function(mode) {
 			if (!mode || mode === 'none') return null;

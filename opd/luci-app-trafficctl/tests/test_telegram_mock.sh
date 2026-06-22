@@ -5,7 +5,6 @@
 
 PASS=0
 FAIL=0
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)/root/usr/local/bin"
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 

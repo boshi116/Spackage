@@ -65,7 +65,10 @@ echo "Running scripts/feeds install -a..."
 
 # Verify the package was registered with the buildroot
 echo "Verifying package is known to buildroot..."
-make defconfig V=s 2>&1 | tail -20
+make defconfig V=s > /tmp/tctl_defconfig.log 2>&1 || {
+    tail -20 /tmp/tctl_defconfig.log; echo "ERROR: make defconfig failed"; exit 1
+}
+tail -20 /tmp/tctl_defconfig.log
 if ! grep -q "luci-app-trafficctl" .config 2>/dev/null; then
     echo "Enabling package in .config..."
     echo 'CONFIG_PACKAGE_luci-app-trafficctl=m' >> .config
@@ -77,7 +80,15 @@ echo 'CONFIG_PACKAGE_liblucihttp-ucode=n' >> .config
 make defconfig
 
 echo "Building package..."
-make package/luci-app-trafficctl/compile V=s -j"$(nproc)" 2>&1 | tail -50
+# Capture make's real exit code — a `make … | tail` pipeline returns tail's
+# status (0), which under set -e would silently hide a genuine build failure.
+# This matters now that the feed-install job is blocking (no continue-on-error).
+if ! make package/luci-app-trafficctl/compile V=s -j"$(nproc)" > /tmp/tctl_compile.log 2>&1; then
+    tail -80 /tmp/tctl_compile.log
+    echo "ERROR: make compile failed"
+    exit 1
+fi
+tail -50 /tmp/tctl_compile.log
 
 # Verify build artifact exists
 FOUND=$(find bin/ -name "luci-app-trafficctl*" \( -name "*.ipk" -o -name "*.apk" \) 2>/dev/null | head -1)

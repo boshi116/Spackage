@@ -43,7 +43,6 @@ assert_file_contains() {
 # ── Setup mock environment ─────────────────────────────────────────────────────
 
 setup_env() {
-    local testname="$1"
     MOCKDIR=$(mktemp -d)
     MOCKBIN="$MOCKDIR/bin"
     MOCKDATA="$MOCKDIR/data"

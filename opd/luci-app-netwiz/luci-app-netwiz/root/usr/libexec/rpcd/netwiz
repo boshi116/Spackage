@@ -87,16 +87,16 @@ watchdog_pppoe_ipv6() {
     fi
 }
 # =======================================================
-# 智能 IPv6 保活状态评估引擎 (中央决策)
+# 智能 IPv6 保活状态评估引擎 (中央决策 V2.0)
 evaluate_keepalive() {
     local need_keepalive=0
-    
+
     # 1. 检查是否开启了全局外网访问后台
     local web_rule=$(uci -q get firewall.netwiz_web.target 2>/dev/null)
     if [ "$web_rule" = "ACCEPT" ]; then
         need_keepalive=1
     fi
-    
+
     # 2. 检查是否有任何设备开启了外网直连 (白名单)
     if [ "$need_keepalive" -eq 0 ]; then
         local expose_count=$(uci -q show firewall 2>/dev/null | grep -c "\.name='nw_expose_")
@@ -104,34 +104,31 @@ evaluate_keepalive() {
             need_keepalive=1
         fi
     fi
-    
-    # 3. 动态管理 procd 守护进程
-    if [ "$need_keepalive" -eq 1 ]; then
-        if [ ! -f /etc/init.d/netwiz-keepalive ]; then
-            cat << 'EOF' > /etc/init.d/netwiz-keepalive
-#!/bin/sh /etc/rc.common
-START=99
-USE_PROCD=1
 
-start_service() {
-    procd_open_instance
-    procd_set_param command /bin/sh -c "while true; do ping -6 -c 1 -W 1 2400:3200::1 >/dev/null 2>&1; sleep 20; done"
-    procd_set_param respawn
-    procd_close_instance
-}
-EOF
-            chmod +x /etc/init.d/netwiz-keepalive
-            /etc/init.d/netwiz-keepalive enable
-            /etc/init.d/netwiz-keepalive start
-            logger -t Netwiz "[保活引擎] 智能联动: 已启动 IPv6 (20秒超高频) 保活服务"
+    # 3. 检查是否在高级面板中强制开启了高级保活探针
+    if [ "$need_keepalive" -eq 0 ]; then
+        local watchdog_en=$(uci -q get netwiz.main.watchdog_enable)
+        if [ "$watchdog_en" = "1" ]; then
+            need_keepalive=1
+        fi
+    fi
+
+    # 4. 动态管理官方 procd 守护进程 (netwiz-watchdog)
+    if [ "$need_keepalive" -eq 1 ]; then
+        if /etc/init.d/netwiz-watchdog enabled 2>/dev/null; then
+            # 已经启用则重启应用新配置
+            /etc/init.d/netwiz-watchdog restart >/dev/null 2>&1
+            logger -t Netwiz "[保活引擎] 智能联动: 已刷新 IPv6 保活与自愈守护进程"
+        else
+            /etc/init.d/netwiz-watchdog enable >/dev/null 2>&1
+            /etc/init.d/netwiz-watchdog start >/dev/null 2>&1
+            logger -t Netwiz "[保活引擎] 智能联动: 已唤醒 IPv6 保活与自愈守护进程"
         fi
     else
-        if [ -f /etc/init.d/netwiz-keepalive ]; then
-            /etc/init.d/netwiz-keepalive stop >/dev/null 2>&1
-            /etc/init.d/netwiz-keepalive disable >/dev/null 2>&1
-            rm -f /etc/init.d/netwiz-keepalive
-            logger -t Netwiz "[保活引擎] 智能联动: 无任何外网穿透需求，已彻底销毁保活服务"
-        fi
+        # 没有任何需求，彻底休眠进程，0 内存损耗
+        /etc/init.d/netwiz-watchdog stop >/dev/null 2>&1
+        /etc/init.d/netwiz-watchdog disable >/dev/null 2>&1
+        logger -t Netwiz "[保活引擎] 智能联动: 无任何外网穿透需求，已彻底休眠保活服务"
     fi
 }
 # =======================================================
@@ -150,109 +147,109 @@ case "$1" in
                 for f in /etc/config/*; do
                     if [ -f "$f" ]; then
                         name=$(basename "$f")
-                        
+
                         # 过滤高危网络核心组件以及后缀异常的临时档案
                         if echo "$name" | grep -qE "network|wireless|dhcp|firewall|system|dropbear|rpcd|uhttpd|luci|fstab|mac80211|netwiz|.*\.apk-new|.*\.bak"; then
                             continue
                         fi
-                        
+
                         [ -n "$arr" ] && arr="$arr,"
                         arr="$arr\"$name\""
                     fi
                 done
-                
+
                 # 回传数组给前端
                 echo "{\"configs\": [$arr]}"
                 exit 0
                 ;;
 
             get_adv_layout)
-                    # 1. 获取面板排版信息
-                    layout=$(uci -q get netwiz.main.adv_layout)
-                    if [ -n "$layout" ]; then
-                        # 安全转义双引号，确保前端 JSON.parse 能完美解析
-                        safe_layout=$(echo "$layout" | sed 's/"/\\"/g')
-                        echo "{\"layout\": \"$safe_layout\"}"
+                # 1. 获取面板排版信息
+                layout=$(uci -q get netwiz.main.adv_layout)
+                if [ -n "$layout" ]; then
+                    # 安全转义双引号，确保前端 JSON.parse 能完美解析
+                    safe_layout=$(echo "$layout" | sed 's/"/\\"/g')
+                    echo "{\"layout\": \"$safe_layout\"}"
+                else
+                    echo "{\"layout\": null}"
+                fi
+                exit 0
+                ;;
+
+            set_adv_layout)
+                # 2. 只有点击确定时，才写入闪存保存排版
+                input=$(cat)
+                layout_data=$(echo "$input" | jsonfilter -e '@.layout')
+                if [ -n "$layout_data" ]; then
+                    [ ! -f /etc/config/netwiz ] && touch /etc/config/netwiz
+                    uci -q get netwiz.main >/dev/null 2>&1 || uci set netwiz.main=main
+                    uci set netwiz.main.adv_layout="$layout_data"
+                    uci commit netwiz
+                fi
+                echo '{"result": 0}'
+                exit 0
+                ;;
+
+            store_offline_pkg)
+                # 3. 离线保险箱：根据用户勾选，执行临时入队或同时永久备份
+                input=$(cat)
+                fname=$(echo "$input" | jsonfilter -e '@.filename')
+                fname=$(basename "$fname")
+                backup=$(echo "$input" | jsonfilter -e '@.backup')
+
+                if [ -n "$fname" ] && [ -f "/tmp/$fname" ]; then
+                    mkdir -p /tmp/nw_staging
+
+                    # 轨道一：只有用户在前端勾选了备份 (backup="1")，才写入
+                    if [ "$backup" = "1" ]; then
+                        mkdir -p /etc/netwiz/custom_pkgs
+                        cp -f "/tmp/$fname" "/etc/netwiz/custom_pkgs/$fname"
+                        chmod 644 "/etc/netwiz/custom_pkgs/$fname"
+                        logger -t Netwiz "[OFFLINE_SAFE] 离线包已永久备份并加入安装队列: $fname"
                     else
-                        echo "{\"layout\": null}"
+                        logger -t Netwiz "[OFFLINE_SAFE] 离线包已加入临时安装队列 (不留存备份): $fname"
                     fi
-                    exit 0
-                    ;;
 
-                set_adv_layout)
-                    # 2. 只有点击确定时，才写入闪存保存排版
-                    input=$(cat)
-                    layout_data=$(echo "$input" | jsonfilter -e '@.layout')
-                    if [ -n "$layout_data" ]; then
-                        [ ! -f /etc/config/netwiz ] && touch /etc/config/netwiz
-                        uci -q get netwiz.main >/dev/null 2>&1 || uci set netwiz.main=main
-                        uci set netwiz.main.adv_layout="$layout_data"
-                        uci commit netwiz
-                    fi
-                    echo '{"result": 0}'
-                    exit 0
-                    ;;
+                    # 轨道二：不论是否备份，当前文件都要移动到内存的临时安装队列中，供后续合并安装
+                    mv -f "/tmp/$fname" "/tmp/nw_staging/$fname"
+                fi
+                echo '{"result": 0}'
+                exit 0
+                ;;
 
-                store_offline_pkg)
-                    # 3. 离线保险箱：根据用户勾选，执行临时入队或同时永久备份
-                    input=$(cat)
-                    fname=$(echo "$input" | jsonfilter -e '@.filename')
-                    fname=$(basename "$fname")
-                    backup=$(echo "$input" | jsonfilter -e '@.backup')
+            batch_install_pkgs)
+                # 4. 临时队列安装引擎
+                logger -t Netwiz "[OFFLINE_SAFE] 触发队列合并安装"
 
-                    if [ -n "$fname" ] && [ -f "/tmp/$fname" ]; then
-                        mkdir -p /tmp/nw_staging
+                (
+                    exec </dev/null >/dev/null 2>&1
+                    sleep 1
 
-                        # 轨道一：只有用户在前端勾选了备份 (backup="1")，才写入
-                        if [ "$backup" = "1" ]; then
-                            mkdir -p /etc/netwiz/custom_pkgs
-                            cp -f "/tmp/$fname" "/etc/netwiz/custom_pkgs/$fname"
-                            chmod 644 "/etc/netwiz/custom_pkgs/$fname"
-                            logger -t Netwiz "[OFFLINE_SAFE] 离线包已永久备份并加入安装队列: $fname"
-                        else
-                            logger -t Netwiz "[OFFLINE_SAFE] 离线包已加入临时安装队列 (不留存备份): $fname"
+                    # 只安装本次拖曳进入/tmp/nw_staging/的档案
+                    # 避开保险箱里以前存放的所有其他旧外挂和netwiz自身
+                    if command -v apk >/dev/null 2>&1; then
+                        local_pkgs=$(ls /tmp/nw_staging/*.apk 2>/dev/null)
+                        if [ -n "$local_pkgs" ]; then
+                            apk add --no-network --allow-untrusted --force-reinstall --force-overwrite $local_pkgs
                         fi
-
-                        # 轨道二：不论是否备份，当前文件都要移动到内存的临时安装队列中，供后续合并安装
-                        mv -f "/tmp/$fname" "/tmp/nw_staging/$fname"
-                    fi
-                    echo '{"result": 0}'
-                    exit 0
-                    ;;
-
-                batch_install_pkgs)
-                    # 4. 临时队列安装引擎
-                    logger -t Netwiz "[OFFLINE_SAFE] 触发队列合并安装"
-
-                    (
-                        exec </dev/null >/dev/null 2>&1
-                        sleep 1
-
-                        # 只安装本次拖曳进入/tmp/nw_staging/的档案
-                        # 避开保险箱里以前存放的所有其他旧外挂和netwiz自身
-                        if command -v apk >/dev/null 2>&1; then
-                            local_pkgs=$(ls /tmp/nw_staging/*.apk 2>/dev/null)
-                            if [ -n "$local_pkgs" ]; then
-                                apk add --no-network --allow-untrusted --force-reinstall --force-overwrite $local_pkgs
-                            fi
-                        elif command -v opkg >/dev/null 2>&1; then
-                            local_pkgs=$(ls /tmp/nw_staging/*.ipk 2>/dev/null)
-                            if [ -n "$local_pkgs" ]; then
-                                opkg install --force-reinstall --force-overwrite --force-depends $local_pkgs
-                            fi
+                    elif command -v opkg >/dev/null 2>&1; then
+                        local_pkgs=$(ls /tmp/nw_staging/*.ipk 2>/dev/null)
+                        if [ -n "$local_pkgs" ]; then
+                            opkg install --force-reinstall --force-overwrite --force-depends $local_pkgs
                         fi
+                    fi
 
-                        # 安装完毕，销毁本次的临时安装队列
-                        rm -rf /tmp/nw_staging
+                    # 安装完毕，销毁本次的临时安装队列
+                    rm -rf /tmp/nw_staging
 
-                        # 清空LuCI界面缓存
-                        rm -f /tmp/luci-indexcache*
-                        rm -f /tmp/luci-modulecache*
-                    ) &
+                    # 清空LuCI界面缓存
+                    rm -f /tmp/luci-indexcache*
+                    rm -f /tmp/luci-modulecache*
+                ) &
 
-                    echo '{"result": 0}'
-                    exit 0
-                    ;;
+                echo '{"result": 0}'
+                exit 0
+                ;;
 
             repair_config)
                 input=$(cat)
@@ -1985,6 +1982,130 @@ EOF
                 exit 0
                 ;;
         esac
+        ;;
+
+    daemon)
+        heal_fail_cnt=0
+        loop_cnt=0
+        PING_TARGET="2400:3200::1"
+        logger -t Netwiz "[保活守护]引擎启动成功！进入后台常驻监控模式..."
+
+        while true; do
+            # --- [ 动作A：每20秒执行（高频轻量保活）] ---
+            ping -6 -c 1 -W 2 "$PING_TARGET" >/dev/null 2>&1
+            ping_res=$?
+            
+            # --- [ 动作 B：每 120 秒执行 (深度探测与高级自愈) ] ---
+            if [ $((loop_cnt % 6)) -eq 0 ]; then
+                ENABLE=$(uci -q get netwiz.main.watchdog_enable)
+                HTTP_URL=$(uci -q get netwiz.main.watchdog_url)
+                
+                if [ "$ENABLE" = "1" ] && [ -n "$HTTP_URL" ]; then
+                    
+                    # --- 防呆：接管防火墙 ---
+                    # 抓取用户设定的 Web 访问端口
+                    raw_port=$(uci -q get firewall.netwiz_web.dest_port 2>/dev/null)
+                    [ -z "$raw_port" ] && raw_port=80
+                    
+                    # 核心防呆：如果用户同时开启了 80 和 443，提取出的值为 "80 443"
+                    # 这里必须提取第一个端口用于拼接 URL，否则带空格的 URL 会让 curl 崩溃
+                    web_port=$(echo "$raw_port" | awk '{print $1}')
+
+                    # 检查专属的探针放行规则是否存在
+                    rule_exists=$(uci -q get firewall.Netwiz_Probe_Allow 2>/dev/null)
+                    if [ -z "$rule_exists" ]; then
+                        # 放弃 EOF 写法，改用单行 uci，彻底杜绝空格/Tab缩进引起的致命语法错误
+                        uci -q set firewall.Netwiz_Probe_Allow=rule
+                        uci -q set firewall.Netwiz_Probe_Allow.name='Allow-Netwiz-Probe'
+                        uci -q set firewall.Netwiz_Probe_Allow.src='wan'
+                        uci -q set firewall.Netwiz_Probe_Allow.dest_port="$raw_port"
+                        uci -q set firewall.Netwiz_Probe_Allow.proto='tcp'
+                        uci -q set firewall.Netwiz_Probe_Allow.family='ipv6'
+                        uci -q set firewall.Netwiz_Probe_Allow.target='ACCEPT'
+                        uci -q commit firewall
+                        /etc/init.d/firewall reload &
+                    fi
+                    # ---------------------------------------
+                    
+                    # 智能 URL 补全与动态追踪拼装
+                    # 1. 自动补全协议 (默认走 http 以降低海外 HTTPS 握手延迟导致超时的概率)
+                    case "$HTTP_URL" in
+                        http://*|https://*) ;;
+                        *) HTTP_URL="http://$HTTP_URL" ;;
+                    esac
+                    
+                    # 2. 检查用户输入的链接中是否已经包含 IPv6 特有的中括号 "["
+                    # 如果没有，说明用户只填了极简的探针域名，需要我们自动获取并拼接
+                    if ! echo "$HTTP_URL" | grep -q "\["; then
+                        
+                        # 极速精准获取当前第一优先级的全球公网IPv6地址（排除内网fd00）
+                        cur_v6=$(ubus call network.interface.wan6 status 2>/dev/null | grep -A 2 '"ipv6-address"' | grep '"address"' | head -n 1 | cut -d '"' -f 4)
+                        [ -z "$cur_v6" ] && cur_v6=$(ip -6 addr show scope global | grep inet6 | grep -v " fd" | awk -F'[/ ]+' '{print $3}' | head -n1)
+                        
+                        if [ -n "$cur_v6" ]; then
+                            # 拼接法则：http://xxx.workers.dev/[IP]：端口
+                            HTTP_URL="${HTTP_URL%%/}/[${cur_v6}]:${web_port}"
+                        else
+                            # 防呆：连IPv6都没有（通常是ISP断网），探针失去意义
+                            logger -t Netwiz "[保活守护] ⚠️ 未检测到公网IPv6位址，暂停本轮外网探测。"
+                            HTTP_URL=""  # 清空URL作为拦截信号
+                        fi
+                    fi
+
+                    # 只有成功拼接了带有IPv6的URL，才发起探测和自愈（避免无意义重启）
+                    if [ -n "$HTTP_URL" ]; then
+                        http_ok=0
+                        # 发起终极请求
+                        HTTP_RES=$(curl -6 -s -m 5 --noproxy "*" "$HTTP_URL")
+                        
+                        if [ $? -eq 0 ]; then
+                            case "$HTTP_RES" in
+                                FAIL_*|MISSING_TARGET) http_ok=0 ;;
+                                *) http_ok=1 ;;
+                            esac
+                        fi
+                        
+                        # 只要有一次探测成功（无论是 HTTP 还是接下来的 Ping），立刻清零计数器
+                        if [ $http_ok -eq 1 ]; then
+                            [ $heal_fail_cnt -gt 0 ] && logger -t Netwiz "[保活守护] 🌐 探测成功，网络已恢复，自愈熔断器复位。"
+                            heal_fail_cnt=0
+                        fi
+                        
+                        # HTTP 深度探测失败 且 Ping 也失败
+                        if [ $http_ok -eq 0 ] && [ $ping_res -ne 0 ]; then
+                            if ! ping -6 -c 2 -W 3 "$PING_TARGET" >/dev/null 2>&1; then
+                                
+                                # 连续自愈次数是否超过 3 次
+                                if [ $heal_fail_cnt -lt 3 ]; then
+                                    heal_fail_cnt=$((heal_fail_cnt + 1))
+                                    logger -t Netwiz "[保活守护]🚨 双层探测均无响应，执行第 $heal_fail_cnt 次内核级自愈重置..."
+                                    
+                                    /etc/init.d/firewall restart >/dev/null 2>&1
+                                    
+                                    [ -x /etc/init.d/uhttpd ] && /etc/init.d/uhttpd restart >/dev/null 2>&1
+                                    [ -x /etc/init.d/nginx ] && /etc/init.d/nginx restart >/dev/null 2>&1
+                                    [ -x /etc/init.d/lighttpd ] && /etc/init.d/lighttpd restart >/dev/null 2>&1
+                                    
+                                    [ -x /etc/init.d/ddns ] && /etc/init.d/ddns restart >/dev/null 2>&1
+
+                                    logger -t Netwiz "[保活守护]✅ 自愈指令下发完毕！"
+                                else
+                                    # 超过 3 次，触发熔断保护，不再执行重启，防止设备性能耗尽
+                                    logger -t Netwiz "[保活守护] ⚠️ 连续 3 次自愈无效，推测为 ISP 严重故障。已触发熔断保护，暂停自愈动作并等待网络自然恢复。"
+                                fi
+                            else
+                                # Ping 成功了，说明底层网络没断，可能只是网页探针节点拥堵，复位计数器
+                                [ $heal_fail_cnt -gt 0 ] && logger -t Netwiz "[保活守护] 🌐 ICMP 层连通正常，自愈熔断器复位。"
+                                heal_fail_cnt=0
+                            fi
+                        fi
+                    fi
+                fi
+            fi
+
+            loop_cnt=$((loop_cnt + 1))
+            sleep 20
+        done
         ;;
 esac
 exit 1

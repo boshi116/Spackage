@@ -78,13 +78,13 @@ check_bashism "$REPO_ROOT/luci-app-trafficctl/root/usr/libexec/rpcd/luci.traffic
 
 # ── IPK build and structure ────────────────────────────────────────────────
 
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 1
 IPK=$(./build-ipk.sh 0.0.0-test 1 2>/dev/null)
 assert_eq "ipk builds" "yes" "$([ -f "$IPK" ] && echo yes || echo no)"
 
 if [ -f "$IPK" ]; then
     TMPDIR=$(mktemp -d)
-    cd "$TMPDIR"
+    cd "$TMPDIR" || exit 1
     tar xzf "$REPO_ROOT/$IPK"
 
     # Verify all critical files in data.tar.gz
@@ -116,7 +116,7 @@ if [ -f "$IPK" ]; then
     assert_ok "conffiles has trafficctl" grep -q "/etc/config/trafficctl" conffiles
     assert_ok "postinst is executable" test -x postinst
 
-    cd "$REPO_ROOT"
+    cd "$REPO_ROOT" || exit 1
     rm -rf "$TMPDIR" dist/
 fi
 

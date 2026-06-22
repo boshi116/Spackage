@@ -26,17 +26,17 @@
     "view": "readonly"
   },
   "rules": {
-    "no-unused-vars": ["warn", { "args": "none", "varsIgnorePattern": "^_" }],
+    "no-unused-vars": ["error", { "args": "none", "varsIgnorePattern": "^_" }],
     "no-undef": "error",
     "no-redeclare": "error",
-    "no-constant-condition": "warn",
-    "no-empty": ["warn", { "allowEmptyCatch": true }],
+    "no-constant-condition": "error",
+    "no-empty": ["error", { "allowEmptyCatch": true }],
     "no-extra-semi": "error",
     "no-unreachable": "error",
-    "eqeqeq": ["warn", "smart"],
+    "eqeqeq": ["error", "smart"],
     "no-var": "off",
     "prefer-const": "off",
     "semi": ["error", "always"],
-    "curly": ["warn", "multi-line"]
+    "curly": ["error", "multi-line"]
   }
 }

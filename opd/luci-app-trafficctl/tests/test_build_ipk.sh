@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Integration test: verify build-ipk.sh produces a valid ipk.
 
 set -e
