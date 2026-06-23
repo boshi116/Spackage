@@ -67,9 +67,7 @@ jobs:
             git_clone https://github.com/upcliujie/luci-app-tcpdump luci-app-tcpdump
             git_clone https://github.com/Natduki/luci-app-sqm-controller luci-app-sqm-controller
             git_clone https://github.com/YusDyr/luci-app-trafficctl luci-app-trafficctl
-            git_clone https://github.com/muink/luci-app-natmapt luci-app-natmapt
-            git_clone https://github.com/muink/openwrt-stuntman openwrt-stuntman
-            git_clone https://github.com/muink/openwrt-natmapt openwrt-natmapt
+
           } &
 
           {
