@@ -25,30 +25,23 @@ grep -q '^arch all ' /etc/opkg.conf || echo 'arch all 200' >> /etc/opkg.conf
 # Disable signature check — our CI IPK is unsigned
 sed -i '/^option check_signature/d' /etc/opkg.conf
 
-# Hybrid install: try opkg, verify a marker file exists, fall back to manual tar
-# extract. Older opkg versions in 23.05/24.10 rootfs images return 0 without
-# actually extracting files when arch resolution gets confused, so file-presence
-# is the only reliable success signal.
-hybrid_ipk_install() {
+# Real opkg install. Minimal rootfs images ship no package index, and opkg
+# refuses a local _all.ipk until one is loaded (reporting it as "incompatible
+# with the architectures configured"), so refresh the index first. No tar
+# fallback: if opkg can't install the package, the test must fail.
+opkg_install() {
     PKG_FILE="$1"
-    opkg install --force-depends "$PKG_FILE" 2>&1 | tee /tmp/opkg.out || true
-    if [ -f /usr/local/bin/trafficctl-fw.sh ]; then
-        return 0
-    fi
-    echo "::warning::opkg install of $PKG_FILE silently failed; falling back to manual tar extract."
-    EXTRACT_DIR=$(mktemp -d)
-    ( cd "$EXTRACT_DIR" && tar xzf "$PKG_FILE" && tar xzf data.tar.gz -C / )
-    rm -rf "$EXTRACT_DIR"
-    chmod +x /usr/local/bin/trafficctl-*.sh 2>/dev/null || true
-    chmod +x /usr/libexec/rpcd/luci.trafficctl 2>/dev/null || true
-    chmod +x /etc/init.d/trafficctl-telegram 2>/dev/null || true
-    [ -f /usr/local/bin/trafficctl-fw.sh ]
+    opkg update 2>&1 | tee /tmp/opkg-update.out || true
+    # --force-downgrade: the CI "new" build is version 0.0.0-test-1, lower than
+    # the released "old" package, so installing it on top is a downgrade.
+    opkg install --force-depends --force-downgrade "$PKG_FILE" 2>&1 | tee /tmp/opkg.out || true
+    opkg list-installed | grep -q '^luci-app-trafficctl '
 }
 
 # ── Step 1: install OLD ───────────────────────────────────────────────────────
 echo "=== Installing OLD package: $OLD_PKG ==="
 case "$OLD_PKG" in
-    *.ipk) hybrid_ipk_install "$OLD_PKG" || { echo "OLD install failed"; exit 1; } ;;
+    *.ipk) opkg_install "$OLD_PKG" || { echo "OLD install failed"; cat /tmp/opkg.out; exit 1; } ;;
     *.apk) apk add --allow-untrusted "$OLD_PKG" ;;
     *) echo "Unknown format: $OLD_PKG"; exit 1 ;;
 esac
@@ -75,32 +68,11 @@ echo "Marker line added to /etc/config/trafficctl: $MARKER"
 echo "=== Installing NEW package on top: $NEW_PKG ==="
 case "$NEW_PKG" in
     *.ipk)
-        # For the upgrade case the marker file already exists from step 1, so we
-        # can't use file-presence as a success signal. Use file mtime instead.
-        TOUCH_TS=$(date +%s)
-        sleep 1
-        opkg install --force-depends "$NEW_PKG" 2>&1 | tee /tmp/opkg-new.out || true
-        FW_MTIME=$(stat -c %Y /usr/local/bin/trafficctl-fw.sh 2>/dev/null || echo 0)
-        if [ "$FW_MTIME" -gt "$TOUCH_TS" ]; then
-            echo "NEW installed via opkg (file updated)."
-        else
-            echo "::warning::opkg install of NEW silently failed; falling back to manual tar extract."
-            # Preserve user-modified config across raw tar extract — opkg's
-            # conffiles machinery is what normally protects this file, and we
-            # bypass it in the fallback path.
-            CONFIG_BACKUP=$(mktemp)
-            cp /etc/config/trafficctl "$CONFIG_BACKUP" 2>/dev/null || true
-            EXTRACT_DIR=$(mktemp -d)
-            ( cd "$EXTRACT_DIR" && tar xzf "$NEW_PKG" && tar xzf data.tar.gz -C / )
-            rm -rf "$EXTRACT_DIR"
-            if [ -s "$CONFIG_BACKUP" ]; then
-                cp "$CONFIG_BACKUP" /etc/config/trafficctl
-            fi
-            rm -f "$CONFIG_BACKUP"
-            chmod +x /usr/local/bin/trafficctl-*.sh 2>/dev/null || true
-            chmod +x /usr/libexec/rpcd/luci.trafficctl 2>/dev/null || true
-            chmod +x /etc/init.d/trafficctl-telegram 2>/dev/null || true
-        fi
+        # Real opkg upgrade. This now genuinely exercises opkg's conffiles
+        # machinery — the config-preservation assertion below is meaningful
+        # because opkg (not a manual cp) is what must preserve the marked file.
+        opkg_install "$NEW_PKG" || { echo "NEW install failed"; cat /tmp/opkg.out; exit 1; }
+        echo "NEW installed via opkg."
         ;;
     *.apk) apk add --allow-untrusted "$NEW_PKG" ;;
 esac
@@ -140,11 +112,17 @@ case "$NEW_PKG" in
         COUNT=$(apk info -e luci-app-trafficctl 2>/dev/null | wc -l)
         ;;
 esac
-if [ "$COUNT" -gt 1 ]; then
-    echo "FAIL: expected at most 1 installed copy, got $COUNT (upgrade left stale entry)"
+if [ "$COUNT" != "1" ]; then
+    echo "FAIL: expected exactly 1 installed copy after upgrade, got $COUNT"
     exit 1
 fi
-# COUNT == 0 is acceptable here: we may have fallen back to manual tar extract
+
+# The package manager must actually have swapped the version (real upgrade,
+# not a no-op). OLD is a released version; NEW is 0.0.0-test-1.
+if [ -n "$OLD_VER" ] && [ "$NEW_VER" = "$OLD_VER" ]; then
+    echo "FAIL: version unchanged after upgrade ($NEW_VER) — install did not take"
+    exit 1
+fi
 # so opkg's DB doesn't reflect the installed package. The files-present check
 # above already verified the install succeeded.
 

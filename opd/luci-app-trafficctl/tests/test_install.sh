@@ -26,24 +26,22 @@ case "$PKG" in
             grep -q '^arch all ' /etc/opkg.conf || echo 'arch all 200' >> /etc/opkg.conf
             sed -i '/^option check_signature/d' /etc/opkg.conf
 
-            # Try opkg install first
-            opkg install --force-depends "$PKG" 2>&1 | tee /tmp/opkg.out || true
+            # Load a package index. Minimal rootfs images ship none, and opkg
+            # refuses to install even a local _all.ipk until an index is present
+            # (it misreports the condition as "incompatible with the
+            # architectures configured"). This is what makes the real opkg
+            # install path actually work in these containers.
+            opkg update 2>&1 | tee /tmp/opkg-update.out || true
 
-            # Verify it actually placed files — older opkg can return 0 without
-            # extracting. If the marker file is missing, fall back to manual tar.
-            if [ -f /usr/local/bin/trafficctl-fw.sh ]; then
-                echo "Installed via opkg."
-            else
-                echo "::warning::opkg returned success but didn't extract files (known older-opkg quirk on some rootfs images). Falling back to manual tar extract."
-                cd /tmp && rm -rf ipk-extract && mkdir ipk-extract && cd ipk-extract
-                tar xzf "$PKG"
-                tar xzf data.tar.gz -C /
-                chmod +x /usr/local/bin/trafficctl-*.sh 2>/dev/null || true
-                chmod +x /usr/libexec/rpcd/luci.trafficctl 2>/dev/null || true
-                chmod +x /etc/init.d/trafficctl-telegram 2>/dev/null || true
-                cd /
-                echo "Installed via manual tar extract."
+            # Install for real and require success — no tar fallback, so a
+            # genuine opkg failure fails the test instead of being masked.
+            opkg install --force-depends "$PKG" 2>&1 | tee /tmp/opkg.out || true
+            if ! opkg list-installed | grep -q '^luci-app-trafficctl '; then
+                echo "ERROR: opkg install failed — luci-app-trafficctl not registered"
+                cat /tmp/opkg.out
+                exit 1
             fi
+            echo "Installed via opkg."
         else
             echo "ERROR: opkg not available in this container"
             exit 1
@@ -131,21 +129,9 @@ echo "Install checks passed."
 echo "Testing package removal..."
 case "$PKG" in
     *.ipk)
-        # Try opkg remove; if package not in DB (manual extract case), fall back
-        # to deleting the installed files by name.
-        if opkg list-installed | grep -q '^luci-app-trafficctl '; then
-            opkg remove luci-app-trafficctl || { echo "REMOVAL FAILED: opkg remove returned non-zero"; exit 1; }
-        else
-            echo "::warning::no opkg DB entry — package was installed via manual tar extract; removing files by name."
-            rm -f /usr/local/bin/trafficctl-*.sh \
-                  /usr/libexec/rpcd/luci.trafficctl \
-                  /www/luci-static/resources/view/trafficctl/status.* \
-                  /etc/init.d/trafficctl-telegram \
-                  /etc/hotplug.d/dhcp/99-trafficctl-newdevice \
-                  /etc/hotplug.d/iface/99-trafficctl-shapes \
-                  /usr/share/luci/menu.d/luci-app-trafficctl.json \
-                  /usr/share/rpcd/acl.d/luci-app-trafficctl.json
-        fi
+        # Install is now guaranteed to have gone through opkg, so the package is
+        # in opkg's DB — remove it the real way and require success.
+        opkg remove luci-app-trafficctl || { echo "REMOVAL FAILED: opkg remove returned non-zero"; exit 1; }
         ;;
     *.apk)
         apk del luci-app-trafficctl || {
