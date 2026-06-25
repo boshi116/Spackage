@@ -44,6 +44,7 @@ int cmd_upstream_interface_http_set = 0;
 int cmd_fcc_listen_port_range_set = 0;
 int cmd_status_page_path_set = 0;
 int cmd_player_page_path_set = 0;
+int cmd_app_path_prefix_set = 0;
 int cmd_zerocopy_on_send_set = 0;
 int cmd_workers_set = 0;
 int cmd_external_m3u_url_set = 0;
@@ -54,6 +55,8 @@ int cmd_rtsp_user_agent_set = 0;
 int cmd_cors_allow_origin_set = 0;
 
 enum section_e { SEC_NONE = 0, SEC_BIND, SEC_SERVICES, SEC_GLOBAL };
+
+enum long_option_e { OPT_APP_PATH_PREFIX = 1000 };
 
 /* M3U parsing state variables */
 static char *inline_m3u_buffer = NULL;
@@ -97,6 +100,101 @@ static void safe_free_string(char **str) {
   if (*str != NULL) {
     free(*str);
     *str = NULL;
+  }
+}
+
+static void free_config_strings(config_t *target, bool force_free) {
+  if (!cmd_hostname_set || force_free)
+    safe_free_string(&target->hostname);
+  if (!cmd_r2h_token_set || force_free)
+    safe_free_string(&target->r2h_token);
+  if (!cmd_ffmpeg_path_set || force_free)
+    safe_free_string(&target->ffmpeg_path);
+  if (!cmd_ffmpeg_args_set || force_free)
+    safe_free_string(&target->ffmpeg_args);
+  if (!cmd_status_page_path_set || force_free) {
+    safe_free_string(&target->status_page_path);
+    safe_free_string(&target->status_page_route);
+  }
+  if (!cmd_player_page_path_set || force_free) {
+    safe_free_string(&target->player_page_path);
+    safe_free_string(&target->player_page_route);
+  }
+  if (!cmd_app_path_prefix_set || force_free) {
+    safe_free_string(&target->app_path_prefix);
+    safe_free_string(&target->app_path_route);
+  }
+  if (!cmd_external_m3u_url_set || force_free)
+    safe_free_string(&target->external_m3u_url);
+  if (!cmd_rtsp_stun_server_set || force_free)
+    safe_free_string(&target->rtsp_stun_server);
+  if (!cmd_http_proxy_user_agent_set || force_free)
+    safe_free_string(&target->http_proxy_user_agent);
+  if (!cmd_rtsp_user_agent_set || force_free)
+    safe_free_string(&target->rtsp_user_agent);
+  if (!cmd_cors_allow_origin_set || force_free)
+    safe_free_string(&target->cors_allow_origin);
+}
+
+static int snapshot_string(char **dst, char *src, int keep_shallow) {
+  if (keep_shallow) {
+    *dst = src;
+    return 0;
+  }
+
+  if (!src) {
+    *dst = NULL;
+    return 0;
+  }
+
+  *dst = strdup(src);
+  return *dst ? 0 : -1;
+}
+
+static int bind_path_is_valid(const char *path) {
+  if (!path || path[0] != '/')
+    return 0;
+  return strpbrk(path, " \t\r\n") == NULL;
+}
+
+static void add_bindaddr_tcp(char *node, char *service) {
+  bindaddr_t *ba = malloc(sizeof(bindaddr_t));
+  if (!ba) {
+    logger(LOG_ERROR, "Failed to allocate bind address");
+    free(node);
+    free(service);
+    return;
+  }
+  memset(ba, 0, sizeof(*ba));
+  ba->type = BIND_ADDR_TCP;
+  ba->node = node;
+  ba->service = service;
+  ba->next = bind_addresses;
+  bind_addresses = ba;
+}
+
+static void add_bindaddr_unix(char *path) {
+  bindaddr_t *ba = malloc(sizeof(bindaddr_t));
+  if (!ba) {
+    logger(LOG_ERROR, "Failed to allocate Unix socket bind address");
+    free(path);
+    return;
+  }
+  memset(ba, 0, sizeof(*ba));
+  ba->type = BIND_ADDR_UNIX;
+  ba->path = path;
+  ba->next = bind_addresses;
+  bind_addresses = ba;
+}
+
+static void apply_bind_side_effects(void) {
+  int has_unix = bind_addresses_has_unix();
+  if (has_unix) {
+    if (config.zerocopy_on_send)
+      config.zerocopy_on_send = 0;
+    logger(LOG_WARN, "Zero-copy send disabled because Unix socket listener is configured");
+  } else if (!has_unix && cmd_zerocopy_on_send_set) {
+    config.zerocopy_on_send = 1;
   }
 }
 
@@ -203,13 +301,97 @@ static void set_player_page_path_value(const char *value) {
   set_page_path_value(value, "player", &config.player_page_path, &config.player_page_route);
 }
 
+static void set_app_path_prefix_value(const char *value) {
+  char normalized[HTTP_URL_BUFFER_SIZE];
+  size_t len = 0;
+  const char *src;
+
+  normalized[0] = '\0';
+
+  if (!value)
+    value = "";
+
+  src = value;
+  while (*src == '/')
+    src++;
+
+  if (*src != '\0') {
+    normalized[len++] = '/';
+
+    while (*src && len < sizeof(normalized) - 1)
+      normalized[len++] = *src++;
+
+    if (*src != '\0') {
+      logger(LOG_ERROR, "app-path-prefix is too long, keeping previous value");
+      return;
+    }
+
+    while (len > 0 && normalized[len - 1] == '/')
+      len--;
+  }
+
+  normalized[len] = '\0';
+
+  safe_free_string(&config.app_path_prefix);
+  safe_free_string(&config.app_path_route);
+
+  config.app_path_prefix = strdup(normalized);
+  if (!config.app_path_prefix) {
+    logger(LOG_ERROR, "Failed to allocate app-path-prefix");
+    config.app_path_route = NULL;
+    return;
+  }
+
+  if (normalized[0] != '\0')
+    config.app_path_route = strdup(normalized + 1);
+  else
+    config.app_path_route = strdup("");
+
+  if (!config.app_path_route) {
+    logger(LOG_ERROR, "Failed to allocate app-path-prefix route");
+    safe_free_string(&config.app_path_prefix);
+  }
+}
+
 void parse_bind_sec(char *line) {
   int pos = 0;
   char *node, *service;
-  bindaddr_t *ba;
 
   node = extract_token(line, &pos);
   service = extract_token(line, &pos);
+
+  if (!node || node[0] == '\0') {
+    logger(LOG_ERROR, "Invalid empty bind address line");
+    free(node);
+    free(service);
+    return;
+  }
+
+  if (node[0] == '/') {
+    if (service && service[0] != '\0') {
+      logger(LOG_ERROR, "Invalid Unix socket bind path (whitespace is not supported): %s", node);
+      free(node);
+      free(service);
+      return;
+    }
+    if (!bind_path_is_valid(node)) {
+      logger(LOG_ERROR, "Invalid Unix socket bind path: %s", node);
+      free(node);
+      free(service);
+      return;
+    }
+    logger(LOG_DEBUG, "unix socket path: %s", node);
+    add_bindaddr_unix(node);
+    free(service);
+    return;
+  }
+
+  if (!service || service[0] == '\0') {
+    logger(LOG_ERROR, "Invalid TCP bind address line: missing port for %s", node);
+    free(node);
+    free(service);
+    return;
+  }
 
   if (strcmp("*", node) == 0) {
     free(node);
@@ -224,11 +406,7 @@ void parse_bind_sec(char *line) {
   }
   logger(LOG_DEBUG, "node: %s, port: %s", node, service);
 
-  ba = malloc(sizeof(bindaddr_t));
-  ba->node = node;
-  ba->service = service;
-  ba->next = bind_addresses;
-  bind_addresses = ba;
+  add_bindaddr_tcp(node, service);
 }
 
 void parse_services_sec(char *line) {
@@ -451,6 +629,12 @@ void parse_global_sec(char *line) {
   if (strcasecmp("player-page-path", param) == 0) {
     if (set_if_not_cmd_override(cmd_player_page_path_set, "player-page-path"))
       set_player_page_path_value(value);
+    return;
+  }
+
+  if (strcasecmp("app-path-prefix", param) == 0) {
+    if (set_if_not_cmd_override(cmd_app_path_prefix_set, "app-path-prefix"))
+      set_app_path_prefix_value(value);
     return;
   }
 
@@ -700,6 +884,7 @@ bindaddr_t *new_empty_bindaddr(void) {
   bindaddr_t *ba;
   ba = malloc(sizeof(bindaddr_t));
   memset(ba, 0, sizeof(*ba));
+  ba->type = BIND_ADDR_TCP;
   ba->service = strdup("5140");
   return ba;
 }
@@ -713,6 +898,8 @@ void free_bindaddr(bindaddr_t *ba) {
       free(bat->node);
     if (bat->service)
       free(bat->service);
+    if (bat->path)
+      free(bat->path);
     free(bat);
   }
 }
@@ -720,7 +907,7 @@ void free_bindaddr(bindaddr_t *ba) {
 /**
  * Deep copy a bind address list
  */
-static bindaddr_t *copy_bindaddr(bindaddr_t *src) {
+bindaddr_t *bindaddr_copy(bindaddr_t *src) {
   bindaddr_t *head = NULL;
   bindaddr_t **tail = &head;
 
@@ -730,8 +917,11 @@ static bindaddr_t *copy_bindaddr(bindaddr_t *src) {
       free_bindaddr(head);
       return NULL;
     }
+    memset(copy, 0, sizeof(*copy));
+    copy->type = src->type;
     copy->node = src->node ? strdup(src->node) : NULL;
     copy->service = src->service ? strdup(src->service) : NULL;
+    copy->path = src->path ? strdup(src->path) : NULL;
     copy->next = NULL;
     *tail = copy;
     tail = &copy->next;
@@ -747,6 +937,9 @@ static bindaddr_t *copy_bindaddr(bindaddr_t *src) {
  */
 int bind_addresses_equal(bindaddr_t *a, bindaddr_t *b) {
   while (a && b) {
+    if (a->type != b->type)
+      return 0;
+
     /* Compare node (both NULL or both equal) */
     if (a->node == NULL && b->node != NULL)
       return 0;
@@ -763,12 +956,29 @@ int bind_addresses_equal(bindaddr_t *a, bindaddr_t *b) {
     if (a->service && b->service && strcmp(a->service, b->service) != 0)
       return 0;
 
+    /* Compare path (both NULL or both equal) */
+    if (a->path == NULL && b->path != NULL)
+      return 0;
+    if (a->path != NULL && b->path == NULL)
+      return 0;
+    if (a->path && b->path && strcmp(a->path, b->path) != 0)
+      return 0;
+
     a = a->next;
     b = b->next;
   }
 
   /* Both should be NULL at the end for equality */
   return (a == NULL && b == NULL);
+}
+
+int bind_addresses_has_unix(void) {
+  bindaddr_t *ba;
+  for (ba = bind_addresses; ba; ba = ba->next) {
+    if (ba->type == BIND_ADDR_UNIX)
+      return 1;
+  }
+  return 0;
 }
 
 /**
@@ -803,38 +1013,82 @@ void config_cleanup(bool force_free) {
   epg_cleanup();
 
   /* Free string config values */
-  if (!cmd_hostname_set || force_free)
-    safe_free_string(&config.hostname);
-  if (!cmd_r2h_token_set || force_free)
-    safe_free_string(&config.r2h_token);
-  if (!cmd_ffmpeg_path_set || force_free)
-    safe_free_string(&config.ffmpeg_path);
-  if (!cmd_ffmpeg_args_set || force_free)
-    safe_free_string(&config.ffmpeg_args);
-  if (!cmd_status_page_path_set || force_free) {
-    safe_free_string(&config.status_page_path);
-    safe_free_string(&config.status_page_route);
-  }
-  if (!cmd_player_page_path_set || force_free) {
-    safe_free_string(&config.player_page_path);
-    safe_free_string(&config.player_page_route);
-  }
-  if (!cmd_external_m3u_url_set || force_free)
-    safe_free_string(&config.external_m3u_url);
-  if (!cmd_rtsp_stun_server_set || force_free)
-    safe_free_string(&config.rtsp_stun_server);
-  if (!cmd_http_proxy_user_agent_set || force_free)
-    safe_free_string(&config.http_proxy_user_agent);
-  if (!cmd_rtsp_user_agent_set || force_free)
-    safe_free_string(&config.rtsp_user_agent);
-  if (!cmd_cors_allow_origin_set || force_free)
-    safe_free_string(&config.cors_allow_origin);
+  free_config_strings(&config, force_free);
 
   /* Free bind addresses */
   if (!cmd_bind_set || force_free) {
     free_bindaddr(bind_addresses);
     bind_addresses = NULL;
   }
+}
+
+int config_snapshot(config_t *snapshot) {
+  if (!snapshot)
+    return -1;
+
+  *snapshot = config;
+  snapshot->hostname = NULL;
+  snapshot->r2h_token = NULL;
+  snapshot->ffmpeg_path = NULL;
+  snapshot->ffmpeg_args = NULL;
+  snapshot->status_page_path = NULL;
+  snapshot->status_page_route = NULL;
+  snapshot->player_page_path = NULL;
+  snapshot->player_page_route = NULL;
+  snapshot->app_path_prefix = NULL;
+  snapshot->app_path_route = NULL;
+  snapshot->external_m3u_url = NULL;
+  snapshot->rtsp_stun_server = NULL;
+  snapshot->http_proxy_user_agent = NULL;
+  snapshot->rtsp_user_agent = NULL;
+  snapshot->cors_allow_origin = NULL;
+
+#define SNAPSHOT_STRING(field, cmd_flag)                                                                               \
+  do {                                                                                                                 \
+    if (snapshot_string(&snapshot->field, config.field, cmd_flag) < 0)                                                 \
+      goto error;                                                                                                      \
+  } while (0)
+
+  SNAPSHOT_STRING(hostname, cmd_hostname_set);
+  SNAPSHOT_STRING(r2h_token, cmd_r2h_token_set);
+  SNAPSHOT_STRING(ffmpeg_path, cmd_ffmpeg_path_set);
+  SNAPSHOT_STRING(ffmpeg_args, cmd_ffmpeg_args_set);
+  SNAPSHOT_STRING(status_page_path, cmd_status_page_path_set);
+  SNAPSHOT_STRING(status_page_route, cmd_status_page_path_set);
+  SNAPSHOT_STRING(player_page_path, cmd_player_page_path_set);
+  SNAPSHOT_STRING(player_page_route, cmd_player_page_path_set);
+  SNAPSHOT_STRING(app_path_prefix, cmd_app_path_prefix_set);
+  SNAPSHOT_STRING(app_path_route, cmd_app_path_prefix_set);
+  SNAPSHOT_STRING(external_m3u_url, cmd_external_m3u_url_set);
+  SNAPSHOT_STRING(rtsp_stun_server, cmd_rtsp_stun_server_set);
+  SNAPSHOT_STRING(http_proxy_user_agent, cmd_http_proxy_user_agent_set);
+  SNAPSHOT_STRING(rtsp_user_agent, cmd_rtsp_user_agent_set);
+  SNAPSHOT_STRING(cors_allow_origin, cmd_cors_allow_origin_set);
+
+#undef SNAPSHOT_STRING
+
+  return 0;
+
+error:
+  config_snapshot_free(snapshot);
+  return -1;
+}
+
+void config_snapshot_free(config_t *snapshot) {
+  if (!snapshot)
+    return;
+
+  free_config_strings(snapshot, false);
+  memset(snapshot, 0, sizeof(*snapshot));
+}
+
+void config_restore_snapshot(config_t *snapshot) {
+  if (!snapshot)
+    return;
+
+  free_config_strings(&config, false);
+  config = *snapshot;
+  memset(snapshot, 0, sizeof(*snapshot));
 }
 
 /**
@@ -879,6 +1133,8 @@ void config_init(void) {
     set_status_page_path_value("/status");
   if (!cmd_player_page_path_set)
     set_player_page_path_value("/player");
+  if (!cmd_app_path_prefix_set)
+    set_app_path_prefix_value("");
 
   /* Reset interface settings (only if not set by command line) */
   if (!cmd_upstream_interface_set)
@@ -919,7 +1175,7 @@ int config_reload(int *out_bind_changed) {
   }
 
   /* Save current bind addresses for comparison and potential rollback */
-  old_bind_addresses = copy_bindaddr(bind_addresses);
+  old_bind_addresses = bindaddr_copy(bind_addresses);
 
   /* Step 1: Cleanup all configuration resources */
   config_cleanup(false);
@@ -939,6 +1195,8 @@ int config_reload(int *out_bind_changed) {
       free_bindaddr(old_bind_addresses);
     return -1;
   }
+
+  apply_bind_side_effects();
 
   /* Check if bind addresses changed */
   if (out_bind_changed) {
@@ -980,7 +1238,8 @@ void usage(FILE *f, char *progname) {
           "pool (default 16384)\n"
           "\t-B --udp-rcvbuf-size <bytes> UDP socket receive buffer size for "
           "multicast/FCC/RTSP (default 524288 = 512KB)\n"
-          "\t-l --listen [addr:]port  Address/port to bind (default ANY:5140)\n"
+          "\t-l --listen [addr:]port|/path.sock  TCP address/port or Unix "
+          "socket path to bind (default ANY:5140)\n"
           "\t-c --config <file>   Read this file for configuration, instead of the "
           "default one\n"
           "\t-C --noconfig        Do not read the default config\n"
@@ -1013,6 +1272,8 @@ void usage(FILE *f, char *progname) {
           "/status)\n"
           "\t-p --player-page-path <path>  HTTP path for player UI (default: "
           "/player)\n"
+          "\t   --app-path-prefix <path>  Public mount path prefix for all HTTP "
+          "resources (default: none)\n"
           "\t-M --external-m3u <url>  External M3U playlist URL (file://, http://, "
           "https://)\n"
           "\t-I --external-m3u-update-interval <seconds>  Auto-update interval "
@@ -1032,7 +1293,22 @@ void usage(FILE *f, char *progname) {
 
 void parse_bind_cmd(char *arg) {
   char *p, *node, *service;
-  bindaddr_t *ba;
+
+  if (arg && arg[0] == '/') {
+    char *path;
+    if (!bind_path_is_valid(arg)) {
+      logger(LOG_ERROR, "Invalid Unix socket bind path: %s", arg);
+      return;
+    }
+    path = strdup(arg);
+    if (!path) {
+      logger(LOG_ERROR, "Failed to allocate Unix socket bind path");
+      return;
+    }
+    logger(LOG_DEBUG, "unix socket path: %s", path);
+    add_bindaddr_unix(path);
+    return;
+  }
 
   if (arg[0] == '[') {
     p = index(arg++, ']');
@@ -1053,11 +1329,7 @@ void parse_bind_cmd(char *arg) {
   }
 
   logger(LOG_DEBUG, "node: %s, port: %s", node, service);
-  ba = malloc(sizeof(bindaddr_t));
-  ba->node = node;
-  ba->service = service;
-  ba->next = bind_addresses;
-  bind_addresses = ba;
+  add_bindaddr_tcp(node, service);
 }
 
 void parse_cmd_line(int argc, char *argv[]) {
@@ -1087,6 +1359,7 @@ void parse_cmd_line(int argc, char *argv[]) {
                                     {"video-snapshot", no_argument, 0, 'S'},
                                     {"status-page-path", required_argument, 0, 's'},
                                     {"player-page-path", required_argument, 0, 'p'},
+                                    {"app-path-prefix", required_argument, 0, OPT_APP_PATH_PREFIX},
                                     {"external-m3u", required_argument, 0, 'M'},
                                     {"external-m3u-update-interval", required_argument, 0, 'I'},
                                     {"zerocopy-on-send", no_argument, 0, 'Z'},
@@ -1167,6 +1440,10 @@ void parse_cmd_line(int argc, char *argv[]) {
       set_config_file_path(NULL); /* No config file */
       break;
     case 'l':
+      if (!cmd_bind_set && bind_addresses) {
+        free_bindaddr(bind_addresses);
+        bind_addresses = NULL;
+      }
       parse_bind_cmd(optarg);
       cmd_bind_set = 1;
       break;
@@ -1205,6 +1482,10 @@ void parse_cmd_line(int argc, char *argv[]) {
     case 'p':
       set_player_page_path_value(optarg);
       cmd_player_page_path_set = 1;
+      break;
+    case OPT_APP_PATH_PREFIX:
+      set_app_path_prefix_value(optarg);
+      cmd_app_path_prefix_set = 1;
       break;
     case 'i':
       strncpy(config.upstream_interface, optarg, IFNAMSIZ - 1);
@@ -1313,6 +1594,8 @@ void parse_cmd_line(int argc, char *argv[]) {
     logger(LOG_WARN, "No config file found");
     set_config_file_path(NULL);
   }
+
+  apply_bind_side_effects();
 
   /* External M3U will be loaded asynchronously by workers after startup
    * This avoids blocking the startup process waiting for network resources */

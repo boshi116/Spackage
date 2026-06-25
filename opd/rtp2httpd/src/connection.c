@@ -40,6 +40,45 @@
 static void handle_playlist_request(connection_t *c);
 static void handle_epg_request(connection_t *c, int requested_gz);
 
+static int strip_app_path_prefix(const char *url, char *out, size_t out_size) {
+  const char *prefix = config.app_path_prefix;
+  const char *query_start;
+  size_t prefix_len;
+  size_t path_len;
+
+  if (!url || !out || out_size == 0)
+    return -1;
+
+  if (!prefix || prefix[0] == '\0') {
+    int written;
+    if (strlen(url) >= out_size)
+      return -1;
+    written = snprintf(out, out_size, "%s", url);
+    return (written >= 0 && (size_t)written < out_size) ? 0 : -1;
+  }
+
+  prefix_len = strlen(prefix);
+  query_start = strchr(url, '?');
+  path_len = query_start ? (size_t)(query_start - url) : strlen(url);
+
+  if (path_len < prefix_len || strncmp(url, prefix, prefix_len) != 0)
+    return -1;
+
+  if (path_len == prefix_len) {
+    int written = snprintf(out, out_size, "/%s", query_start ? query_start : "");
+    return (written >= 0 && (size_t)written < out_size) ? 0 : -1;
+  }
+
+  if (url[prefix_len] != '/')
+    return -1;
+
+  if (strlen(url + prefix_len) >= out_size)
+    return -1;
+
+  int written = snprintf(out, out_size, "%s", url + prefix_len);
+  return (written >= 0 && (size_t)written < out_size) ? 0 : -1;
+}
+
 /* Token source for r2h-token validation */
 typedef enum {
   TOKEN_SOURCE_NONE = 0,
@@ -47,6 +86,12 @@ typedef enum {
   TOKEN_SOURCE_COOKIE, /* From Cookie header */
   TOKEN_SOURCE_UA      /* From User-Agent R2HTOKEN/xxx */
 } token_source_t;
+
+static int connection_client_is_tcp(const connection_t *c) {
+  if (!c || c->client_addr_len == 0)
+    return 0;
+  return c->client_addr.ss_family == AF_INET || c->client_addr.ss_family == AF_INET6;
+}
 
 /**
  * Parse cookie value from Cookie header string
@@ -472,14 +517,16 @@ connection_t *connection_create(int fd, int epfd, struct sockaddr_storage *clien
 
   /* Enforce TCP user timeout so unacknowledged data fails quickly */
 #ifdef TCP_USER_TIMEOUT
-  int tcp_user_timeout = CONNECTION_TCP_USER_TIMEOUT_MS;
-  if (setsockopt(fd, IPPROTO_TCP, TCP_USER_TIMEOUT, &tcp_user_timeout, sizeof(tcp_user_timeout)) < 0) {
-    logger(LOG_DEBUG, "connection_create: Failed to set TCP_USER_TIMEOUT: %s", strerror(errno));
+  if (connection_client_is_tcp(c)) {
+    int tcp_user_timeout = CONNECTION_TCP_USER_TIMEOUT_MS;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_USER_TIMEOUT, &tcp_user_timeout, sizeof(tcp_user_timeout)) < 0) {
+      logger(LOG_DEBUG, "connection_create: Failed to set TCP_USER_TIMEOUT: %s", strerror(errno));
+    }
   }
 #endif
 
   /* Enable SO_ZEROCOPY on socket if supported */
-  if (config.zerocopy_on_send) {
+  if (config.zerocopy_on_send && connection_client_is_tcp(c)) {
     int one = 1;
     if (setsockopt(fd, SOL_SOCKET, SO_ZEROCOPY, &one, sizeof(one)) == 0) {
       c->zerocopy_enabled = 1;
@@ -721,6 +768,7 @@ void connection_handle_read(connection_t *c) {
 int connection_route_and_start(connection_t *c) {
   /* Copy URL and strip $label suffix (UI display tag at URL end) */
   char url_buf[HTTP_URL_BUFFER_SIZE];
+  char internal_url_buf[HTTP_URL_BUFFER_SIZE];
   strncpy(url_buf, c->http_req.url, sizeof(url_buf) - 1);
   url_buf[sizeof(url_buf) - 1] = '\0';
   http_strip_url_label(url_buf);
@@ -729,7 +777,9 @@ int connection_route_and_start(connection_t *c) {
   /* Format client address string (will be overridden by X-Forwarded-For if
    * present later) */
   char client_addr_str[NI_MAXHOST + NI_MAXSERV + 4] = "unknown";
-  if (c->client_addr_len > 0) {
+  if (c->client_addr_len > 0 && c->client_addr.ss_family == AF_UNIX) {
+    snprintf(client_addr_str, sizeof(client_addr_str), "unix");
+  } else if (c->client_addr_len > 0) {
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
     int r = getnameinfo((struct sockaddr *)&c->client_addr, c->client_addr_len, hbuf, sizeof(hbuf), sbuf, sizeof(sbuf),
                         NI_NUMERICHOST | NI_NUMERICSERV);
@@ -791,6 +841,12 @@ int connection_route_and_start(connection_t *c) {
 
     logger(LOG_DEBUG, "Host header validated: %s", c->http_req.hostname);
   }
+
+  if (strip_app_path_prefix(url, internal_url_buf, sizeof(internal_url_buf)) != 0) {
+    http_send_404(c);
+    return 0;
+  }
+  url = internal_url_buf;
 
   /* Handle CORS preflight (OPTIONS) before r2h-token check */
   if (config.cors_allow_origin && config.cors_allow_origin[0] && strcasecmp(c->http_req.method, "OPTIONS") == 0) {
@@ -959,7 +1015,7 @@ int connection_route_and_start(connection_t *c) {
   /* Dynamic parsing for RTSP and UDPxy if needed */
   if (service == NULL) {
     if (config.udpxy) {
-      service = service_create_from_udpxy_url(c->http_req.url);
+      service = service_create_from_udpxy_url(internal_url_buf);
     }
   } else {
     /* Found configured service (RTP or RTSP) - merge with request query (or

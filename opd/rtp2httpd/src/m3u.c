@@ -38,6 +38,43 @@ static m3u_cache_t m3u_cache = {0};
 static const int m3u_retry_delays[] = {2, 4, 8, 16, 32, 64, 128, 256};
 #define M3U_MAX_RETRY_COUNT 8
 
+static int append_path_with_trailing_slash(char *base, size_t base_size, const char *path) {
+  size_t len;
+  size_t path_len;
+  int written;
+
+  if (!base || base_size == 0 || !path)
+    return -1;
+
+  len = strlen(base);
+  if (len >= base_size)
+    return -1;
+
+  path_len = strlen(path);
+  written = snprintf(base + len, base_size - len, "%s%s", path, (path_len > 0 && path[path_len - 1] == '/') ? "" : "/");
+  return (written >= 0 && (size_t)written < base_size - len) ? 0 : -1;
+}
+
+static int append_app_path_prefix_to_url(char *base, size_t base_size) {
+  size_t len;
+
+  if (!config.app_path_prefix || config.app_path_prefix[0] == '\0')
+    return 0;
+
+  if (!base || base_size == 0)
+    return -1;
+
+  len = strlen(base);
+  if (len >= base_size)
+    return -1;
+
+  if (len > 0 && base[len - 1] == '/') {
+    base[len - 1] = '\0';
+  }
+
+  return append_path_with_trailing_slash(base, base_size, config.app_path_prefix);
+}
+
 int m3u_is_header(const char *line) { return (strncmp(line, "#EXTM3U", 7) == 0); }
 
 /* Extract x-tvg-url attribute from #EXTM3U header line
@@ -171,12 +208,16 @@ char *get_server_address(void) {
   char server_port[16];
   char full_url[2048];
 
-  /* Get first listening port from bind_addresses */
-  if (bind_addresses && bind_addresses->service) {
-    strncpy(server_port, bind_addresses->service, sizeof(server_port) - 1);
-    server_port[sizeof(server_port) - 1] = '\0';
-  } else {
-    strcpy(server_port, "5140");
+  snprintf(server_port, sizeof(server_port), "5140");
+
+  /* Get first TCP listening port from bind_addresses. Unix socket listeners
+   * do not provide a usable HTTP authority for generated playlist URLs. */
+  for (bindaddr_t *ba = bind_addresses; ba; ba = ba->next) {
+    if (ba->type == BIND_ADDR_TCP && ba->service) {
+      strncpy(server_port, ba->service, sizeof(server_port) - 1);
+      server_port[sizeof(server_port) - 1] = '\0';
+      break;
+    }
   }
 
   /* Priority 1: Use configured hostname */
@@ -194,13 +235,17 @@ char *get_server_address(void) {
       } else {
         snprintf(full_url, sizeof(full_url), "http://%s:%s/", config.hostname, server_port);
       }
+      if (append_app_path_prefix_to_url(full_url, sizeof(full_url)) != 0) {
+        logger(LOG_ERROR, "Failed to append app-path-prefix to server address");
+        return NULL;
+      }
       return strdup(full_url);
     }
 
     /* Build full URL */
     /* Default protocol to http if not specified */
     if (protocol[0] == '\0') {
-      strcpy(protocol, "http");
+      snprintf(protocol, sizeof(protocol), "http");
 
       /* Use port from config if specified, otherwise use server_port */
       if (port[0] == '\0') {
@@ -224,19 +269,23 @@ char *get_server_address(void) {
       snprintf(full_url, sizeof(full_url), "%s://%s:%s", protocol, host_formatted, port);
     }
 
-    /* Add path if present, ensuring it ends with slash */
-    if (path[0] != '\0') {
-      size_t path_len = strlen(path);
-      /* Ensure path ends with '/' */
-      if (path[path_len - 1] != '/') {
-        strncat(full_url, path, sizeof(full_url) - strlen(full_url) - 2);
-        strcat(full_url, "/");
-      } else {
-        strncat(full_url, path, sizeof(full_url) - strlen(full_url) - 1);
+    /* Add app path prefix when configured; otherwise preserve hostname path. */
+    if (config.app_path_prefix && config.app_path_prefix[0] != '\0') {
+      if (append_app_path_prefix_to_url(full_url, sizeof(full_url)) != 0) {
+        logger(LOG_ERROR, "Failed to append app-path-prefix to server address");
+        return NULL;
+      }
+    } else if (path[0] != '\0') {
+      if (append_path_with_trailing_slash(full_url, sizeof(full_url), path) != 0) {
+        logger(LOG_ERROR, "Failed to append hostname path to server address");
+        return NULL;
       }
     } else {
       /* No path specified, add trailing slash */
-      strcat(full_url, "/");
+      if (append_path_with_trailing_slash(full_url, sizeof(full_url), "/") != 0) {
+        logger(LOG_ERROR, "Failed to append trailing slash to server address");
+        return NULL;
+      }
     }
 
     return strdup(full_url);
@@ -250,6 +299,10 @@ char *get_server_address(void) {
       snprintf(full_url, sizeof(full_url), "http://localhost/");
     } else {
       snprintf(full_url, sizeof(full_url), "http://localhost:%s/", server_port);
+    }
+    if (append_app_path_prefix_to_url(full_url, sizeof(full_url)) != 0) {
+      logger(LOG_ERROR, "Failed to append app-path-prefix to server address");
+      return NULL;
     }
     return strdup(full_url);
   }
@@ -362,6 +415,11 @@ char *get_server_address(void) {
       snprintf(full_url, sizeof(full_url), "http://%s/", host_formatted);
     } else {
       snprintf(full_url, sizeof(full_url), "http://%s:%s/", host_formatted, server_port);
+    }
+    if (append_app_path_prefix_to_url(full_url, sizeof(full_url)) != 0) {
+      free(host_ip);
+      logger(LOG_ERROR, "Failed to append app-path-prefix to server address");
+      return NULL;
     }
   }
 
@@ -662,6 +720,13 @@ static int extract_wrapped_url(const char *url, char *extracted, size_t extracte
 
   path_start++; /* Skip the slash */
 
+  if (config.app_path_route && config.app_path_route[0] != '\0') {
+    size_t prefix_len = strlen(config.app_path_route);
+    if (strncmp(path_start, config.app_path_route, prefix_len) == 0 && path_start[prefix_len] == '/') {
+      path_start += prefix_len + 1;
+    }
+  }
+
   /* Extract protocol (rtp, udp, rtsp) */
   protocol_end = strchr(path_start, '/');
   if (!protocol_end) {
@@ -836,6 +901,19 @@ static int append_to_transformed_m3u(const char *str, service_source_t source) {
   m3u_cache.transformed_m3u_etag_valid = 0;
 
   return 0;
+}
+
+static void free_transformed_m3u_buffer(m3u_cache_t *cache) {
+  if (cache->transformed_m3u) {
+    free(cache->transformed_m3u);
+    cache->transformed_m3u = NULL;
+  }
+  cache->transformed_m3u_size = 0;
+  cache->transformed_m3u_used = 0;
+  cache->transformed_m3u_inline_end = 0;
+  cache->transformed_m3u_has_header = 0;
+  cache->transformed_m3u_etag_valid = 0;
+  cache->transformed_m3u_etag[0] = '\0';
 }
 
 /* Find a unique service name by adding numeric suffix if needed
@@ -1496,22 +1574,42 @@ const char *m3u_get_etag(void) {
   return m3u_cache.transformed_m3u_etag;
 }
 
-void m3u_reset_transformed_playlist(void) {
-  /* Clear entire buffer */
-  if (m3u_cache.transformed_m3u) {
-    free(m3u_cache.transformed_m3u);
-    m3u_cache.transformed_m3u = NULL;
+void m3u_reset_transformed_playlist(void) { free_transformed_m3u_buffer(&m3u_cache); }
+
+int m3u_cache_snapshot(m3u_cache_t *snapshot) {
+  if (!snapshot)
+    return -1;
+
+  *snapshot = m3u_cache;
+  snapshot->transformed_m3u = NULL;
+
+  if (m3u_cache.transformed_m3u && m3u_cache.transformed_m3u_size > 0) {
+    snapshot->transformed_m3u = malloc(m3u_cache.transformed_m3u_size);
+    if (!snapshot->transformed_m3u) {
+      memset(snapshot, 0, sizeof(*snapshot));
+      return -1;
+    }
+    memcpy(snapshot->transformed_m3u, m3u_cache.transformed_m3u, m3u_cache.transformed_m3u_size);
   }
-  m3u_cache.transformed_m3u_size = 0;
-  m3u_cache.transformed_m3u_used = 0;
-  m3u_cache.transformed_m3u_inline_end = 0;
 
-  /* Reset header flag */
-  m3u_cache.transformed_m3u_has_header = 0;
+  return 0;
+}
 
-  /* Invalidate ETag */
-  m3u_cache.transformed_m3u_etag_valid = 0;
-  m3u_cache.transformed_m3u_etag[0] = '\0';
+void m3u_cache_snapshot_free(m3u_cache_t *snapshot) {
+  if (!snapshot)
+    return;
+
+  free_transformed_m3u_buffer(snapshot);
+  memset(snapshot, 0, sizeof(*snapshot));
+}
+
+void m3u_cache_restore_snapshot(m3u_cache_t *snapshot) {
+  if (!snapshot)
+    return;
+
+  free_transformed_m3u_buffer(&m3u_cache);
+  m3u_cache = *snapshot;
+  memset(snapshot, 0, sizeof(*snapshot));
 }
 
 void m3u_reset_external_playlist(void) {
