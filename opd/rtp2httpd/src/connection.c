@@ -1,4 +1,5 @@
 #include "connection.h"
+#include "access_log.h"
 #include "embedded_web.h"
 #include "epg.h"
 #include "http.h"
@@ -778,7 +779,7 @@ int connection_route_and_start(connection_t *c) {
    * present later) */
   char client_addr_str[NI_MAXHOST + NI_MAXSERV + 4] = "unknown";
   if (c->client_addr_len > 0 && c->client_addr.ss_family == AF_UNIX) {
-    snprintf(client_addr_str, sizeof(client_addr_str), "unix");
+    snprintf(client_addr_str, sizeof(client_addr_str), "localhost");
   } else if (c->client_addr_len > 0) {
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
     int r = getnameinfo((struct sockaddr *)&c->client_addr, c->client_addr_len, hbuf, sizeof(hbuf), sbuf, sizeof(sbuf),
@@ -1135,6 +1136,8 @@ int connection_route_and_start(connection_t *c) {
     c->status_index = status_register_client(client_addr_str, display_url);
     if (c->status_index < 0) {
       logger(LOG_ERROR, "Failed to register streaming client in status tracking");
+    } else {
+      access_log_write_connection(c, service, c->status_index);
     }
   } else {
     c->status_index = -1;

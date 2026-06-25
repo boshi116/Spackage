@@ -15,6 +15,7 @@ import tempfile
 import time
 
 from helpers import (
+    MockHTTPUpstreamSilent,
     R2HProcess,
     find_free_port,
     http_get,
@@ -61,7 +62,7 @@ def _wait_unix_http_status(socket_path: str, path: str, expected_status: int = 2
     assert last_status == expected_status
 
 
-def _wait_unix_http_body_contains(socket_path: str, path: str, needle: bytes, timeout: float = 5.0) -> None:
+def _wait_unix_http_body_contains(socket_path: str, path: str, needle: bytes, timeout: float = 5.0) -> bytes:
     deadline = time.time() + timeout
     last_body = b""
     while time.time() < deadline:
@@ -70,9 +71,55 @@ def _wait_unix_http_body_contains(socket_path: str, path: str, needle: bytes, ti
             if status == 200:
                 last_body = body
                 if needle in body:
-                    return
+                    return body
         except OSError:
             pass
+        time.sleep(0.1)
+    assert needle in last_body
+    return last_body
+
+
+def _wait_log_contains(r2h: R2HProcess, needle: str, timeout: float = 5.0) -> None:
+    deadline = time.time() + timeout
+    last_log = ""
+    while time.time() < deadline:
+        last_log = r2h.read_log()
+        if needle in last_log:
+            return
+        time.sleep(0.1)
+    assert needle in last_log
+
+
+def _wait_file_contains(path: str, needle: str, timeout: float = 5.0) -> None:
+    deadline = time.time() + timeout
+    last_text = ""
+    while time.time() < deadline:
+        if os.path.exists(path):
+            with open(path) as f:
+                last_text = f.read()
+            if needle in last_text:
+                return
+        time.sleep(0.1)
+    assert needle in last_text
+
+
+def _open_unix_http_stream(socket_path: str, path: str) -> socket.socket:
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(5.0)
+    sock.connect(socket_path)
+    request = "GET %s HTTP/1.0\r\nHost: localhost\r\n\r\n" % path
+    sock.sendall(request.encode())
+    return sock
+
+
+def _wait_status_sse_contains(socket_path: str, needle: str, timeout: float = 5.0) -> None:
+    deadline = time.time() + timeout
+    last_body = ""
+    while time.time() < deadline:
+        status, _, body = unix_http_get(socket_path, "/status/sse", timeout=0.5)
+        last_body = body.decode(errors="replace")
+        if status == 200 and needle in last_body:
+            return
         time.sleep(0.1)
     assert needle in last_body
 
@@ -89,9 +136,38 @@ class TestUnixSocketListen:
                 assert status == 200
                 assert "text/html" in content_type
                 assert len(body) > 0
-                assert "New client unix requested URL: /status" in r2h.read_log()
+                assert "New client localhost requested URL: /status" in r2h.read_log()
             finally:
                 r2h.stop()
+
+    def test_unix_socket_client_addr_displays_as_localhost(self, r2h_binary):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sock_path = _socket_path(tmpdir)
+            access_log_path = os.path.join(tmpdir, "access.log")
+            upstream = MockHTTPUpstreamSilent()
+            upstream.start()
+            config = f"""\
+[global]
+verbosity = 4
+access-log = {access_log_path}
+log-format = $client_addr|$remote_addr|$remote_port
+
+[bind]
+{sock_path}
+"""
+            r2h = R2HProcess(r2h_binary, None, config_content=config, wait_socket_path=sock_path)
+            media_sock = None
+            try:
+                r2h.start()
+                media_sock = _open_unix_http_stream(sock_path, f"/http/127.0.0.1:{upstream.port}/hello")
+
+                _wait_file_contains(access_log_path, "localhost|localhost|-")
+                _wait_status_sse_contains(sock_path, '"clientAddr":"localhost"')
+            finally:
+                if media_sock:
+                    media_sock.close()
+                r2h.stop()
+                upstream.stop()
 
     def test_config_unix_socket_serves_status(self, r2h_binary):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -262,14 +338,13 @@ rtp://239.0.0.2:1234
                 assert "keeping existing workers and listeners" in log
 
                 os.kill(r2h.process.pid, signal.SIGUSR1)
+                _wait_log_contains(r2h, "Restarting worker 0")
                 _wait_unix_http_status(old_sock_path, "/oldstatus")
-                status, _, body = unix_http_get(old_sock_path, "/playlist.m3u")
-                assert status == 200
+                body = _wait_unix_http_body_contains(old_sock_path, "/playlist.m3u", b"Old Channel")
                 playlist = body.decode()
                 assert "Old Channel" in playlist
                 assert "New Channel" not in playlist
-                _wait_unix_http_body_contains(old_sock_path, "/epg.xml", b"Old Programme")
-                status, _, body = unix_http_get(old_sock_path, "/epg.xml")
+                body = _wait_unix_http_body_contains(old_sock_path, "/epg.xml", b"Old Programme")
                 assert b"Old Programme" in body
                 assert b"New Programme" not in body
                 status, _, _ = unix_http_get(old_sock_path, "/newstatus")

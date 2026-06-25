@@ -45,6 +45,7 @@ int cmd_fcc_listen_port_range_set = 0;
 int cmd_status_page_path_set = 0;
 int cmd_player_page_path_set = 0;
 int cmd_app_path_prefix_set = 0;
+int cmd_use_relative_path_in_m3u_set = 0;
 int cmd_zerocopy_on_send_set = 0;
 int cmd_workers_set = 0;
 int cmd_external_m3u_url_set = 0;
@@ -53,10 +54,12 @@ int cmd_rtsp_stun_server_set = 0;
 int cmd_http_proxy_user_agent_set = 0;
 int cmd_rtsp_user_agent_set = 0;
 int cmd_cors_allow_origin_set = 0;
+int cmd_access_log_set = 0;
+int cmd_log_format_set = 0;
 
 enum section_e { SEC_NONE = 0, SEC_BIND, SEC_SERVICES, SEC_GLOBAL };
 
-enum long_option_e { OPT_APP_PATH_PREFIX = 1000 };
+enum long_option_e { OPT_APP_PATH_PREFIX = 1000, OPT_USE_RELATIVE_PATH_IN_M3U, OPT_ACCESS_LOG, OPT_LOG_FORMAT };
 
 /* M3U parsing state variables */
 static char *inline_m3u_buffer = NULL;
@@ -134,6 +137,10 @@ static void free_config_strings(config_t *target, bool force_free) {
     safe_free_string(&target->rtsp_user_agent);
   if (!cmd_cors_allow_origin_set || force_free)
     safe_free_string(&target->cors_allow_origin);
+  if (!cmd_access_log_set || force_free)
+    safe_free_string(&target->access_log);
+  if (!cmd_log_format_set || force_free)
+    safe_free_string(&target->log_format);
 }
 
 static int snapshot_string(char **dst, char *src, int keep_shallow) {
@@ -605,6 +612,12 @@ void parse_global_sec(char *line) {
     return;
   }
 
+  if (strcasecmp("use-relative-path-in-m3u", param) == 0) {
+    if (set_if_not_cmd_override(cmd_use_relative_path_in_m3u_set, "use-relative-path-in-m3u"))
+      config.use_relative_path_in_m3u = parse_bool(value);
+    return;
+  }
+
   /* String parameters with command line override */
   if (strcasecmp("hostname", param) == 0) {
     if (set_if_not_cmd_override(cmd_hostname_set, "hostname")) {
@@ -765,6 +778,25 @@ void parse_global_sec(char *line) {
     if (set_if_not_cmd_override(cmd_cors_allow_origin_set, "cors-allow-origin")) {
       safe_free_string(&config.cors_allow_origin);
       config.cors_allow_origin = strdup(value);
+    }
+    return;
+  }
+
+  /* Keep legacy snake_case config names working for existing files. */
+  if (strcasecmp("access-log", param) == 0 || strcasecmp("access_log", param) == 0) {
+    if (set_if_not_cmd_override(cmd_access_log_set, "access-log")) {
+      safe_free_string(&config.access_log);
+      if (value[0] != '\0')
+        config.access_log = strdup(value);
+    }
+    return;
+  }
+
+  if (strcasecmp("log-format", param) == 0 || strcasecmp("log_format", param) == 0) {
+    if (set_if_not_cmd_override(cmd_log_format_set, "log-format")) {
+      safe_free_string(&config.log_format);
+      if (value[0] != '\0')
+        config.log_format = strdup(value);
     }
     return;
   }
@@ -1042,6 +1074,8 @@ int config_snapshot(config_t *snapshot) {
   snapshot->http_proxy_user_agent = NULL;
   snapshot->rtsp_user_agent = NULL;
   snapshot->cors_allow_origin = NULL;
+  snapshot->access_log = NULL;
+  snapshot->log_format = NULL;
 
 #define SNAPSHOT_STRING(field, cmd_flag)                                                                               \
   do {                                                                                                                 \
@@ -1064,6 +1098,8 @@ int config_snapshot(config_t *snapshot) {
   SNAPSHOT_STRING(http_proxy_user_agent, cmd_http_proxy_user_agent_set);
   SNAPSHOT_STRING(rtsp_user_agent, cmd_rtsp_user_agent_set);
   SNAPSHOT_STRING(cors_allow_origin, cmd_cors_allow_origin_set);
+  SNAPSHOT_STRING(access_log, cmd_access_log_set);
+  SNAPSHOT_STRING(log_format, cmd_log_format_set);
 
 #undef SNAPSHOT_STRING
 
@@ -1117,6 +1153,8 @@ void config_init(void) {
     config.mcast_rejoin_interval = 0;
   if (!cmd_zerocopy_on_send_set)
     config.zerocopy_on_send = 0;
+  if (!cmd_use_relative_path_in_m3u_set)
+    config.use_relative_path_in_m3u = 0;
   if (!cmd_fcc_listen_port_range_set) {
     config.fcc_listen_port_min = 0;
     config.fcc_listen_port_max = 0;
@@ -1135,6 +1173,8 @@ void config_init(void) {
     set_player_page_path_value("/player");
   if (!cmd_app_path_prefix_set)
     set_app_path_prefix_value("");
+  if (!cmd_log_format_set)
+    config.log_format = strdup(DEFAULT_ACCESS_LOG_FORMAT);
 
   /* Reset interface settings (only if not set by command line) */
   if (!cmd_upstream_interface_set)
@@ -1274,6 +1314,8 @@ void usage(FILE *f, char *progname) {
           "/player)\n"
           "\t   --app-path-prefix <path>  Public mount path prefix for all HTTP "
           "resources (default: none)\n"
+          "\t   --use-relative-path-in-m3u  Use root-relative URLs in generated "
+          "and rewritten M3U playlists (default: off)\n"
           "\t-M --external-m3u <url>  External M3U playlist URL (file://, http://, "
           "https://)\n"
           "\t-I --external-m3u-update-interval <seconds>  Auto-update interval "
@@ -1287,6 +1329,8 @@ void usage(FILE *f, char *progname) {
           "(default: disabled)\n"
           "\t-O --cors-allow-origin <origin>  Set Access-Control-Allow-Origin header "
           "(default: disabled)\n"
+          "\t   --access-log <path>  Write access logs to this file (default: disabled)\n"
+          "\t   --log-format <format>  Access log format (nginx-style $variables)\n"
           "\t                     default " CONFIGFILE "\n",
           prog);
 }
@@ -1360,6 +1404,7 @@ void parse_cmd_line(int argc, char *argv[]) {
                                     {"status-page-path", required_argument, 0, 's'},
                                     {"player-page-path", required_argument, 0, 'p'},
                                     {"app-path-prefix", required_argument, 0, OPT_APP_PATH_PREFIX},
+                                    {"use-relative-path-in-m3u", no_argument, 0, OPT_USE_RELATIVE_PATH_IN_M3U},
                                     {"external-m3u", required_argument, 0, 'M'},
                                     {"external-m3u-update-interval", required_argument, 0, 'I'},
                                     {"zerocopy-on-send", no_argument, 0, 'Z'},
@@ -1367,6 +1412,8 @@ void parse_cmd_line(int argc, char *argv[]) {
                                     {"rtsp-stun-server", required_argument, 0, 'N'},
                                     {"rtsp-user-agent", required_argument, 0, 'u'},
                                     {"cors-allow-origin", required_argument, 0, 'O'},
+                                    {"access-log", required_argument, 0, OPT_ACCESS_LOG},
+                                    {"log-format", required_argument, 0, OPT_LOG_FORMAT},
                                     {0, 0, 0, 0}};
 
   const char short_opts[] = "v:qhUm:w:b:B:c:l:P:H:XT:i:f:t:r:y:R:F:A:s:p:M:I:SCZg:N:u:O:";
@@ -1487,6 +1534,11 @@ void parse_cmd_line(int argc, char *argv[]) {
       set_app_path_prefix_value(optarg);
       cmd_app_path_prefix_set = 1;
       break;
+    case OPT_USE_RELATIVE_PATH_IN_M3U:
+      config.use_relative_path_in_m3u = 1;
+      cmd_use_relative_path_in_m3u_set = 1;
+      logger(LOG_INFO, "Using root-relative URLs in M3U playlists");
+      break;
     case 'i':
       strncpy(config.upstream_interface, optarg, IFNAMSIZ - 1);
       cmd_upstream_interface_set = 1;
@@ -1577,6 +1629,20 @@ void parse_cmd_line(int argc, char *argv[]) {
       safe_free_string(&config.cors_allow_origin);
       config.cors_allow_origin = strdup(optarg);
       cmd_cors_allow_origin_set = 1;
+      break;
+    case OPT_ACCESS_LOG:
+      safe_free_string(&config.access_log);
+      if (optarg[0] != '\0') {
+        config.access_log = strdup(optarg);
+      }
+      cmd_access_log_set = 1;
+      break;
+    case OPT_LOG_FORMAT:
+      safe_free_string(&config.log_format);
+      if (optarg[0] != '\0') {
+        config.log_format = strdup(optarg);
+      }
+      cmd_log_format_set = 1;
       break;
     default:
       logger(LOG_FATAL, "Unknown option! %d ", opt);

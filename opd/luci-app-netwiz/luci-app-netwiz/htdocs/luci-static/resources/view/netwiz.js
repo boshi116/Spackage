@@ -2419,14 +2419,14 @@ return view.extend({
                             var domVal = domInput.value.trim();
                             
                             if (!ipVal || !domVal) { 
-                                // 替换 原生alert()弹窗
+                                // 替换 alert()弹窗
                                 openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['MSG_HOSTS_REQ'] || 'IP and Domain cannot be empty!', okText: T['M_CLOSE'] || 'Close' }); 
                                 return; 
                             }
                             var isIpv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(ipVal);
                             var isIpv6 = /^[a-fA-F0-9:]+:[a-fA-F0-9:]+$/.test(ipVal);
                             if (!isIpv4 && !isIpv6) { 
-                                // 替换 原生alert()弹窗
+                                // 替换 alert()弹窗
                                 openModal({ title: T['M_INC_TIT'] || 'Notice', msg: T['M_FMT_IP'] || 'Invalid IP format!', okText: T['M_CLOSE'] || 'Close' }); 
                                 return; 
                             }
@@ -3281,79 +3281,91 @@ return view.extend({
                 Promise.all([ safePromise(uci.load('network'), null), safePromise(uci.load('dhcp'), null), safePromise(uci.load('wireless'), null), safePromise(getWanStatus(), {}), safePromise(callNetCheckWifi(), {}) ]).then(function(results) {
                     var wifiRes = results[4] || {};
                     var rawIfaces = results[3] || {}, ifaces = Array.isArray(rawIfaces.interface) ? rawIfaces.interface : (Array.isArray(rawIfaces) ? rawIfaces : []);
+                    
+                    // 保留 wProto
                     var wProto = safeUciGet('network', 'wan', 'proto', '').toLowerCase();
 
-                    // --- 提取基础网卡信息 ---
+                    // ==========================================
+                    // 1. 全局终极防抖：容错 15 秒
+                    // ==========================================
+                    var isHealthyPoll = ifaces.some(function(i) { return i && i.up && i['ipv4-address'] && i['ipv4-address'].length > 0; });
+                    
+                    if (isHealthyPoll) {
+                        window._stableIfaces = ifaces;
+                        window._stableIfacesTime = Date.now();
+                    } else if (window._stableIfaces && window._stableIfacesTime && (Date.now() - window._stableIfacesTime < 15000)) {
+                        ifaces = window._stableIfaces;
+                    }
+
+                    // 重新提取
                     var phyWan = ifaces.find(function(i) { return i && i.interface === 'wan'; }) || {};
                     var virWwan = ifaces.find(function(i) { return i && i.interface === 'wwan'; }) || {};
 
                     // ==========================================
-                    // 1. 终极防抖锁：杜绝面板乱跳
+                    // 2. 穿透寻找真正的出口网卡
                     // ==========================================
-                    if (typeof window._stablePhyWan === 'undefined') {
-                        window._stablePhyWan = phyWan;
-                    }
-                    if (phyWan && phyWan.up && phyWan['ipv4-address'] && phyWan['ipv4-address'].length > 0) {
-                        window._stablePhyWan = phyWan; 
-                    } else if (window._stablePhyWan && window._stablePhyWan.up) {
-                        phyWan = window._stablePhyWan; 
+                    var routeWan = ifaces.find(function(i) {
+                        return i.up && Array.isArray(i.route) && i.route.some(function(r) { return r.target === '0.0.0.0' && (r.mask === 0 || !r.mask); });
+                    });
+                    
+                    if (!routeWan) {
+                        routeWan = ifaces.find(function(i) { return i && (i.interface === 'wan' || i.interface === 'wwan' || (i.interface && i.interface.indexOf('wan') !== -1 && i.interface.indexOf('lan') === -1)); }) || {};
                     }
 
-                    var activeWan = phyWan; 
+                    var activeWan = routeWan;
                     var isWispActive = false;
                     var hasWispConfigured = !!uci.sections('wireless', 'wifi-iface').find(function(i) { return i.network === 'wwan' && i.mode === 'sta'; });
 
-                    var phyWanHasIp = phyWan.up && phyWan['ipv4-address'] && phyWan['ipv4-address'].length > 0;
+                    var activeWanHasIp = activeWan.up && activeWan['ipv4-address'] && activeWan['ipv4-address'].length > 0;
                     var virWwanHasIp = virWwan.up && virWwan['ipv4-address'] && virWwan['ipv4-address'].length > 0;
 
-                    if (!phyWanHasIp && virWwanHasIp) {
+                    if (!activeWanHasIp && virWwanHasIp) {
                         activeWan = virWwan;
                         isWispActive = true;
-                    } else if (!phyWan.up && !virWwan.up) {
-                        activeWan = ifaces.find(function(i) { return i && (i.interface === 'wan' || i.interface === 'wwan' || (i.interface && i.interface.indexOf('wan') !== -1 && i.interface.indexOf('lan') === -1)); }) || {};
                     }
 
+                    // 只要它是 WAN 口，强行把状态设为 true。
+                    if (activeWan) activeWan.up = true;
+                    if (phyWan) phyWan.up = true;
+
                     // ==========================================
-                    // 2. 强制识别协议名称 (完美同步官方)
+                    // 4. 强制识别协议名称
                     // ==========================================
                     var rawProto = (safeUciGet('network', activeWan.interface || 'wan', 'proto', '') || '').toLowerCase();
                     var protoName = '';
                     if (rawProto === 'pppoe') protoName = 'PPPoE 拨号';
                     else if (rawProto === 'dhcp') protoName = '自动获取 (DHCP)';
                     else if (rawProto === 'static') protoName = '静态 IP';
-                    else protoName = '自动获取 (DHCP)'; // 终极兜底，强杀“局域网模式”字眼
+                    else protoName = '自动获取 (DHCP)';
 
                     // ==========================================
-                    // 3. 提取本地物理 WAN IP (智能剔除光猫管理 IP)
+                    // 5. 提取主力 IP
                     // ==========================================
                     var liveWanIp = '';
                     if (activeWan['ipv4-address'] && activeWan['ipv4-address'].length > 0) {
                         var foundMainIp = null;
                         var foundModemIp = null;
-
-                        // 遍历网卡上的所有 IP，解决多个 IP 导致乱跳的问题
+                        
                         activeWan['ipv4-address'].forEach(function(ipObj) {
                             var ip = ipObj.address || '';
-                            // 如果是 192.168.x.x，通常是光猫桥接/管理 IP，做个标记
                             if (ip.indexOf('192.168.') === 0) {
                                 if (!foundModemIp) foundModemIp = ip;
                             } else {
-                                // 只要不是 192.168，不管是 100.64 大内网，还是 114.x 真公网，统统视为“主力 IP”
                                 if (!foundMainIp) foundMainIp = ip;
                             }
                         });
-
-                        // 优先级逻辑：有主力 IP 就显示主力，只有光猫 IP 才显示光猫，否则兜底
+                        
                         liveWanIp = foundMainIp ? foundMainIp : (foundModemIp ? foundModemIp : activeWan['ipv4-address'][0].address);
                     }
 
                     // ==========================================
-                    // 4. 纯净渲染：只显示本地真实状态
+                    // 6. 纯净渲染 (加入正在获取提示)
                     // ==========================================
                     if (liveWanIp) {
                         window._liveWanIp = liveWanIp + '  (' + protoName + ')';
                     } else {
-                        window._liveWanIp = '';
+                        // 没拿到 IP 时，不再显示空白，而是友好提示正在获取中！
+                        window._liveWanIp = '正在连接/获取 IP...  (' + protoName + ')';
                     }
                     // ==========================================
                     
@@ -3369,7 +3381,7 @@ return view.extend({
                         if (!secs) return '';
                         var d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
                         var res = '';
-                        if (d > 0) res += d + 'd ';
+                        if (d > 0) res += d + 'D ';
                         if (h > 0) res += h + 'H ';
                         if (m > 0) res += m + 'm ';
                         res += s + 's';
@@ -4116,7 +4128,7 @@ return view.extend({
 
                     // ---- 开始 ----
                     var mkB = function(bg, txt) { return "<span style='font-size:14px; background:" + bg + "; color:#fff; padding:5px 10px; border-radius:12px; white-space:nowrap;'>" + txt + "</span>"; };
-                    var mkD = function(l1, v1, l2, v2) { return "<span class='nw-info-item'>" + l1 + " <span class='nw-hl'>" + v1 + "</span></span><span class='nw-info-item'>" + l2 + " <span class='nw-hl'>" + v2 + "</span></span>"; };
+                    var mkD = function(l1, v1, l2, v2) { return "<span class='nw-info-item'>" + l1 + "<span class='nw-hl'>" + v1 + "</span></span><span class='nw-info-item'>" + l2 + "<span class='nw-hl'>" + v2 + "</span></span>"; };
 
                     // 这样时间在内部怎么跳动，都绝对不会再挤压外部的排版！
                     var fixedUpBadge = upBadgeHtml ? "<span style='display:inline-block; width:AUTO; text-align:left; font-variant-numeric: tabular-nums; margin:0 0;'>" + upBadgeHtml + "</span>" : "";
@@ -4141,7 +4153,7 @@ return view.extend({
                     // ---- 结束 ----
                     var sDnsHtml = "";
                     if (!isBypass && activeWan.up && dns1) {
-                        sDnsHtml = "<div style='font-size:15.5px; font-weight:bold; color:#FFF; font-family:monospace; margin:6px 0 10px 0; display:flex; flex-wrap:wrap; justify-content:center; gap:0;'><span class='nw-info-item'>" + T['TXT_DNS1'] + " <span class='nw-hl'>" + dns1 + "</span></span>" + (dns2 ? "<span class='nw-info-item'>" + T['TXT_DNS2'] + " <span class='nw-hl'>" + dns2 + "</span></span>" : "") + "</div>";
+                        sDnsHtml = "<div style='font-size:15.5px; font-weight:bold; color:#FFF; font-family:monospace; margin:6px 0 10px 0; display:flex; flex-wrap:wrap; justify-content:center; gap:0;'><span class='nw-info-item'>" + T['TXT_DNS1'] + "<span class='nw-hl'>" + dns1 + "</span></span>" + (dns2 ? "<span class='nw-info-item'>" + T['TXT_DNS2'] + "<span class='nw-hl'>" + dns2 + "</span></span>" : "") + "</div>";
                     }
 
                     window._gotoRoam = function(band, isDirty) {
@@ -4366,7 +4378,7 @@ return view.extend({
                     extraInfo += wifiLines.join('');
                     extraInfo += "</div>";
 
-                    // ✨ 读取会话记忆，保持按钮文字与智能折叠状态一致
+                    // 读取会话记忆，保持按钮文字与智能折叠状态一致
                     var isExpanded = (sessionStorage.getItem('nw_adv_expanded') === '1');
                     var btnText = isExpanded ? (T['BTN_ADV_HIDE'] || 'Advanced Settings ▲') : (T['BTN_ADV_SHOW'] || 'Advanced Settings ▼');
                     var btnBg = isExpanded ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.15)';
