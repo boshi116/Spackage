@@ -53,6 +53,10 @@ type AdaptationFieldInfo = {
   random_access_indicator?: number;
   elementary_stream_priority_indicator?: number;
 };
+type CommonPidKey = keyof PMT["common_pids"];
+type TSDemuxerOptions = {
+  waitForInitialVideoKeyframe?: boolean;
+};
 type AACAudioMetadata = {
   codec: "aac";
   audio_object_type: MPEG4AudioObjectTypes;
@@ -100,9 +104,13 @@ type AudioData =
       data: MP3Data;
     };
 
+const VIDEO_PID_KEYS: readonly CommonPidKey[] = ["h264", "h265"];
+const AUDIO_PID_KEYS: readonly CommonPidKey[] = ["adts_aac", "loas_aac", "ac3", "eac3", "mp3"];
+
 export type OnErrorCallback = (type: string, info: string) => void;
 export type OnTrackMetadataCallback = (type: string, metadata: unknown) => void;
-export type OnDataAvailableCallback = (audioTrack: unknown, videoTrack: unknown) => void;
+export type OnDataAvailableCallback = (audioTrack: unknown, videoTrack: unknown, force?: boolean) => void;
+export type OnTrackDiscontinuityCallback = (track: "audio" | "video") => void;
 
 class TSDemuxer {
   private readonly TAG: string = "TSDemuxer";
@@ -110,6 +118,7 @@ class TSDemuxer {
   public onError: OnErrorCallback | null = null;
   public onTrackMetadata: OnTrackMetadataCallback | null = null;
   public onDataAvailable: OnDataAvailableCallback | null = null;
+  public onTrackDiscontinuity: OnTrackDiscontinuityCallback | null = null;
   /** Software audio decode support (MP2) */
   public onRawAudioData: ((frame: { codec: "mp2"; data: Uint8Array; pts: number }) => void) | null = null;
 
@@ -127,6 +136,7 @@ class TSDemuxer {
 
   private pes_slice_queues_: PIDToSliceQueues = {};
   private section_slice_queues_: PIDToSliceQueues = {};
+  private continuity_counters_: Record<number, number | undefined> = {};
 
   private video_metadata_: {
     vps: H265NaluHVC1 | undefined;
@@ -159,9 +169,13 @@ class TSDemuxer {
   private video_init_segment_dispatched_ = false;
   private audio_init_segment_dispatched_ = false;
   private video_metadata_changed_ = false;
+  private video_output_started_ = false;
+  private video_discontinuity_pending_ = false;
   private loas_previous_frame: LOASAACFrame | null = null;
 
   private soft_decode_audio_codec_: "mp2" | null = null;
+  private audio_drop_until_sync_ = false;
+  private drop_video_until_keyframe_ = true;
 
   private video_track_ = {
     type: "video",
@@ -182,9 +196,13 @@ class TSDemuxer {
     this.timestamp_offset_ = value;
   }
 
-  public constructor(probe_data: TSProbeResult) {
+  public constructor(probe_data: TSProbeResult, options: TSDemuxerOptions = {}) {
     this.ts_packet_size_ = probe_data.ts_packet_size as number;
     this.sync_offset_ = probe_data.sync_offset as number;
+    if (options.waitForInitialVideoKeyframe === false) {
+      this.drop_video_until_keyframe_ = false;
+      this.video_output_started_ = true;
+    }
   }
 
   public destroy() {
@@ -201,12 +219,23 @@ class TSDemuxer {
     this.onError = null;
     this.onTrackMetadata = null;
     this.onDataAvailable = null;
+    this.onTrackDiscontinuity = null;
     this.onRawAudioData = null;
     this.soft_decode_audio_codec_ = null;
   }
 
-  public static probe(buffer: ArrayBuffer): TSProbeResult {
-    const data = new Uint8Array(buffer);
+  public resetSegmentBoundary(probe_data?: TSProbeResult): void {
+    if (probe_data) {
+      this.ts_packet_size_ = probe_data.ts_packet_size as number;
+      this.sync_offset_ = probe_data.sync_offset as number;
+    }
+    this.first_parse_ = true;
+    this.pes_slice_queues_ = {};
+    this.section_slice_queues_ = {};
+    this.continuity_counters_ = {};
+  }
+
+  public static probe(data: Uint8Array): TSProbeResult {
     let sync_offset = -1;
     let ts_packet_size = 188;
 
@@ -262,7 +291,129 @@ class TSDemuxer {
     };
   }
 
-  public parseChunks(chunk: ArrayBuffer, byte_start: number): number {
+  private isCommonPid(pid: number, keys: readonly CommonPidKey[]): boolean {
+    const commonPids = this.pmt_?.common_pids;
+    return !!commonPids && keys.some((key) => commonPids[key] === pid);
+  }
+
+  private isVideoPid(pid: number): boolean {
+    return this.isCommonPid(pid, VIDEO_PID_KEYS);
+  }
+
+  private isAudioPid(pid: number): boolean {
+    return this.isCommonPid(pid, AUDIO_PID_KEYS);
+  }
+
+  private isMediaPid(pid: number): boolean {
+    return this.isVideoPid(pid) || this.isAudioPid(pid);
+  }
+
+  private resetAudioParserState(): void {
+    this.audio_last_sample_pts_ = undefined;
+    this.aac_last_incomplete_data_ = null;
+    this.loas_previous_frame = null;
+    this.audio_drop_until_sync_ = true;
+  }
+
+  private clearAudioTrack(): void {
+    this.audio_track_.samples = [];
+    this.audio_track_.length = 0;
+  }
+
+  private clearVideoTrack(): void {
+    this.video_track_.samples = [];
+    this.video_track_.length = 0;
+  }
+
+  private clearAudioPESQueues(): void {
+    const commonPids = this.pmt_?.common_pids;
+    if (!commonPids) {
+      return;
+    }
+
+    for (const key of AUDIO_PID_KEYS) {
+      const pid = commonPids[key];
+      if (pid !== undefined) {
+        delete this.pes_slice_queues_[pid];
+      }
+    }
+  }
+
+  private shouldWaitForVideoKeyframe(): boolean {
+    return this.has_video_ && !this.video_output_started_;
+  }
+
+  private flushMediaBeforeTrackDiscontinuity(): void {
+    if (this.shouldWaitForVideoKeyframe() || !this.isInitSegmentDispatched()) {
+      return;
+    }
+    if (this.audio_track_.length || this.video_track_.length) {
+      this.onDataAvailable?.(this.audio_track_, this.video_track_, true);
+    }
+  }
+
+  private resumeVideoOutputFromKeyframe(): void {
+    const reason = this.video_discontinuity_pending_ ? "after TS discontinuity; resuming" : "at stream start; starting";
+    this.drop_video_until_keyframe_ = false;
+    this.video_output_started_ = true;
+    this.video_discontinuity_pending_ = false;
+    this.clearAudioTrack();
+    this.resetAudioParserState();
+    Log.v(this.TAG, `Video keyframe found ${reason} video output timeline`);
+  }
+
+  private handleTrackDiscontinuity(pid: number, reason: string): void {
+    delete this.pes_slice_queues_[pid];
+
+    if (this.isVideoPid(pid)) {
+      this.flushMediaBeforeTrackDiscontinuity();
+      this.clearVideoTrack();
+      this.drop_video_until_keyframe_ = true;
+      this.video_output_started_ = false;
+      this.video_discontinuity_pending_ = true;
+      this.clearAudioTrack();
+      this.clearAudioPESQueues();
+      this.resetAudioParserState();
+      Log.w(this.TAG, `Video TS discontinuity on pid ${pid}: ${reason}; dropping until keyframe`);
+      this.onTrackDiscontinuity?.("video");
+      return;
+    }
+
+    if (this.isAudioPid(pid)) {
+      this.resetAudioParserState();
+      Log.w(this.TAG, `Audio TS discontinuity on pid ${pid}: ${reason}; resetting audio parser state`);
+      this.onTrackDiscontinuity?.("audio");
+    }
+  }
+
+  private shouldProcessPayload(pid: number, continuityCounter: number, discontinuityIndicator?: number): boolean {
+    if (discontinuityIndicator === 1) {
+      this.continuity_counters_[pid] = continuityCounter;
+      this.handleTrackDiscontinuity(pid, "discontinuity indicator");
+      return true;
+    }
+
+    const lastCounter = this.continuity_counters_[pid];
+    if (lastCounter === undefined) {
+      this.continuity_counters_[pid] = continuityCounter;
+      return true;
+    }
+
+    if (continuityCounter === lastCounter) {
+      Log.w(this.TAG, `Duplicate TS packet on pid ${pid} with continuity counter ${continuityCounter}; skipping`);
+      return false;
+    }
+
+    const expected = (lastCounter + 1) & 0x0f;
+    if (continuityCounter !== expected) {
+      this.handleTrackDiscontinuity(pid, `expected continuity counter ${expected}, got ${continuityCounter}`);
+    }
+
+    this.continuity_counters_[pid] = continuityCounter;
+    return true;
+  }
+
+  public parseChunks(chunk: Uint8Array, byte_start: number): number {
     if (!this.onError || !this.onTrackMetadata || !this.onDataAvailable) {
       throw new IllegalStateException("onError & onTrackMetadata & onDataAvailable callback must be specified");
     }
@@ -282,7 +433,7 @@ class TSDemuxer {
         offset += 4;
       }
 
-      const data = new Uint8Array(chunk, offset, 188);
+      const data = chunk.subarray(offset, offset + 188);
 
       const sync_byte = data[0];
       if (sync_byte !== 0x47) {
@@ -348,15 +499,14 @@ class TSDemuxer {
           const stream_type = this.pmt_.pid_stream_type[pid];
 
           // process PES only for known common_pids
-          if (
-            pid === this.pmt_.common_pids.h264 ||
-            pid === this.pmt_.common_pids.h265 ||
-            pid === this.pmt_.common_pids.adts_aac ||
-            pid === this.pmt_.common_pids.loas_aac ||
-            pid === this.pmt_.common_pids.ac3 ||
-            pid === this.pmt_.common_pids.eac3 ||
-            pid === this.pmt_.common_pids.mp3
-          ) {
+          if (this.isMediaPid(pid)) {
+            if (!this.shouldProcessPayload(pid, continuity_conunter, adaptation_field_info.discontinuity_indicator)) {
+              offset += 188;
+              if (this.ts_packet_size_ === 204) {
+                offset += 16;
+              }
+              continue;
+            }
             this.handlePESSlice(chunk, offset + ts_payload_start_index, ts_payload_length, {
               pid,
               stream_type,
@@ -383,15 +533,15 @@ class TSDemuxer {
     return offset; // consumed bytes
   }
 
-  private handleSectionSlice(buffer: ArrayBuffer, offset: number, length: number, misc: TSSliceMisc): void {
-    const data = new Uint8Array(buffer, offset, length);
+  private handleSectionSlice(buffer: Uint8Array, offset: number, length: number, misc: TSSliceMisc): void {
+    const data = buffer.subarray(offset, offset + length);
     let slice_queue = this.section_slice_queues_[misc.pid];
 
     if (misc.payload_unit_start_indicator) {
       const pointer_field = data[0];
 
       if (slice_queue !== undefined && slice_queue.total_length !== 0) {
-        const remain_section = new Uint8Array(buffer, offset + 1, Math.min(length, pointer_field));
+        const remain_section = buffer.subarray(offset + 1, offset + 1 + Math.min(length, pointer_field));
         slice_queue.slices.push(remain_section);
         slice_queue.total_length += remain_section.byteLength;
 
@@ -417,11 +567,8 @@ class TSDemuxer {
         slice_queue.file_position = misc.file_position;
         slice_queue.random_access_indicator = misc.random_access_indicator ?? 0;
 
-        const remain_section = new Uint8Array(
-          buffer,
-          offset + i,
-          Math.min(length - i, slice_queue.expected_length - slice_queue.total_length),
-        );
+        const remain_length = Math.min(length - i, slice_queue.expected_length - slice_queue.total_length);
+        const remain_section = buffer.subarray(offset + i, offset + i + remain_length);
         slice_queue.slices.push(remain_section);
         slice_queue.total_length += remain_section.byteLength;
 
@@ -434,11 +581,8 @@ class TSDemuxer {
         i += remain_section.byteLength;
       }
     } else if (slice_queue !== undefined && slice_queue.total_length !== 0) {
-      const remain_section = new Uint8Array(
-        buffer,
-        offset,
-        Math.min(length, slice_queue.expected_length - slice_queue.total_length),
-      );
+      const remain_length = Math.min(length, slice_queue.expected_length - slice_queue.total_length);
+      const remain_section = buffer.subarray(offset, offset + remain_length);
       slice_queue.slices.push(remain_section);
       slice_queue.total_length += remain_section.byteLength;
 
@@ -450,8 +594,8 @@ class TSDemuxer {
     }
   }
 
-  private handlePESSlice(buffer: ArrayBuffer, offset: number, length: number, misc: TSSliceMisc): void {
-    const data = new Uint8Array(buffer, offset, length);
+  private handlePESSlice(buffer: Uint8Array, offset: number, length: number, misc: TSSliceMisc): void {
+    const data = buffer.subarray(offset, offset + length);
 
     const packet_start_code_prefix = (data[0] << 16) | (data[1] << 8) | data[2];
     const PES_packet_length = (data[4] << 8) | data[5];
@@ -637,7 +781,7 @@ class TSDemuxer {
         this.parseH264Payload(payload, pts, dts, pes_data.file_position, pes_data.random_access_indicator);
         break;
       case StreamType.kH265:
-        this.parseH265Payload(payload, pts, dts, pes_data.file_position);
+        this.parseH265Payload(payload, pts, dts, pes_data.file_position, pes_data.random_access_indicator);
         break;
       default:
         break;
@@ -826,15 +970,14 @@ class TSDemuxer {
   ) {
     const annexb_parser = new H264AnnexBParser(data);
     let nalu_payload: H264NaluPayload | null = null;
-    const units: { type: H264NaluType; data: Uint8Array }[] = [];
+    const units: { type: H264NaluType; data: Uint8Array; lengthPrefixed: false }[] = [];
     let length = 0;
     let keyframe = false;
 
     nalu_payload = annexb_parser.readNextNaluPayload();
     while (nalu_payload != null) {
-      const nalu_avc1 = new H264NaluAVC1(nalu_payload);
-
-      if (nalu_avc1.type === H264NaluType.kSliceSPS) {
+      if (nalu_payload.type === H264NaluType.kSliceSPS) {
+        const nalu_avc1 = new H264NaluAVC1(nalu_payload);
         // Notice: parseSPS requires Nalu without startcode or length-header
         const details = SPSParser.parseSPS(nalu_payload.data) as unknown as Record<string, unknown>;
         if (!this.video_init_segment_dispatched_) {
@@ -850,7 +993,8 @@ class TSDemuxer {
             details: details,
           };
         }
-      } else if (nalu_avc1.type === H264NaluType.kSlicePPS) {
+      } else if (nalu_payload.type === H264NaluType.kSlicePPS) {
+        const nalu_avc1 = new H264NaluAVC1(nalu_payload);
         if (!this.video_init_segment_dispatched_ || this.video_metadata_changed_) {
           this.video_metadata_.pps = nalu_avc1;
           if (this.video_metadata_.sps && this.video_metadata_.pps) {
@@ -862,17 +1006,17 @@ class TSDemuxer {
             this.dispatchVideoInitSegment();
           }
         }
-      } else if (nalu_avc1.type === H264NaluType.kSliceIDR) {
+      } else if (nalu_payload.type === H264NaluType.kSliceIDR) {
         keyframe = true;
-      } else if (nalu_avc1.type === H264NaluType.kSliceNonIDR && random_access_indicator === 1) {
+      } else if (nalu_payload.type === H264NaluType.kSliceNonIDR && random_access_indicator === 1) {
         // For open-gop stream, use random_access_indicator to identify keyframe
         keyframe = true;
       }
 
       // Push samples to remuxer only if initialization metadata has been dispatched
       if (this.video_init_segment_dispatched_) {
-        units.push(nalu_avc1);
-        length += nalu_avc1.data.byteLength;
+        units.push({ type: nalu_payload.type, data: nalu_payload.data, lengthPrefixed: false });
+        length += 4 + nalu_payload.data.byteLength;
       }
 
       nalu_payload = annexb_parser.readNextNaluPayload();
@@ -883,6 +1027,13 @@ class TSDemuxer {
     }
     const pts_ms = Math.floor(pts / this.timescale_);
     const dts_ms = Math.floor(dts / this.timescale_);
+
+    if (this.drop_video_until_keyframe_ || !this.video_output_started_) {
+      if (!keyframe || units.length === 0) {
+        return;
+      }
+      this.resumeVideoOutputFromKeyframe();
+    }
 
     if (units.length) {
       const track = this.video_track_;
@@ -900,7 +1051,13 @@ class TSDemuxer {
     }
   }
 
-  private parseH265Payload(data: Uint8Array, pts: number | undefined, dts: number | undefined, file_position: number) {
+  private parseH265Payload(
+    data: Uint8Array,
+    pts: number | undefined,
+    dts: number | undefined,
+    file_position: number,
+    random_access_indicator?: number,
+  ) {
     const annexb_parser = new H265AnnexBParser(data);
     let nalu_payload: H265NaluPayload | null = null;
     const units: { type: H265NaluType; data: Uint8Array }[] = [];
@@ -962,6 +1119,8 @@ class TSDemuxer {
         nalu_hvc1.type === H265NaluType.kSliceCRA_NUT
       ) {
         keyframe = true;
+      } else if (random_access_indicator === 1) {
+        keyframe = true;
       }
 
       // Push samples to remuxer only if initialization metadata has been dispatched
@@ -978,6 +1137,13 @@ class TSDemuxer {
     }
     const pts_ms = Math.floor(pts / this.timescale_);
     const dts_ms = Math.floor(dts / this.timescale_);
+
+    if (this.drop_video_until_keyframe_ || !this.video_output_started_) {
+      if (!keyframe || units.length === 0) {
+        return;
+      }
+      this.resumeVideoOutputFromKeyframe();
+    }
 
     if (units.length) {
       const track = this.video_track_;
@@ -1114,6 +1280,9 @@ class TSDemuxer {
   }
 
   private dispatchVideoMediaSegment() {
+    if (this.shouldWaitForVideoKeyframe()) {
+      return;
+    }
     if (this.isInitSegmentDispatched()) {
       if (this.video_track_.length) {
         this.onDataAvailable?.(null, this.video_track_);
@@ -1122,6 +1291,9 @@ class TSDemuxer {
   }
 
   private dispatchAudioMediaSegment() {
+    if (this.shouldWaitForVideoKeyframe()) {
+      return;
+    }
     if (this.isInitSegmentDispatched()) {
       if (this.audio_track_.length) {
         this.onDataAvailable?.(this.audio_track_, null);
@@ -1130,6 +1302,9 @@ class TSDemuxer {
   }
 
   private dispatchAudioVideoMediaSegment() {
+    if (this.shouldWaitForVideoKeyframe()) {
+      return;
+    }
     if (this.isInitSegmentDispatched()) {
       if (this.audio_track_.length || this.video_track_.length) {
         this.onDataAvailable?.(this.audio_track_, this.video_track_);
@@ -1141,6 +1316,9 @@ class TSDemuxer {
     if (this.has_video_ && !this.video_init_segment_dispatched_) {
       // If first video IDR frame hasn't been detected,
       // Wait for first IDR frame and video init segment being dispatched
+      return;
+    }
+    if (this.shouldWaitForVideoKeyframe()) {
       return;
     }
 
@@ -1183,6 +1361,9 @@ class TSDemuxer {
     let last_sample_pts_ms: number | undefined;
 
     aac_frame = adts_parser.readNextAACFrame();
+    if (aac_frame != null) {
+      this.audio_drop_until_sync_ = false;
+    }
     while (aac_frame != null) {
       ref_sample_duration = (1024 / aac_frame.sampling_frequency) * 1000;
       const audio_sample = {
@@ -1238,6 +1419,9 @@ class TSDemuxer {
       // Wait for first IDR frame and video init segment being dispatched
       return;
     }
+    if (this.shouldWaitForVideoKeyframe()) {
+      return;
+    }
 
     if (this.aac_last_incomplete_data_) {
       const buf = new Uint8Array(data.byteLength + this.aac_last_incomplete_data_.byteLength);
@@ -1278,6 +1462,9 @@ class TSDemuxer {
     let last_sample_pts_ms: number | undefined;
 
     aac_frame = loas_parser.readNextAACFrame(this.loas_previous_frame ?? undefined);
+    if (aac_frame != null) {
+      this.audio_drop_until_sync_ = false;
+    }
     while (aac_frame != null) {
       this.loas_previous_frame = aac_frame;
       ref_sample_duration = (1024 / aac_frame.sampling_frequency) * 1000;
@@ -1334,6 +1521,9 @@ class TSDemuxer {
       // Wait for first IDR frame and video init segment being dispatched
       return;
     }
+    if (this.shouldWaitForVideoKeyframe()) {
+      return;
+    }
 
     let ref_sample_duration: number;
     let base_pts_ms!: number;
@@ -1358,6 +1548,9 @@ class TSDemuxer {
     let last_sample_pts_ms: number | undefined;
 
     ac3_frame = adts_parser.readNextAC3Frame();
+    if (ac3_frame != null) {
+      this.audio_drop_until_sync_ = false;
+    }
     while (ac3_frame != null) {
       ref_sample_duration = (1536 / ac3_frame.sampling_frequency) * 1000;
       const audio_sample = {
@@ -1410,6 +1603,9 @@ class TSDemuxer {
       // Wait for first IDR frame and video init segment being dispatched
       return;
     }
+    if (this.shouldWaitForVideoKeyframe()) {
+      return;
+    }
 
     let ref_sample_duration: number;
     let base_pts_ms!: number;
@@ -1434,6 +1630,9 @@ class TSDemuxer {
     let last_sample_pts_ms: number | undefined;
 
     eac3_frame = adts_parser.readNextEAC3Frame();
+    if (eac3_frame != null) {
+      this.audio_drop_until_sync_ = false;
+    }
     while (eac3_frame != null) {
       ref_sample_duration = (1536 / eac3_frame.sampling_frequency) * 1000;
       const audio_sample = {
@@ -1486,6 +1685,9 @@ class TSDemuxer {
       // Wait for first IDR frame and video init segment being dispatched
       return;
     }
+    if (this.shouldWaitForVideoKeyframe()) {
+      return;
+    }
 
     const _mpegAudioV10SampleRateTable = [44100, 48000, 32000, 0];
     const _mpegAudioV20SampleRateTable = [22050, 24000, 16000, 0];
@@ -1530,6 +1732,12 @@ class TSDemuxer {
     // A payload may start mid-frame (frame straddling a PES boundary); header
     // fields parsed from such payloads are garbage and must not drive metadata.
     const sync_at_start = data.length >= 4 && data[0] === 0xff && (data[1] & 0xe0) === 0xe0;
+    if (this.audio_drop_until_sync_) {
+      if (!sync_at_start) {
+        return;
+      }
+      this.audio_drop_until_sync_ = false;
+    }
     if (this.onRawAudioData && !soft_decode_active && !sync_at_start) {
       // Can't classify a payload that starts mid-frame; wait for an aligned one
       return;
