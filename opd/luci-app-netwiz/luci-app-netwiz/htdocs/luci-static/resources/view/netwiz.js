@@ -3281,10 +3281,21 @@ return view.extend({
                 Promise.all([ safePromise(uci.load('network'), null), safePromise(uci.load('dhcp'), null), safePromise(uci.load('wireless'), null), safePromise(getWanStatus(), {}), safePromise(callNetCheckWifi(), {}) ]).then(function(results) {
                     var wifiRes = results[4] || {};
                     var rawIfaces = results[3] || {};
-                    var ifaces = Array.isArray(rawIfaces.interface) ? rawIfaces.interface : (Array.isArray(rawIfaces) ? rawIfaces : []);
+                    var currentIfaces = Array.isArray(rawIfaces.interface) ? rawIfaces.interface : (Array.isArray(rawIfaces) ? rawIfaces : []);
 
                     // ==========================================
-                    // 1. 从 UCI 配置抓取真实状态
+                    // 1. 拦截浏览器切后台导致的空数据
+                    // ==========================================
+                    if (currentIfaces.length > 0) {
+                        // 只要当前抓到了网卡数据，就深拷贝存入永久快照
+                        window._antiSleepIfaces = JSON.parse(JSON.stringify(currentIfaces));
+                    }
+                    // 只要当前是空数据，用快照顶替整个数组
+                    var ifaces = (currentIfaces.length === 0 && window._antiSleepIfaces) ? window._antiSleepIfaces : currentIfaces;
+                    if (!Array.isArray(ifaces)) ifaces = [];
+
+                    // ==========================================
+                    // 2. 从 UCI 配置抓取真实状态
                     // ==========================================
                     var realWanName = 'wan';
                     var wProto = safeUciGet('network', 'wan', 'proto', '').toLowerCase();
@@ -3304,7 +3315,7 @@ return view.extend({
                     var isWanMode = (wProto === 'dhcp' || wProto === 'pppoe' || wProto === 'static');
 
                     // ==========================================
-                    // 2. 网卡并塞入全局数组
+                    // 3. 捏造完美网卡并强行塞入全局数组
                     // ==========================================
                     var activeWan = ifaces.find(function(i) { return i && i.interface === realWanName; });
                     
@@ -3316,25 +3327,25 @@ return view.extend({
                             available: true, 
                             route: [] 
                         };
-                        // 防止浏览器休眠唤醒时外层脚本遍历不到网卡
+                        // 外层 UI 遍历不到而报警
                         ifaces.push(activeWan); 
                     }
 
                     // ==========================================
-                    // 3. 霸道防跳锁 + 彻底封杀网线未连接
+                    // 4. 防跳锁 + 彻底封杀所有网线未连接警告
                     // ==========================================
                     if (isWanMode) {
                         activeWan.up = true; 
                         activeWan.available = true; 
-                    }
 
-                    // 数组里还有其他叫 wan 的影子网卡
-                    ifaces.forEach(function(i) {
-                        if (isWanMode && i && (i.interface === 'wan' || i.interface === realWanName)) {
-                            i.up = true;
-                            i.available = true;
-                        }
-                    });
+                        // 检查物理网卡 (eth0, eth1) 状态
+                        ifaces.forEach(function(i) {
+                            if (i && i.interface !== 'lan' && i.interface !== 'loopback') {
+                                i.up = true;
+                                i.available = true;
+                            }
+                        });
+                    }
 
                     var phyWan = activeWan; 
                     var virWwan = ifaces.find(function(i) { return i && i.interface === 'wwan'; }) || {};
@@ -3355,7 +3366,7 @@ return view.extend({
                     }
 
                     // ==========================================
-                    // 4. 识别协议名称
+                    // 5. 强制识别协议名称
                     // ==========================================
                     var protoName = '';
                     if (wProto === 'pppoe') protoName = 'PPPoE 拨号';
@@ -3364,7 +3375,7 @@ return view.extend({
                     else protoName = '自动获取 (DHCP)';
 
                     // ==========================================
-                    // 5. 提取主力 IP
+                    // 6. 提取主力 IP
                     // ==========================================
                     var liveWanIp = '';
                     if (activeWan['ipv4-address'] && activeWan['ipv4-address'].length > 0) {
@@ -3381,7 +3392,7 @@ return view.extend({
                     }
 
                     // ==========================================
-                    // 6. 纯净渲染
+                    // 7. 纯净渲染
                     // ==========================================
                     if (liveWanIp) {
                         window._liveWanIp = liveWanIp + '  (' + protoName + ')';
