@@ -481,8 +481,39 @@ case "$1" in
                 exit 0
                 ;;
 
+
+            # 检测网络连通性
             check_internet)
-                if ping -c 1 -W 2 223.5.5.5 >/dev/null 2>&1 || ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then echo '{"status":"ok"}'; else echo '{"status":"fail"}'; fi
+                # ==========================================
+                # 惰性垃圾回收 (/tmp/ 升级文件)
+                # ==========================================
+                if [ -f /tmp/netwiz_update.version ]; then
+                    if ! pidof wget >/dev/null 2>&1 && ! pidof apk >/dev/null 2>&1 && ! pidof opkg >/dev/null 2>&1; then
+                        TARGET_VER=$(cat /tmp/netwiz_update.version | sed 's/[vV]//g' | tr -d '\r\n ')
+                        
+                        LOCAL_VERS=""
+                        for f in $(find /www/luci-static/ -name "netwiz.js" 2>/dev/null); do
+                            # 锁定 "APP_VERSION + 任意符号 + 数字" 的结构，无视逗号、大括号或换行
+                            RAW_EXTRACT=$(grep -oE "APP_VERSION[^a-zA-Z0-9]+[vV]?[0-9]+\.[0-9]+\.[0-9]+" "$f" 2>/dev/null)
+                            
+                            # 纯净提炼数字
+                            v=$(echo "$RAW_EXTRACT" | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+                            LOCAL_VERS="$LOCAL_VERS $v"
+                        done
+                        
+                        if [ -n "$LOCAL_VERS" ] && [ -n "$TARGET_VER" ] && echo "$LOCAL_VERS" | grep -q "$TARGET_VER"; then
+                            rm -f /tmp/apk_luci-* /tmp/ipk_luci-* /tmp/netwiz_update.* /tmp/nw_dl.sh /tmp/nw_install.sh /tmp/netwiz_install.log 2>/dev/null
+                        fi
+                    fi
+                fi
+                # ==========================================
+
+                # 检测网络连通性，原生 ping 逻辑
+                if ping -c 1 -W 2 223.5.5.5 >/dev/null 2>&1 || ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then 
+                    echo '{"status":"ok"}'
+                else 
+                    echo '{"status":"fail"}'
+                fi
                 exit 0
                 ;;
             get_client_mac)
@@ -828,55 +859,55 @@ case "$1" in
                 fi
                 ;;
 
-               # 获取向导状态与智能探针
-                get_wizard_status)
-                    configured=$(uci -q get netwiz.global.configured)
-                    [ -z "$configured" ] && configured=0
-                    
-                    wizard_enable=$(uci -q get netwiz.main.wizard_enable)
-                    [ -z "$wizard_enable" ] && wizard_enable=1
+            # 获取向导状态与智能探针
+            get_wizard_status)
+                configured=$(uci -q get netwiz.global.configured)
+                [ -z "$configured" ] && configured=0
+                
+                wizard_enable=$(uci -q get netwiz.main.wizard_enable)
+                [ -z "$wizard_enable" ] && wizard_enable=1
 
-                    is_pppoe=0
-                    wan_proto=$(uci -q get network.wan.proto)
-                    wan_user=$(uci -q get network.wan.username)
-                    if [ "$wan_proto" = "pppoe" ] && [ -n "$wan_user" ]; then
-                        is_pppoe=1
-                    fi
+                is_pppoe=0
+                wan_proto=$(uci -q get network.wan.proto)
+                wan_user=$(uci -q get network.wan.username)
+                if [ "$wan_proto" = "pppoe" ] && [ -n "$wan_user" ]; then
+                    is_pppoe=1
+                fi
 
-                    echo "{\"configured\": $configured, \"wizard_enable\": $wizard_enable, \"is_pppoe\": $is_pppoe}"
-                    exit 0
-                    ;;
+                echo "{\"configured\": $configured, \"wizard_enable\": $wizard_enable, \"is_pppoe\": $is_pppoe}"
+                exit 0
+                ;;
 
-                # 状态锁控
-                set_wizard_status)
-                    input=$(cat)
-                    mode=$(echo "$input" | jsonfilter -e '@.mode')
-                    
-                    # 防呆
-                    # 检查并创建节点，防止因为配置文件缺失导致的 uci set 静默失效
-                    [ ! -f /etc/config/netwiz ] && touch /etc/config/netwiz
-                    uci -q get netwiz.global >/dev/null 2>&1 || uci set netwiz.global=global
-                    uci -q get netwiz.main >/dev/null 2>&1 || uci set netwiz.main=main
+            # 状态锁控
+            set_wizard_status)
+                input=$(cat)
+                mode=$(echo "$input" | jsonfilter -e '@.mode')
+                
+                # 防呆
+                # 检查并创建节点，防止因为配置文件缺失导致的 uci set 静默失效
+                [ ! -f /etc/config/netwiz ] && touch /etc/config/netwiz
+                uci -q get netwiz.global >/dev/null 2>&1 || uci set netwiz.global=global
+                uci -q get netwiz.main >/dev/null 2>&1 || uci set netwiz.main=main
 
-                    if [ "$mode" = "skip" ]; then
-                        # 普通跳过
-                        uci set netwiz.global.configured='1'
-                    elif [ "$mode" = "restore" ]; then
-                        # 手动恢复弹窗
-                        uci set netwiz.global.configured='1'
-                        uci set netwiz.main.wizard_enable='1'
-                    elif [ "$mode" = "done" ]; then
-                        # 彻底完成/不再提示
-                        uci set netwiz.global.configured='1'
-                        uci set netwiz.main.wizard_enable='0'
-                    fi
-                    
-                    uci commit netwiz
-                    sync  # 刷入物理闪存，防止丢失
-                    
-                    echo '{"result": 0}'
-                    exit 0
-                    ;;
+                if [ "$mode" = "skip" ]; then
+                    # 普通跳过
+                    uci set netwiz.global.configured='1'
+                elif [ "$mode" = "restore" ]; then
+                    # 手动恢复弹窗
+                    uci set netwiz.global.configured='1'
+                    uci set netwiz.main.wizard_enable='1'
+                elif [ "$mode" = "done" ]; then
+                    # 彻底完成/不再提示
+                    uci set netwiz.global.configured='1'
+                    uci set netwiz.main.wizard_enable='0'
+                fi
+                
+                uci commit netwiz
+                sync  # 刷入物理闪存，防止丢失
+                
+                echo '{"result": 0}'
+                exit 0
+                ;;
 
             set_network)
                     input=$(cat)
@@ -984,16 +1015,8 @@ EOF
                         echo '{"result":0}'
                         cat << 'EOF' > /tmp/nw_install.sh
 #!/bin/sh
+# 稍微等一秒，让前端接口有时间返回 {"result":0}，避免网络连接被强制掐断
 sleep 1
-
-# cron 定时删除 (1分钟后执行)
-touch /etc/crontabs/root
-grep -v "netwiz_ota_gc" /etc/crontabs/root > /tmp/cron_gc.tmp || true
-echo "* * * * * sleep 20; rm -f /tmp/apk_luci-* /tmp/ipk_luci-* /tmp/netwiz_update.* /tmp/nw_dl.sh /tmp/nw_install.sh /tmp/netwiz_install.log 2>/dev/null; sed -i '/netwiz_ota_gc/d' /etc/crontabs/root; /etc/init.d/cron restart #netwiz_ota_gc" >> /tmp/cron_gc.tmp
-mv /tmp/cron_gc.tmp /etc/crontabs/root
-/etc/init.d/cron restart
-
-sleep 2
 
 if command -v apk >/dev/null 2>&1; then
     PREFIX="apk_"
@@ -1011,6 +1034,7 @@ INSTALL_LIST="$F_MAIN"
 [ -f "$F_CN" ] && INSTALL_LIST="$INSTALL_LIST $F_CN"
 [ -f "$F_TW" ] && INSTALL_LIST="$INSTALL_LIST $F_TW"
 
+# 执行安装
 if [ "$EXT" = ".apk" ]; then
     apk add --allow-untrusted --force-overwrite --force-reinstall $INSTALL_LIST > /tmp/netwiz_install.log 2>&1
     INSTALL_STATUS=$?
@@ -1019,6 +1043,7 @@ else
     INSTALL_STATUS=$?
 fi
 
+# 安装成功后，清理 luci 缓存并热重载
 if [ "$INSTALL_STATUS" -eq 0 ]; then
     rm -rf /tmp/luci-modulecache/ /tmp/luci-indexcache* /tmp/luci-app-netwiz.*
     ubus call luci reload >/dev/null 2>&1
