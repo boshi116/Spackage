@@ -24,6 +24,13 @@ export interface PlayerConfig {
   headers: Record<string, string> | undefined;
   /** Frontend log level: 0=FATAL, 1=ERROR, 2=WARN, 3=INFO, 4=DEBUG/VERBOSE. */
   logLevel: number | undefined;
+
+  /** Overlay canvas the player draws WebGL-rendered frames onto. Omit to disable WebGL video rendering.
+   *  The player never touches the canvas' style/visibility — drive that from the
+   *  `render-active-change` event. */
+  renderCanvas: HTMLCanvasElement | undefined;
+  /** Automatic bwdif deinterlacing enabled for detected interlaced content. @default true */
+  autoDeinterlace: boolean;
 }
 
 export const defaultConfig: PlayerConfig = {
@@ -40,6 +47,9 @@ export const defaultConfig: PlayerConfig = {
   referrerPolicy: undefined,
   headers: undefined,
   logLevel: undefined,
+
+  renderCanvas: undefined,
+  autoDeinterlace: true,
 };
 
 export function createDefaultConfig(): PlayerConfig {

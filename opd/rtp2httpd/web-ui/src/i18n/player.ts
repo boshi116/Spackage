@@ -36,6 +36,7 @@ const base: TranslationDict = {
   playbackError: "Playback Error",
   clickToPlay: "Click to Play",
   autoplayBlocked: "Browser requires user interaction to start playback",
+  playingInPictureInPicture: "Video is playing in Picture-in-Picture",
 
   // Errors
   failedToLoadPlaylist: "Failed to load playlist",
@@ -78,7 +79,6 @@ const base: TranslationDict = {
   fullscreen: "Fullscreen",
   exitFullscreen: "Exit Fullscreen",
   pictureInPicture: "Picture in Picture",
-  exitPictureInPicture: "Exit Picture in Picture",
 
   // Relative dates
   today: "Today",
@@ -98,6 +98,7 @@ const base: TranslationDict = {
   themeLight: "Light",
   themeDark: "Dark",
   seamlessSwitch: "Seamless switch",
+  deinterlace: "Auto Deinterlacing",
 };
 
 const zhHans: TranslationDict = {
@@ -134,6 +135,7 @@ const zhHans: TranslationDict = {
   playbackError: "播放错误",
   clickToPlay: "点击播放",
   autoplayBlocked: "浏览器需要用户交互才能开始播放",
+  playingInPictureInPicture: "视频正在画中画模式下播放",
 
   // 错误信息
   failedToLoadPlaylist: "加载播放列表失败",
@@ -176,7 +178,6 @@ const zhHans: TranslationDict = {
   fullscreen: "全屏",
   exitFullscreen: "退出全屏",
   pictureInPicture: "画中画",
-  exitPictureInPicture: "退出画中画",
 
   // 相对日期
   today: "今天",
@@ -196,6 +197,7 @@ const zhHans: TranslationDict = {
   themeLight: "浅色",
   themeDark: "深色",
   seamlessSwitch: "无缝换台",
+  deinterlace: "自动反交错",
 };
 
 // 繁體中文（偏好香港用語）
@@ -233,6 +235,7 @@ const zhHant: TranslationDict = {
   playbackError: "播放錯誤",
   clickToPlay: "點擊播放",
   autoplayBlocked: "瀏覽器需要用戶互動才能開始播放",
+  playingInPictureInPicture: "影片正在畫中畫模式下播放",
 
   // 錯誤訊息
   failedToLoadPlaylist: "載入播放列表失敗",
@@ -275,7 +278,6 @@ const zhHant: TranslationDict = {
   fullscreen: "全屏",
   exitFullscreen: "退出全屏",
   pictureInPicture: "畫中畫",
-  exitPictureInPicture: "退出畫中畫",
 
   // 相對日期
   today: "今天",
@@ -295,6 +297,7 @@ const zhHant: TranslationDict = {
   themeLight: "淺色",
   themeDark: "深色",
   seamlessSwitch: "無縫換台",
+  deinterlace: "自動反交錯",
 };
 
 export const translations: Record<Locale, TranslationDict> = {
