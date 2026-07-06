@@ -1,5 +1,4 @@
 import "./filters/bwdif";
-import "./filters/passthrough";
 import Log from "../utils/logger";
 import { type DetectorVerdict, InterlaceDetector, isRenderResolutionEligible } from "./interlace-detector";
 import { type FieldOrder, type RenderStageName, VideoRenderer } from "./renderer";
@@ -8,6 +7,7 @@ const TAG = "VideoRenderPipeline";
 
 export interface VideoRenderPipeline {
   setAutoDeinterlaceEnabled(enabled: boolean): void;
+  setPictureEnhancementEnabled(enabled: boolean): void;
   /** Forget the detection verdict; call on channel/source switch. */
   reset(): void;
   /** True while the WebGL canvas is the visible video output. */
@@ -28,10 +28,12 @@ const SAMPLE_INTERVAL_MS = 500;
  * Wires the GPU interlace detector to the WebGL renderer for one video/canvas pair.
  *
  * The renderer runs only while the decoded frame size is inside the SD/HD render
- * gate. Eligible progressive frames are rendered through the passthrough stage;
- * eligible interlaced frames can switch to bwdif when auto deinterlacing is on.
- * Larger frames, WebGL failures, or missing rVFC support fall back to the raw
- * video element by reporting active = false.
+ * gate AND at least one of auto deinterlacing / picture enhancement is enabled —
+ * with both off the pipeline would only reproduce the raw video, so it is skipped
+ * like an ineligible resolution. Eligible interlaced frames switch to bwdif when
+ * auto deinterlacing is on; otherwise the source frame is presented directly.
+ * Larger frames, both features disabled, WebGL failures, or missing rVFC support
+ * all fall back to the raw video element by reporting active = false.
  */
 export function createVideoRenderPipeline(
   video: HTMLVideoElement,
@@ -42,6 +44,7 @@ export function createVideoRenderPipeline(
     Log.i(TAG, "requestVideoFrameCallback unavailable; WebGL video rendering disabled");
     return {
       setAutoDeinterlaceEnabled() {},
+      setPictureEnhancementEnabled() {},
       reset() {},
       get active() {
         return false;
@@ -51,6 +54,7 @@ export function createVideoRenderPipeline(
   }
 
   let autoDeinterlaceEnabled = true;
+  let pictureEnhancementEnabled = true;
   let active = false;
   let destroyed = false;
   let renderRunning = false;
@@ -113,6 +117,7 @@ export function createVideoRenderPipeline(
       apply();
     },
   );
+  renderer.setPictureEnhancementEnabled(pictureEnhancementEnabled);
 
   renderer.onFrame = (gl) => {
     if (destroyed || !autoDeinterlaceEnabled || !detectorReady) return false;
@@ -233,7 +238,10 @@ export function createVideoRenderPipeline(
       lastEligibility = eligible;
     }
 
-    if (!eligible) {
+    // With both features off the pipeline would only reproduce the raw video, so treat
+    // that case like an ineligible resolution and fall back to the raw <video> element.
+    const pipelineUseful = autoDeinterlaceEnabled || pictureEnhancementEnabled;
+    if (!eligible || !pipelineUseful) {
       stopRenderChain();
       return;
     }
@@ -260,6 +268,12 @@ export function createVideoRenderPipeline(
     setAutoDeinterlaceEnabled(next: boolean) {
       if (autoDeinterlaceEnabled === next) return;
       autoDeinterlaceEnabled = next;
+      apply();
+    },
+    setPictureEnhancementEnabled(next: boolean) {
+      if (pictureEnhancementEnabled === next) return;
+      pictureEnhancementEnabled = next;
+      renderer.setPictureEnhancementEnabled(next);
       apply();
     },
     reset() {

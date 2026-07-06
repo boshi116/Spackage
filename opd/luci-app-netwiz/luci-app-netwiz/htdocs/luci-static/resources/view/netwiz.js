@@ -521,7 +521,7 @@ var T = {
                 _('If the network is accessible, it must return the plain text') + ' <code style="background:#e2e8f0; padding:2px 4px; color:#ef4444; border-radius:3px;">OK</code>.<br><br>' +
                 '✍️ <b>' + _('Examples:') + '</b><br>' +
                 '<code style="background:#e2e8f0; padding:2px 6px; border-radius:4px; color:#0f172a; margin-top:2px; margin-bottom:4px; display:inline-block; word-break:break-all;">netwiz-probe.xxxx.workers.dev</code> ' + '<br>' +
-                '<code style="background:#e2e8f0; padding:2px 6px; border-radius:4px; color:#0f172a; margin-bottom:8px; display:inline-block; word-break:break-all;">http://your-vps-ip:8080</code> ' + _('(VPS_IPv6)') + '<br>' +
+                '<code style="background:#e2e8f0; padding:2px 6px; border-radius:4px; color:#0f172a; margin-bottom:8px; display:inline-block; word-break:break-all;">http://your-vps-ip:18080</code> ' + _('<a href="https://raw.githubusercontent.com/huchd0/luci-app-netwiz/refs/heads/master/probe.py" target="_blank" style="color:#0284c7; text-decoration:underline; font-weight: bold;">' + _('(VPS_IPv6)')  + '</a>') + '<br>' +
                 '🔗 <a href="https://raw.githubusercontent.com/huchd0/luci-app-netwiz/refs/heads/master/worker.js" target="_blank" style="color:#0284c7; text-decoration:underline; font-weight: bold;">' + _('Click to view Cloudflare tutorial & source code') + '</a>' +
                 '</div>',
     'MSG_WOG_LINKAGE': _('To ensure the probe works correctly, the following dependent features have been automatically enabled:'),
@@ -1270,9 +1270,9 @@ return view.extend({
         // ====================================================================
         var defaultAdvLayout = [
             { id: 'link-cron-reboot',   icon: '⏱️', name: (T['LBL_CRON_REBOOT_LINK'] || '⏱️ Scheduled Reboot').replace('⏱️ ', ''), show: true },
-            { id: 'link-mac-clone',     icon: '🔗', name: (T['LBL_MAC_CLONE_LINK'] || '🔗 MAC Clone').replace('🔗 ', ''), show: true },
             { id: 'link-modify-hosts',  icon: '✏️', name: (T['LBL_HOSTS_LINK'] || '✏️ Custom Hosts').replace('✏️ ', ''), show: true },
-            { id: 'link-repair-plugin', icon: '🚑', name: (T['LBL_REPAIR_BTN'] || '🚑 Plugin Repair').replace('🚑 ', ''), show: true },
+            { id: 'link-mac-clone',     icon: '🔗', name: (T['LBL_MAC_CLONE_LINK'] || '🔗 MAC Clone').replace('🔗 ', ''), show: false },
+            { id: 'link-repair-plugin', icon: '🚑', name: (T['LBL_REPAIR_BTN'] || '🚑 Plugin Repair').replace('🚑 ', ''), show: false },
             { id: 'link-offline-safe',  icon: '📦', name: (T['ADV_SAFE_BTN'] || '📦 Plugin Installation').replace('📦 ', ''), show: false },
             { id: 'link-ipv6-watchdog', icon: '📡', name: (T['LBL_WATCHDOG_LINK'] || '📡 IPv6 Watchdog').replace('📡 ', ''), show: false }
         ];
@@ -1407,8 +1407,7 @@ return view.extend({
                             list.insertBefore(draggingEl, next ? target.nextSibling : target);
                         }
                     });
-                    window.location.reload(true); // 强制忽略浏览器缓存刷新当前页面
-                }, 3000);
+                }, 300);
             });
         }
 
