@@ -1,6 +1,59 @@
-# ==============================================================
-# 📡 IPv6 Watchdog - (VPS Edition) | 📡 IPv6 深度保活 - (VPS 版)
-# ==============================================================
+# Copyright (C) 2026 huchd0 <https://github.com/huchd0/luci-app-netwiz>
+# Licensed under the GNU General Public License v3.0
+
+# ==================================================
+# English | IPv6 Watchdog - (VPS Edition)
+# ==================================================
+# [Environment Requirements]
+# 1. Ultra-lightweight: Uses built-in Python 3 on Linux (heavyweight environments like Node.js, Docker, or Nginx can also be used).
+# 2. The VPS must have IPv6 network outbound capability.
+#
+# [Native Daemon]
+# Uses systemd for process management, enabling auto-start on boot and sub-second self-healing on crashes.
+#
+# [Ultra-lightweight Deployment Steps]
+# 1. Save the file:
+#    Copy all the code inside the `probe.py` file in this project and save it to your VPS at /root/probe.py
+#
+# 2. Create the daemon service:
+#    Execute the command in the terminal: nano /etc/systemd/system/netwiz-probe.service
+#    Paste the content inside the dashed lines below and save (Ctrl+O, Enter, Ctrl+X):
+#    ----------------------------------
+#    [Unit]
+#    Description=Netwiz IPv6 Probe Service
+#    After=network.target
+#
+#    [Service]
+#    Type=simple
+#    User=root
+#    ExecStart=/usr/bin/python3 /root/probe.py
+#    Restart=always
+#    RestartSec=3
+#
+#    [Install]
+#    WantedBy=multi-user.target
+#    ----------------------------------
+#
+# 3. Activate and start the probe (execute sequentially):
+#    systemctl daemon-reload
+#    systemctl enable netwiz-probe
+#    systemctl start netwiz-probe
+#
+# 4. Plugin Configuration:
+#    In the <📡 IPv6 Watchdog> section of the Netwiz Advanced Utility Settings, enter: http://YOUR_VPS_IP:18080
+#    (Note: Port 18080 can be freely modified in the basic configuration below: LISTEN_PORT = 18080.
+#    Please ensure the VPS firewall and cloud provider security group have allowed port 18080)
+#
+# [Common Management Commands]
+# Check status:  systemctl status netwiz-probe
+# Stop probe:    systemctl stop netwiz-probe
+# Restart probe: systemctl restart netwiz-probe
+# Real-time log: journalctl -u netwiz-probe -f
+#
+#
+# ==================================================
+# 简体中文 | IPv6 深度保活 - (VPS 版)
+# ==================================================
 # 【环境要求】
 # 1. 极致轻量：使用 Linux 自带的 Python 3（当然也可以使用 Node.js、Docker 或 Nginx 等庞大环境）。
 # 2. VPS 必须具备 IPv6 网络出口能力。
@@ -38,14 +91,64 @@
 #
 # 4. 插件填写：
 #    在 Netwiz 高级实用设置的 <📡 IPv6 深度保活> 设置中，填写：http://您的VPS_IP:18080
-#    (注：请确保 VPS 防火墙与云服务商安全组已放行 18080 端口)
+#    (注：18080 端口可以在下方的基础配置：LISTEN_PORT = 18080 随意修改，请确保 VPS 防火墙与云服务商安全组已放行 18080 端口)
 #
 # 【常用管理命令】
 # 查看状态: systemctl status netwiz-probe
 # 停止探针: systemctl stop netwiz-probe
 # 重启探针: systemctl restart netwiz-probe
 # 实时日志: journalctl -u netwiz-probe -f
-# ============================ 结束 ============================
+#
+#
+# ==================================================
+# 繁體中文 | IPv6 深度保活 - (VPS 版)
+# ==================================================
+# 【環境要求】
+# 1. 極致輕量：使用 Linux 內建的 Python 3（當然也可以使用 Node.js、Docker 或 Nginx 等龐大環境）。
+# 2. VPS 必須具備 IPv6 網路出口能力。
+#
+# 【原生守護】
+# 採用 systemd 進程守護，開機自啟、崩潰秒級自癒。
+#
+# 【極致輕量部署步驟】
+# 1. 保存文件：
+#    複製本項目中的 `probe.py` 裡的全部代碼，保存到 VPS 的 /root/probe.py
+#
+# 2. 創建守護服務：
+#    在終端執行命令: nano /etc/systemd/system/netwiz-probe.service
+#    將下方虛線內的內容貼入並保存 (Ctrl+O, Enter, Ctrl+X)：
+#    ----------------------------------
+#    [Unit]
+#    Description=Netwiz IPv6 Probe Service
+#    After=network.target
+#
+#    [Service]
+#    Type=simple
+#    User=root
+#    ExecStart=/usr/bin/python3 /root/probe.py
+#    Restart=always
+#    RestartSec=3
+#
+#    [Install]
+#    WantedBy=multi-user.target
+#    ----------------------------------
+#
+# 3. 激活並啟動探針（依次執行）：
+#    systemctl daemon-reload
+#    systemctl enable netwiz-probe
+#    systemctl start netwiz-probe
+#
+# 4. 外掛填寫：
+#    在 Netwiz 高級實用設置的 <📡 IPv6 深度保活> 設置中，填寫：http://您的VPS_IP:18080
+#    (註：18080 端口可以在下方的基礎配置：LISTEN_PORT = 18080 隨意修改，請確保 VPS 防火牆與雲端服務商安全組已放行 18080 端口)
+#
+# 【常用管理命令】
+# 查看狀態: systemctl status netwiz-probe
+# 停止探針: systemctl stop netwiz-probe
+# 重啟探針: systemctl restart netwiz-probe
+# 即時日誌: journalctl -u netwiz-probe -f
+#
+# ============================ END ============================
 
 # 基础配置 (可随意修改)
 LISTEN_PORT = 18080  # 绑定您要求的端口，可随时更改
