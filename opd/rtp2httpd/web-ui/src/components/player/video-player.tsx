@@ -1,6 +1,15 @@
 import { clsx } from "clsx";
 import { Play } from "lucide-react";
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { usePlayerTranslation } from "../../hooks/use-player-translation";
 import {
@@ -398,6 +407,46 @@ export function VideoPlayer({
     }
     setShowControls(false);
   }, []);
+
+  // Hover model for pointers that have a real hover state (mouse / pen):
+  // enter or move shows controls and resets the 3s idle timer, leaving hides them.
+  // Touch has no hover — taps synthesize compatibility mouse events that would
+  // otherwise race enter/leave — so we ignore touch here and let the click
+  // handler own toggling for that input type. No conflict detection needed.
+  const handlePointerHover = useCallback(
+    (event: ReactPointerEvent) => {
+      if (event.pointerType === "touch") return;
+      showControlsImmediately();
+    },
+    [showControlsImmediately],
+  );
+
+  const handlePointerLeave = useCallback(
+    (event: ReactPointerEvent) => {
+      if (event.pointerType === "touch") return;
+      hideControlsImmediately();
+    },
+    [hideControlsImmediately],
+  );
+
+  // Click / tap toggles controls. The handler lives on the whole player surface (not
+  // just the <video>) so taps on the letterbox bars outside the 16:9 frame — common on
+  // desktop/tablet where the surface is taller/wider than the video — toggle too. We
+  // only act when the click lands on the surface itself or the video element; overlays
+  // (toolbar buttons, channel info) sit above and own their own clicks, so a click that
+  // bubbles up from them is ignored and never dismisses the controls.
+  const handleSurfaceClick = useCallback(
+    (event: ReactMouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target !== event.currentTarget && target.tagName !== "VIDEO") return;
+      if (showControls) {
+        hideControlsImmediately();
+      } else {
+        showControlsImmediately();
+      }
+    },
+    [showControls, hideControlsImmediately, showControlsImmediately],
+  );
 
   // Start auto-hide timer on mount
   useEffect(() => {
@@ -1018,8 +1067,11 @@ export function VideoPlayer({
     // Note: video.paused may still report false in this state.
     const mediaDead = video.error !== null;
     const behindLiveMs = Date.now() - (streamStartTime.getTime() + currentVideoTime * 1000);
+    // Beyond this lag a live-edge reload beats letting live-sync chase at 2x
+    // for tens of seconds; tied to the sync config rather than a magic 10s.
+    const staleLiveMs = (defaultConfig.liveSyncMaxLatency + 5) * 1000;
 
-    if (playMode === "live" && (mediaDead || behindLiveMs > 10000)) {
+    if (playMode === "live" && (mediaDead || behindLiveMs > staleLiveMs)) {
       // Dead session or stale buffer — rebuild the stream at the live edge
       console.log("Reloading at live edge after background suspension");
       shouldAutoPlayRef.current = true;
@@ -1241,14 +1293,6 @@ export function VideoPlayer({
     };
   }, [isDocumentPiP]);
 
-  const handleVideoClick = useCallback(() => {
-    if (showControls) {
-      hideControlsImmediately();
-    } else {
-      showControlsImmediately();
-    }
-  }, [showControls, hideControlsImmediately, showControlsImmediately]);
-
   const handleMuteToggle = useEffectEvent(() => {
     const video = getActiveVideo();
     if (video) {
@@ -1397,6 +1441,7 @@ export function VideoPlayer({
 
   const isVideoPiP = isPiP && !isDocumentPiP;
   const playerSurface = (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: surface click only toggles chrome visibility; keyboard users drive the real controls via focusable buttons and global key shortcuts
     <div
       role="application"
       ref={playerSurfaceRef}
@@ -1405,8 +1450,10 @@ export function VideoPlayer({
         isDocumentPiP ? "h-screen min-h-screen aspect-auto" : "md:aspect-auto md:h-full",
         !showControls && "cursor-none",
       )}
-      onMouseMove={showControlsImmediately}
-      onMouseLeave={hideControlsImmediately}
+      onPointerEnter={handlePointerHover}
+      onPointerMove={handlePointerHover}
+      onPointerLeave={handlePointerLeave}
+      onClick={handleSurfaceClick}
     >
       {/* Player area sizes the 16:9 frame via container queries; sources stretch to 16:9 inside it. */}
       <div className="relative aspect-video h-auto max-h-full w-full max-w-full overflow-hidden [@container_video_(max-aspect-ratio:_16/9)]:h-auto [@container_video_(max-aspect-ratio:_16/9)]:w-full [@container_video_(min-aspect-ratio:_16/9)]:h-full [@container_video_(min-aspect-ratio:_16/9)]:w-auto">
@@ -1427,7 +1474,6 @@ export function VideoPlayer({
               playsInline
               webkit-playsinline="true"
               x5-playsinline="true"
-              onClick={visibleSlotId === slotId ? handleVideoClick : undefined}
             />
             <canvas
               ref={slotId === "a" ? slotACanvasRef : slotBCanvasRef}
@@ -1457,7 +1503,7 @@ export function VideoPlayer({
         <div
           className={clsx(
             "absolute top-4 right-4 md:top-8 md:right-8 z-10 flex flex-col gap-2 md:gap-3 items-end transition-opacity duration-300",
-            showControls ? "opacity-100" : "opacity-0",
+            showControls ? "opacity-100" : "opacity-0 pointer-events-none",
           )}
         >
           <div
@@ -1534,7 +1580,9 @@ export function VideoPlayer({
           role="toolbar"
           className={clsx(
             "absolute bottom-0 left-0 right-0 z-10 transition-opacity duration-300",
-            showControls ? "opacity-100" : "opacity-0 has-focus-visible:opacity-100",
+            showControls
+              ? "opacity-100"
+              : "opacity-0 pointer-events-none has-focus-visible:opacity-100 has-focus-visible:pointer-events-auto",
           )}
           onMouseEnter={showControlsImmediately}
         >
