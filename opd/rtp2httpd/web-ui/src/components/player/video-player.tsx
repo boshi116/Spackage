@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import { Play } from "lucide-react";
+import { CircleAlert, Play } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -29,6 +29,8 @@ import {
   isSupported,
   type Player,
   type PlayerError,
+  type PlayerMediaInfo,
+  type PlayerRenderState,
   type PlayerSegment,
 } from "../../mpegts";
 import {
@@ -69,7 +71,17 @@ interface VideoPlayerProps {
   onPlaybackStarted?: () => void;
 }
 
+interface PlaybackErrorDisplay {
+  message: string;
+  description?: string;
+  statusCode?: number;
+  statusText?: string;
+  requestUrl?: string;
+  suggestion?: string;
+}
+
 const MAX_RETRIES = 3;
+const INACTIVE_RENDER_STATE: PlayerRenderState = { active: false, deinterlacing: false };
 
 type SlotId = "a" | "b";
 
@@ -92,6 +104,15 @@ function isInterruptedPlayError(err: unknown): boolean {
 
 function ignoreInterruptedPlayError(err: unknown): void {
   if (!isInterruptedPlayError(err)) throw err;
+}
+
+function decodeRequestUrl(url: string): string {
+  try {
+    return decodeURI(url);
+  } catch {
+    // Keep the original URL visible when an upstream returns malformed percent encoding.
+    return url;
+  }
 }
 
 function getEventDocument(event: Event): Document {
@@ -165,7 +186,7 @@ function PlayerTopLeftOverlay({
     <div
       className={clsx(
         PLAYER_OVERLAY_SURFACE_CLASS,
-        "absolute top-4 left-4 z-10 flex max-w-[calc(100%-2rem)] items-center gap-1.5 rounded-xl px-2 py-1.5 transition-opacity duration-300 md:top-8 md:left-8 md:gap-2 md:px-3 md:py-2",
+        "absolute top-4 left-4 z-10 max-w-[calc(100%-2rem)] rounded-xl px-2 py-1.5 transition-opacity duration-300 md:top-8 md:left-8 md:px-3 md:py-2",
         visible ? "opacity-100" : "opacity-0 pointer-events-none",
       )}
     >
@@ -234,6 +255,10 @@ export function VideoPlayer({
   const slotLiveStateRef = useRef<Record<SlotId, boolean>>({ a: true, b: true });
   const activeSlotIdRef = useRef<SlotId>("a");
   const [visibleSlotId, setVisibleSlotId] = useState<SlotId>("a");
+  const [slotMediaInfo, setSlotMediaInfo] = useState<Record<SlotId, PlayerMediaInfo | null>>({
+    a: null,
+    b: null,
+  });
   const transitionGenRef = useRef(0);
   const pendingTransitionRef = useRef<PendingTransition | null>(null);
   const hasStartedPlaybackRef = useRef(false);
@@ -245,12 +270,22 @@ export function VideoPlayer({
   const slotCanvasRef = (id: SlotId) => (id === "a" ? slotACanvasRef : slotBCanvasRef);
   const slotPlayerRef = (id: SlotId) => (id === "a" ? slotAPlayerRef : slotBPlayerRef);
 
-  const [renderActiveSlots, setRenderActiveSlots] = useState<Record<SlotId, boolean>>({
-    a: false,
-    b: false,
+  const [slotRenderStates, setSlotRenderStates] = useState<Record<SlotId, PlayerRenderState>>({
+    a: INACTIVE_RENDER_STATE,
+    b: INACTIVE_RENDER_STATE,
   });
-  const setRenderActiveSlot = (slotId: SlotId, active: boolean) =>
-    setRenderActiveSlots((prev) => (prev[slotId] === active ? prev : { ...prev, [slotId]: active }));
+  const setSlotRenderState = (slotId: SlotId, renderState: PlayerRenderState) =>
+    setSlotRenderStates((previousStates) =>
+      previousStates[slotId].active === renderState.active &&
+      previousStates[slotId].detectedScanType === renderState.detectedScanType &&
+      previousStates[slotId].deinterlacing === renderState.deinterlacing
+        ? previousStates
+        : { ...previousStates, [slotId]: renderState },
+    );
+  const renderActiveSlots = {
+    a: slotRenderStates.a.active,
+    b: slotRenderStates.b.active,
+  };
 
   const getActiveSlotId = () => activeSlotIdRef.current;
   const getActiveVideo = () => slotVideoRef(getActiveSlotId()).current;
@@ -259,7 +294,9 @@ export function VideoPlayer({
   const [isLoading, setIsLoading] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
   const loadingTimeoutRef = useRef<number>(0);
-  const [error, setError] = useState<string | null>(() => (isSupported() ? null : t("mseNotSupported")));
+  const [error, setError] = useState<PlaybackErrorDisplay | null>(() =>
+    isSupported() ? null : { message: t("mseNotSupported") },
+  );
   const [volume, setVolume] = useState(() => getVolume());
   const [isMuted, setIsMuted] = useState(() => getMuted());
   const [isPlaying, setIsPlaying] = useState(false);
@@ -514,7 +551,7 @@ export function VideoPlayer({
   const destroySlot = useEffectEvent((slotId: SlotId) => {
     slotPlayerRef(slotId).current?.destroy();
     slotPlayerRef(slotId).current = null;
-    setRenderActiveSlot(slotId, false);
+    setSlotRenderState(slotId, INACTIVE_RENDER_STATE);
   });
 
   const stopPendingTransition = useEffectEvent(() => {
@@ -612,7 +649,9 @@ export function VideoPlayer({
     }
 
     let errorMessage = t("playbackError");
+    let errorDisplay: PlaybackErrorDisplay = { message: errorMessage };
     let decodingErrorRetry = false;
+    const isHttpStatusError = playerError.category === "io" && playerError.detail === "HttpStatusCodeInvalid";
 
     if (playerError.category === "media") {
       if (playerError.detail === "MediaMSEError") {
@@ -635,7 +674,28 @@ export function VideoPlayer({
         errorMessage = `${t("mediaError")}: ${playerError.detail}`;
       }
     } else if (playerError.category === "io") {
-      errorMessage = `${t("networkError")}: ${playerError.detail}`;
+      if (isHttpStatusError) {
+        const status = [playerError.code, playerError.info]
+          .filter((value) => value !== undefined && value !== "")
+          .join(" ");
+        errorMessage = `${t("upstreamRequestFailed")}${status ? `: HTTP ${status}` : ""}${
+          playerError.url ? ` (${playerError.url})` : ""
+        }`;
+        errorDisplay = {
+          message: t("upstreamRequestFailed"),
+          description: t("upstreamRequestFailedDescription"),
+          statusCode: playerError.code,
+          statusText: playerError.info,
+          requestUrl: playerError.url ? decodeRequestUrl(playerError.url) : undefined,
+          suggestion: t("upstreamRequestFailedSuggestion"),
+        };
+      } else {
+        errorMessage = `${t("networkError")}: ${playerError.detail}${playerError.info ? `: ${playerError.info}` : ""}`;
+      }
+    }
+
+    if (!isHttpStatusError) {
+      errorDisplay = { message: errorMessage };
     }
 
     // Check if we should retry
@@ -670,7 +730,7 @@ export function VideoPlayer({
     }
 
     // No more sources to try, show error
-    setError(errorMessage);
+    setError(errorDisplay);
     onError?.(errorMessage);
     setIsLoading(false);
   });
@@ -752,9 +812,14 @@ export function VideoPlayer({
         handleAudioSuspended();
       }
     });
-    p.on("render-active-change", (active) => {
+    p.on("render-state-change", (renderState) => {
       if (slotPlayerRef(slotId).current === p) {
-        setRenderActiveSlot(slotId, active);
+        setSlotRenderState(slotId, renderState);
+      }
+    });
+    p.on("media-info", (mediaInfo) => {
+      if (slotPlayerRef(slotId).current === p) {
+        setSlotMediaInfo((previousMediaInfo) => ({ ...previousMediaInfo, [slotId]: mediaInfo }));
       }
     });
     applyPlayerSettings(p);
@@ -788,6 +853,7 @@ export function VideoPlayer({
   );
 
   const loadActiveSlotSegments = useEffectEvent((player: Player, slotId: SlotId, newSegments: PlayerSegment[]) => {
+    setSlotMediaInfo((previousMediaInfo) => ({ ...previousMediaInfo, [slotId]: null }));
     player.loadSegments(newSegments);
 
     if (shouldAutoPlayRef.current) {
@@ -906,6 +972,7 @@ export function VideoPlayer({
     // The pending slot's player resets its interlace verdict on loadSegments and
     // starts detecting while hidden, so an interlaced verdict can be ready the
     // moment the switch completes (no combing flash on channel change)
+    setSlotMediaInfo((previousMediaInfo) => ({ ...previousMediaInfo, [pendingId]: null }));
     pendingPlayer.loadSegments(newSegments);
 
     if (shouldAutoPlayRef.current) {
@@ -1417,7 +1484,7 @@ export function VideoPlayer({
     video.play()?.catch((err: Error) => {
       if (isInterruptedPlayError(err)) return;
       console.error("Play error after user interaction:", err);
-      setError(`${t("failedToPlay")}: ${err.message}`);
+      setError({ message: `${t("failedToPlay")}: ${err.message}` });
       onError?.(`${t("failedToPlay")}: ${err.message}`);
     });
   });
@@ -1450,7 +1517,7 @@ export function VideoPlayer({
       role="application"
       ref={playerSurfaceRef}
       className={clsx(
-        "@container-size/video relative flex aspect-video w-full min-h-0 items-center justify-center bg-[radial-gradient(circle_at_50%_35%,#102044_0%,#050b18_58%,#01030a_100%)]",
+        "dark @container-size/video relative flex aspect-video w-full min-h-0 items-center justify-center bg-[radial-gradient(circle_at_50%_35%,#102044_0%,#050b18_58%,#01030a_100%)]",
         isDocumentPiP ? "h-screen min-h-screen aspect-auto" : "md:aspect-auto md:h-full",
         !showControls && "cursor-none",
       )}
@@ -1572,15 +1639,55 @@ export function VideoPlayer({
       )}
 
       {error && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(76,20,55,0.46),rgba(2,6,23,0.96)_72%)] p-4 backdrop-blur-[3px]">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(76,20,55,0.46),rgba(2,6,23,0.96)_72%)] p-3 backdrop-blur-[3px] md:p-4">
           <div
             className={clsx(
               PLAYER_OVERLAY_SURFACE_CLASS,
-              "w-full max-w-md rounded-2xl border-rose-300/25 bg-[linear-gradient(145deg,rgba(52,18,50,0.82),rgba(12,22,51,0.8))] p-5 text-white shadow-[0_20px_60px_rgba(43,5,32,0.58)]",
+              "max-h-full w-full max-w-xl overflow-y-auto rounded-2xl border-rose-300/25 bg-[linear-gradient(145deg,rgba(52,18,50,0.82),rgba(12,22,51,0.8))] p-4 text-white shadow-[0_20px_60px_rgba(43,5,32,0.58)] [@media(max-height:360px)]:p-2.5 md:p-5",
             )}
           >
-            <div className="mb-2 font-semibold text-lg text-rose-100">{t("playbackError")}</div>
-            <div className="break-words text-pretty text-rose-50/75 text-sm leading-relaxed">{error}</div>
+            <div className="flex items-center gap-2 font-semibold text-lg text-rose-100">
+              <CircleAlert className="h-5 w-5 shrink-0" aria-hidden="true" />
+              {t("playbackError")}
+            </div>
+            <div className="mt-2 break-words font-medium text-pretty text-rose-50 text-sm leading-relaxed">
+              {error.message}
+            </div>
+            {error.description && (
+              <div className="mt-1 break-words text-pretty text-rose-50/70 text-xs leading-relaxed [@media(max-height:360px)]:hidden md:text-sm">
+                {error.description}
+              </div>
+            )}
+            {(error.statusCode !== undefined || error.requestUrl) && (
+              <div className="mt-3 grid gap-2 text-xs [@media(max-height:360px)]:mt-2 [@media(max-height:360px)]:gap-1 md:text-sm">
+                {error.statusCode !== undefined && (
+                  <div className="grid grid-cols-[auto_1fr] items-baseline gap-3 rounded-lg bg-black/20 px-3 py-2 [@media(max-height:360px)]:py-1.5">
+                    <span className="text-rose-100/55">{t("httpStatus")}</span>
+                    <span className="min-w-0 font-mono text-rose-50">
+                      {error.statusCode}
+                      {error.statusText ? ` ${error.statusText}` : ""}
+                    </span>
+                  </div>
+                )}
+                {error.requestUrl && (
+                  <div className="rounded-lg bg-black/20 px-3 py-2 [@media(max-height:360px)]:grid [@media(max-height:360px)]:grid-cols-[auto_1fr] [@media(max-height:360px)]:items-baseline [@media(max-height:360px)]:gap-3 [@media(max-height:360px)]:py-1.5">
+                    <div className="mb-1 text-rose-100/55 [@media(max-height:360px)]:mb-0">{t("requestUrl")}</div>
+                    <div
+                      className="min-w-0 whitespace-normal break-all font-mono text-rose-50"
+                      title={error.requestUrl}
+                    >
+                      {error.requestUrl}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {error.suggestion && (
+              <div className="mt-3 rounded-lg border border-amber-200/15 bg-amber-100/8 px-3 py-2 text-xs leading-relaxed [@media(max-height:360px)]:mt-2 [@media(max-height:360px)]:py-1 md:text-sm">
+                <div className="font-medium text-amber-100">{t("suggestedAction")}</div>
+                <div className="mt-0.5 text-amber-50/70">{error.suggestion}</div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1603,6 +1710,9 @@ export function VideoPlayer({
             isLive={isLive}
             onSeek={handleSeek}
             locale={locale}
+            mediaInfo={slotMediaInfo[visibleSlotId]}
+            renderState={slotRenderStates[visibleSlotId]}
+            autoDeinterlace={autoDeinterlace}
             seekStartTime={streamStartTime}
             isPlaying={isPlaying}
             onPlayPause={togglePlayPause}

@@ -18,12 +18,6 @@ function post(msg: WorkerEvent, transfer?: Transferable[]): void {
 function createPipeline(segments: PlayerSegment[], config: PlayerConfig): Pipeline {
   const callbacks: PipelineCallbacks = {
     onInitSegment(type, initSegment) {
-      const videoInfo = initSegment.videoInfo as
-        | { width: number; height: number; mayBeInterlaced: boolean }
-        | undefined;
-      if (type === "video" && videoInfo) {
-        post({ type: "video-info", ...videoInfo, gen });
-      }
       const data = initSegment.data as ArrayBuffer;
       post(
         {
@@ -54,13 +48,16 @@ function createPipeline(segments: PlayerSegment[], config: PlayerConfig): Pipeli
       post({ type: "complete", gen });
     },
     onIOError(type, info) {
-      post({ type: "error", category: "io", detail: type, info: info.msg, gen });
+      post({ type: "error", category: "io", detail: type, info: info.msg, code: info.code, url: info.url, gen });
     },
     onDemuxError(type, info) {
       post({ type: "error", category: "demux", detail: type, info, gen });
     },
     onHlsInfo(info) {
       post({ type: "hls-info", live: info.live, totalDuration: info.totalDuration, gen });
+    },
+    onMediaInfo(info) {
+      post({ type: "media-info", info, gen });
     },
     onPCMAudioData(pcm, channels, sampleRate, time) {
       const buffer = pcm.buffer as ArrayBuffer;

@@ -11,13 +11,39 @@ export interface PlayerError {
   category: "io" | "demux" | "media";
   detail: string;
   info?: string;
+  code?: number;
+  url?: string;
 }
 
-export interface VideoTrackInfo {
-  width: number;
-  height: number;
-  /** Codec metadata says the stream may contain interlaced pictures (hint, not proof). */
-  mayBeInterlaced: boolean;
+export type PlayerVideoScanType = "progressive" | "interlaced";
+export type PlayerDynamicRange = "sdr" | "hdr10" | "hlg";
+
+export interface PlayerRenderState {
+  /** True while the WebGL canvas is the visible video output. */
+  active: boolean;
+  /** Scan type confirmed by the GPU detector; absent before a reliable verdict. */
+  detectedScanType?: PlayerVideoScanType;
+  /** True only while the renderer is successfully presenting the bwdif stage. */
+  deinterlacing: boolean;
+}
+
+export interface PlayerMediaInfo {
+  video?: {
+    codec?: string;
+    width?: number;
+    height?: number;
+    scanType?: PlayerVideoScanType;
+    frameRate?: number;
+    dynamicRange?: PlayerDynamicRange;
+  };
+  audio?: {
+    codec?: string;
+    channelCount?: number;
+  };
+  bitrate?: {
+    bitsPerSecond: number;
+    source: "advertised" | "measured";
+  };
 }
 
 export interface PlayerEventMap {
@@ -26,10 +52,10 @@ export interface PlayerEventMap {
   "live-state-change": (isLive: boolean) => void;
   /** Fired when audio playback is blocked by autoplay policy and requires user interaction. */
   "audio-suspended": () => void;
-  /** Fired when codec-level video track info is parsed from the stream. */
-  "video-info": (info: VideoTrackInfo) => void;
-  /** Fired when WebGL rendering onto the overlay canvas starts/stops. */
-  "render-active-change": (active: boolean) => void;
+  /** Fired when parsed or measured media metadata changes. */
+  "media-info": (info: PlayerMediaInfo) => void;
+  /** Fired when WebGL activity or its confirmed deinterlacing state changes. */
+  "render-state-change": (state: PlayerRenderState) => void;
 }
 
 export interface Player {
@@ -56,7 +82,7 @@ export interface PlayerImpl {
   onError: ((error: PlayerError) => void) | null;
   onLiveStateChange?: ((isLive: boolean) => void) | null;
   onAudioSuspended?: (() => void) | null;
-  onVideoInfo?: ((info: VideoTrackInfo) => void) | null;
+  onMediaInfo?: ((info: PlayerMediaInfo) => void) | null;
   loadSegments(segments: PlayerSegment[]): void;
   seek(seconds: number): void;
   goLive(targetMseSeconds: number): void;

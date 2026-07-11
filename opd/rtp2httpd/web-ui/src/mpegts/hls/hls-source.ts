@@ -1,20 +1,36 @@
 import type { PlayerConfig } from "../config";
 import Log from "../utils/logger";
 import type { SegmentMeta, SegmentSource } from "../worker/segment-source";
-import { type HlsMediaPlaylist, parseM3U8 } from "./m3u8";
+import { type HlsMediaPlaylist, type HlsVariant, parseM3U8 } from "./m3u8";
 
 export interface HlsInfo {
   live: boolean;
   targetDuration: number;
   totalDuration: number;
-  /** CODECS attribute from the multivariant playlist, if any. */
+  /** Selected variant hints from the multivariant playlist, if any. */
+  bandwidth?: number;
+  averageBandwidth?: number;
   codecs?: string;
+  resolution?: { width: number; height: number };
+  frameRate?: number;
+  videoRange?: string;
 }
 
 const TAG = "HlsSource";
 /** Start playback this many segments away from the live edge. */
 const LIVE_EDGE_SEGMENTS = 3;
 const MAX_REFRESH_FAILURES = 5;
+
+export class HlsRequestError extends Error {
+  constructor(
+    public readonly code: number,
+    public readonly statusText: string,
+    public readonly url: string,
+  ) {
+    super(`HTTP ${code}${statusText ? ` ${statusText}` : ""}`);
+    this.name = "HlsRequestError";
+  }
+}
 
 /** SegmentSource driven by an HLS media playlist (with live refresh). */
 export class HlsSource implements SegmentSource {
@@ -29,7 +45,7 @@ export class HlsSource implements SegmentSource {
   private ended = false;
   private targetDuration = 6;
   private totalDuration = 0;
-  private codecs: string | undefined;
+  private selectedVariant: Omit<HlsVariant, "url"> | undefined;
 
   private segments: SegmentMeta[] = [];
   private nextIndex = 0;
@@ -56,7 +72,7 @@ export class HlsSource implements SegmentSource {
       live: this.live,
       targetDuration: this.targetDuration,
       totalDuration: this.totalDuration,
-      codecs: this.codecs,
+      ...this.selectedVariant,
     };
   }
 
@@ -172,7 +188,8 @@ export class HlsSource implements SegmentSource {
           if (!best) {
             throw new Error("Multivariant playlist contains no variants");
           }
-          this.codecs = best.codecs;
+          const { url: _url, ...selectedVariant } = best;
+          this.selectedVariant = selectedVariant;
           this.url = best.url;
           continue; // fetch the selected media playlist
         }
@@ -203,7 +220,7 @@ export class HlsSource implements SegmentSource {
       referrerPolicy: (this.config.referrerPolicy as ReferrerPolicy | undefined) ?? "no-referrer-when-downgrade",
     });
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+      throw new HlsRequestError(response.status, response.statusText, response.url || url);
     }
     const text = await response.text();
     return parseM3U8(text, response.url || url);

@@ -58,6 +58,14 @@ const base: TranslationDict = {
   mediaError: "Media error",
   networkError: "Network error",
   failedToPlay: "Failed to play",
+  upstreamRequestFailed: "Upstream stream request failed",
+  upstreamRequestFailedDescription:
+    "The player received an unsuccessful HTTP response while rtp2httpd was forwarding this stream.",
+  httpStatus: "HTTP status",
+  requestUrl: "Request URL",
+  suggestedAction: "What to check",
+  upstreamRequestFailedSuggestion:
+    "Check that the upstream service is reachable and the channel URL and credentials are valid. Review the rtp2httpd logs, then retry.",
 
   // Rewind buttons
   rewind30m: "-30m",
@@ -79,6 +87,18 @@ const base: TranslationDict = {
   fullscreen: "Fullscreen",
   exitFullscreen: "Exit Fullscreen",
   pictureInPicture: "Picture in Picture",
+  mediaInfoLabel: "Media information",
+  mediaInfoVideoCodec: "Video codec",
+  mediaInfoResolution: "Resolution",
+  mediaInfoFrameRate: "Frame rate",
+  mediaInfoDynamicRange: "Dynamic range",
+  mediaInfoAudioCodec: "Audio codec",
+  mediaInfoAudioChannels: "Audio channels",
+  mediaInfoMono: "Mono",
+  mediaInfoStereo: "Stereo",
+  mediaInfoChannels: "channels",
+  mediaInfoAdvertisedBitrate: "Advertised bitrate",
+  mediaInfoMeasuredBitrate: "Measured bitrate",
 
   // Relative dates
   today: "Today",
@@ -160,6 +180,13 @@ const zhHans: TranslationDict = {
   mediaError: "媒体错误",
   networkError: "网络错误",
   failedToPlay: "播放失败",
+  upstreamRequestFailed: "上游流请求失败",
+  upstreamRequestFailedDescription: "rtp2httpd 转发此视频流时，播放器收到了异常的 HTTP 响应。",
+  httpStatus: "HTTP 状态",
+  requestUrl: "请求地址",
+  suggestedAction: "建议检查",
+  upstreamRequestFailedSuggestion:
+    "确认上游服务可以访问，频道地址和鉴权参数有效；查看 rtp2httpd 日志中的上游转发错误，修复后重试。",
 
   // 时移按钮
   rewind30m: "-30分钟",
@@ -181,6 +208,18 @@ const zhHans: TranslationDict = {
   fullscreen: "全屏",
   exitFullscreen: "退出全屏",
   pictureInPicture: "画中画",
+  mediaInfoLabel: "媒体信息",
+  mediaInfoVideoCodec: "视频编码",
+  mediaInfoResolution: "分辨率",
+  mediaInfoFrameRate: "帧率",
+  mediaInfoDynamicRange: "动态范围",
+  mediaInfoAudioCodec: "音频编码",
+  mediaInfoAudioChannels: "音频声道",
+  mediaInfoMono: "单声道",
+  mediaInfoStereo: "立体声",
+  mediaInfoChannels: "声道",
+  mediaInfoAdvertisedBitrate: "标称码率",
+  mediaInfoMeasuredBitrate: "实测码率",
 
   // 相对日期
   today: "今天",
@@ -263,6 +302,13 @@ const zhHant: TranslationDict = {
   mediaError: "媒體錯誤",
   networkError: "網絡錯誤",
   failedToPlay: "播放失敗",
+  upstreamRequestFailed: "上游串流請求失敗",
+  upstreamRequestFailedDescription: "rtp2httpd 轉發此串流時，播放器收到了異常的 HTTP 回應。",
+  httpStatus: "HTTP 狀態",
+  requestUrl: "請求地址",
+  suggestedAction: "建議檢查",
+  upstreamRequestFailedSuggestion:
+    "確認上游服務可以存取，頻道地址和驗證參數有效；查看 rtp2httpd 日誌中的上游轉發錯誤，修復後重試。",
 
   // 時移按鈕
   rewind30m: "-30分鐘",
@@ -284,6 +330,18 @@ const zhHant: TranslationDict = {
   fullscreen: "全屏",
   exitFullscreen: "退出全屏",
   pictureInPicture: "畫中畫",
+  mediaInfoLabel: "媒體資訊",
+  mediaInfoVideoCodec: "視訊編碼",
+  mediaInfoResolution: "解像度",
+  mediaInfoFrameRate: "幀率",
+  mediaInfoDynamicRange: "動態範圍",
+  mediaInfoAudioCodec: "音訊編碼",
+  mediaInfoAudioChannels: "音訊聲道",
+  mediaInfoMono: "單聲道",
+  mediaInfoStereo: "立體聲",
+  mediaInfoChannels: "聲道",
+  mediaInfoAdvertisedBitrate: "標稱碼率",
+  mediaInfoMeasuredBitrate: "實測碼率",
 
   // 相對日期
   today: "今天",

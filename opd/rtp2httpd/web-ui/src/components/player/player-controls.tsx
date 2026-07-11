@@ -16,8 +16,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePlayerTranslation } from "../../hooks/use-player-translation";
 import type { Locale } from "../../lib/locale";
+import type { PlayerMediaInfo, PlayerRenderState } from "../../mpegts";
 import type { Channel, EPGProgram } from "../../types/player";
 import { PLAYER_CONTROL_BUTTON_CLASS, PLAYER_OVERLAY_SURFACE_CLASS } from "./classnames";
+import { PlayerMediaBadges } from "./player-media-badges";
 import { PlayerSelectedGlassLayers } from "./player-selected-glass-layers";
 
 interface PlayerControlsProps {
@@ -33,6 +35,10 @@ interface PlayerControlsProps {
   locale: Locale;
   // Current video playback time from video element (in seconds)
   currentTime: number;
+  // Technical information for the currently visible player slot
+  mediaInfo: PlayerMediaInfo | null;
+  renderState: PlayerRenderState;
+  autoDeinterlace: boolean;
   // The absolute time of the last seek position (null for live mode)
   seekStartTime: Date;
   // Video element controls
@@ -62,6 +68,9 @@ export function PlayerControls({
   onSeek,
   locale,
   currentTime,
+  mediaInfo,
+  renderState,
+  autoDeinterlace,
   seekStartTime,
   isPlaying,
   onPlayPause,
@@ -206,10 +215,10 @@ export function PlayerControls({
   }, []);
 
   return (
-    <div className="flex w-full flex-col gap-2 bg-[linear-gradient(to_top,rgba(2,8,23,0.98)_0%,rgba(8,22,51,0.9)_46%,rgba(21,27,69,0.48)_72%,transparent_100%)] px-3 pt-8 pb-3 md:gap-3 md:px-4 md:pt-12 md:pb-4">
+    <div className="flex w-full flex-col gap-1 bg-[linear-gradient(to_top,rgba(2,8,23,0.98)_0%,rgba(8,22,51,0.9)_46%,rgba(21,27,69,0.48)_72%,transparent_100%)] px-1.5 pt-4 pb-1 md:gap-2 md:px-3 md:pt-9 md:pb-3">
       {/* Program Info */}
       {currentProgram && (
-        <div className="flex min-w-0 items-center justify-between gap-2 text-xs tracking-[0.01em] text-blue-50/80 md:text-sm">
+        <div className="flex min-w-0 items-center justify-between gap-1 text-xs leading-tight tracking-[0.01em] text-blue-50/80 md:gap-2 md:text-sm md:leading-normal">
           <div className="min-w-0 flex-1 truncate">
             <span className="font-medium text-blue-100">{formatTime(startTime)}</span>
             <span className="mx-1 text-blue-100/30 md:mx-2">|</span>
@@ -230,9 +239,9 @@ export function PlayerControls({
           aria-valuenow={Math.round(progress)}
           aria-label={t("seekTo")}
           className={clsx(
-            "group relative h-2 rounded-full bg-blue-50/15 shadow-[inset_0_1px_3px_rgba(0,0,0,0.45)] ring-1 ring-white/10 transition-[height,box-shadow] duration-150",
+            "group relative h-1.5 rounded-full bg-blue-50/15 shadow-[inset_0_1px_3px_rgba(0,0,0,0.45)] ring-1 ring-white/10 transition-[height,box-shadow] duration-150 md:h-2",
             isCatchupSupported
-              ? "cursor-pointer hover:h-3 hover:shadow-[0_0_20px_rgba(59,130,246,0.16),inset_0_1px_3px_rgba(0,0,0,0.45)]"
+              ? "cursor-pointer hover:h-2 hover:shadow-[0_0_20px_rgba(59,130,246,0.16),inset_0_1px_3px_rgba(0,0,0,0.45)] md:hover:h-3"
               : "cursor-default",
           )}
           onMouseDown={isCatchupSupported ? handleMouseDown : undefined}
@@ -267,8 +276,8 @@ export function PlayerControls({
 
           <div
             className={clsx(
-              "absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-blue-300 shadow-[0_0_16px_rgba(147,197,253,0.75)] transition-[left,width,height] duration-150",
-              isCatchupSupported && "group-hover:h-4 group-hover:w-4",
+              "absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-blue-300 shadow-[0_0_16px_rgba(147,197,253,0.75)] transition-[left,width,height] duration-150 md:h-3 md:w-3",
+              isCatchupSupported && "group-hover:h-3 group-hover:w-3 md:group-hover:h-4 md:group-hover:w-4",
             )}
             style={{ left: `${progress}%` }}
           />
@@ -276,17 +285,17 @@ export function PlayerControls({
       )}
 
       {/* Control Bar */}
-      <div className="flex min-w-0 items-center justify-between gap-1">
+      <div className="flex min-h-10 min-w-0 items-center justify-between gap-0.5 md:min-h-14 md:gap-1">
         {/* Left Controls */}
-        <div className="flex min-w-0 items-center gap-0.5 sm:gap-1.5 md:gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-0 sm:gap-1 md:gap-3">
           {/* Play/Pause */}
           <button
             type="button"
             onClick={onPlayPause}
-            className={clsx(PLAYER_CONTROL_BUTTON_CLASS, "cursor-pointer p-1.5 md:p-2")}
+            className={clsx(PLAYER_CONTROL_BUTTON_CLASS, "cursor-pointer p-1 md:p-2")}
             title={isPlaying ? t("pause") : t("play")}
           >
-            {isPlaying ? <Pause className="h-5 w-5 md:h-7 md:w-7" /> : <Play className="h-5 w-5 md:h-7 md:w-7" />}
+            {isPlaying ? <Pause className="h-4 w-4 md:h-7 md:w-7" /> : <Play className="h-4 w-4 md:h-7 md:w-7" />}
           </button>
 
           {/* Volume */}
@@ -294,15 +303,15 @@ export function PlayerControls({
             <button
               type="button"
               onClick={onMuteToggle}
-              className={clsx(PLAYER_CONTROL_BUTTON_CLASS, "cursor-pointer p-1.5 md:p-2")}
+              className={clsx(PLAYER_CONTROL_BUTTON_CLASS, "cursor-pointer p-1 md:p-2")}
               title={isMuted ? t("unmute") : t("mute")}
             >
               {isMuted || volume === 0 ? (
-                <VolumeX className="h-5 w-5 md:h-7 md:w-7" />
+                <VolumeX className="h-4 w-4 md:h-7 md:w-7" />
               ) : volume < 0.5 ? (
-                <Volume1 className="h-5 w-5 md:h-7 md:w-7" />
+                <Volume1 className="h-4 w-4 md:h-7 md:w-7" />
               ) : (
-                <Volume2 className="h-5 w-5 md:h-7 md:w-7" />
+                <Volume2 className="h-4 w-4 md:h-7 md:w-7" />
               )}
             </button>
 
@@ -330,7 +339,7 @@ export function PlayerControls({
           </div>
 
           {/* Time Display */}
-          <div className="hidden whitespace-nowrap text-xs text-blue-50/75 tabular-nums min-[360px]:block md:text-sm">
+          <div className="hidden whitespace-nowrap text-[11px] leading-none text-blue-50/75 tabular-nums min-[360px]:block md:text-sm md:leading-normal">
             {currentProgram ? (
               <span>
                 {formatDuration(elapsedTime)} / {formatDuration(duration)}
@@ -341,13 +350,22 @@ export function PlayerControls({
               </span>
             )}
           </div>
+
+          <div className="ml-1.5 flex h-7 min-w-0 basis-0 flex-1 items-center overflow-hidden md:ml-2 md:h-12">
+            <PlayerMediaBadges
+              mediaInfo={mediaInfo}
+              locale={locale}
+              renderState={renderState}
+              autoDeinterlace={autoDeinterlace}
+            />
+          </div>
         </div>
 
         {/* Right Controls */}
-        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 md:gap-2">
+        <div className="flex shrink-0 items-center gap-0 sm:gap-0.5 md:gap-2">
           {/* Live/Catchup Indicator & Go Live Button */}
           {isLive ? (
-            <span className="flex items-center gap-1 whitespace-nowrap p-1.5 text-xs font-semibold tracking-wide text-white md:gap-1.5 md:p-2 md:text-sm">
+            <span className="flex items-center gap-1 whitespace-nowrap p-1 text-[11px] font-semibold tracking-wide text-white md:gap-1.5 md:p-2 md:text-sm">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400 shadow-[0_0_12px_rgba(251,113,133,0.85)] md:h-2 md:w-2" />
               {t("live")}
             </span>
@@ -357,7 +375,7 @@ export function PlayerControls({
               onClick={() => onSeek(new Date())}
               className={clsx(
                 PLAYER_CONTROL_BUTTON_CLASS,
-                "cursor-pointer whitespace-nowrap bg-blue-300/10 px-2 py-1 text-xs font-medium text-blue-50 md:px-2.5 md:py-1.5 md:text-sm",
+                "cursor-pointer whitespace-nowrap bg-blue-300/10 px-1.5 py-0.5 text-[11px] font-medium text-blue-50 md:px-2.5 md:py-1.5 md:text-sm",
               )}
             >
               {t("goLive")}
@@ -371,7 +389,7 @@ export function PlayerControls({
                 type="button"
                 className={clsx(
                   PLAYER_CONTROL_BUTTON_CLASS,
-                  "max-w-16 cursor-pointer truncate px-2 py-1 text-xs font-medium min-[360px]:max-w-24 md:max-w-40 md:px-2.5 md:py-1.5 md:text-sm",
+                  "max-w-14 cursor-pointer truncate px-1.5 py-0.5 text-[11px] font-medium min-[360px]:max-w-20 md:max-w-40 md:px-2.5 md:py-1.5 md:text-sm",
                 )}
               >
                 {channel.sources[activeSourceIndex]?.label || `${t("source")} ${activeSourceIndex + 1}`}
@@ -415,13 +433,13 @@ export function PlayerControls({
           <button
             type="button"
             onClick={onFullscreen}
-            className={clsx(PLAYER_CONTROL_BUTTON_CLASS, "cursor-pointer p-1.5 md:p-2")}
+            className={clsx(PLAYER_CONTROL_BUTTON_CLASS, "cursor-pointer p-1 md:p-2")}
             title={isFullscreen ? t("exitFullscreen") : t("fullscreen")}
           >
             {isFullscreen ? (
-              <Minimize className="h-5 w-5 md:h-6 md:w-6" />
+              <Minimize className="h-4 w-4 md:h-6 md:w-6" />
             ) : (
-              <Maximize className="h-5 w-5 md:h-6 md:w-6" />
+              <Maximize className="h-4 w-4 md:h-6 md:w-6" />
             )}
           </button>
 
@@ -430,10 +448,10 @@ export function PlayerControls({
             <button
               type="button"
               onClick={onPiPToggle}
-              className={clsx(PLAYER_CONTROL_BUTTON_CLASS, "cursor-pointer p-1.5 md:p-2")}
+              className={clsx(PLAYER_CONTROL_BUTTON_CLASS, "cursor-pointer p-1 md:p-2")}
               title={t("pictureInPicture")}
             >
-              <PictureInPicture className="h-5 w-5 md:h-6 md:w-6" />
+              <PictureInPicture className="h-4 w-4 md:h-6 md:w-6" />
             </button>
           )}
 
