@@ -51,6 +51,7 @@ export function createMpegtsPlayer(
   // PCM audio player for software-decoded audio (MP2)
   let pcmPlayer: PCMAudioPlayer | null = null;
   let pcmPlayerInitPromise: Promise<void> | null = null;
+  let startupRateControlActive = false;
 
   function ensurePCMPlayer(): PCMAudioPlayer {
     if (!pcmPlayer) {
@@ -67,6 +68,16 @@ export function createMpegtsPlayer(
           info: "Audio could not re-anchor to the video clock after an interruption",
         });
       };
+      pcmPlayer.onStartupSyncFailed = () => {
+        impl.onError?.({
+          category: "media",
+          detail: "AudioStartupSyncFailed",
+          info: "Software-decoded audio could not establish an initial shared timeline with video",
+        });
+      };
+      pcmPlayer.onStartupRateControlChange = (active) => {
+        startupRateControlActive = active;
+      };
       pcmPlayerInitPromise = pcmPlayer.init();
       pcmPlayer.attachVideo(video);
     }
@@ -79,6 +90,7 @@ export function createMpegtsPlayer(
       pcmPlayer = null;
       pcmPlayerInitPromise = null;
     }
+    startupRateControlActive = false;
   }
 
   // Init segments are batched and flushed together when the first non-init message
@@ -135,7 +147,9 @@ export function createMpegtsPlayer(
         sourceMode = "hls";
         hlsLive = msg.live;
         updateLiveState();
-        if (!msg.live) {
+        if (msg.live) {
+          mse?.setDuration(Infinity);
+        } else {
           mse?.setDuration(msg.totalDuration);
           hlsVodThrottleEnabled = true;
           updateFetchBackpressure();
@@ -357,6 +371,9 @@ export function createMpegtsPlayer(
   /** Create (or recreate) MSE and attach to video element. */
   function initMSE(): void {
     mse = createMSE(video, config);
+    if (sourceMode === "continuous-live-ts") {
+      mse.setDuration(Infinity);
+    }
 
     mse.open(() => {
       if (pendingSegments) {
@@ -417,7 +434,7 @@ export function createMpegtsPlayer(
 
   function initLiveHelpers(): void {
     if (!destroyLiveSync && liveSyncEnabled) {
-      destroyLiveSync = setupLiveSync(video, config, getLiveEdgeLatency);
+      destroyLiveSync = setupLiveSync(video, config, getLiveEdgeLatency, () => !startupRateControlActive);
     }
   }
 
@@ -455,7 +472,7 @@ export function createMpegtsPlayer(
     setLiveSync(enabled: boolean) {
       if (enabled && !destroyLiveSync) {
         liveSyncEnabled = true;
-        destroyLiveSync = setupLiveSync(video, config, getLiveEdgeLatency);
+        destroyLiveSync = setupLiveSync(video, config, getLiveEdgeLatency, () => !startupRateControlActive);
       } else if (!enabled && destroyLiveSync) {
         liveSyncEnabled = false;
         destroyLiveSync();
