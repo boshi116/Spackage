@@ -117,9 +117,14 @@ const base: TranslationDict = {
   themeAuto: "Auto",
   themeLight: "Light",
   themeDark: "Dark",
+  appearance: "Interface style",
+  appearanceFancy: "Fancy",
+  appearanceSimple: "Simple",
+  pictureInPictureMode: "PiP mode",
+  pictureInPictureModeFull: "Full",
+  pictureInPictureModeSimple: "Compact",
   seamlessSwitch: "Seamless switch",
-  videoProcessing: "Video Processing",
-  resolutionLimitHint: "1080p and below only",
+  resolutionLimitHint: "Options below apply to ≤1080p only",
   deinterlace: "Auto Deinterlacing",
   pictureEnhancement: "Video Enhancement",
 };
@@ -238,9 +243,14 @@ const zhHans: TranslationDict = {
   themeAuto: "自动",
   themeLight: "浅色",
   themeDark: "深色",
+  appearance: "界面风格",
+  appearanceFancy: "Fancy",
+  appearanceSimple: "Simple",
+  pictureInPictureMode: "画中画模式",
+  pictureInPictureModeFull: "完整",
+  pictureInPictureModeSimple: "简洁",
   seamlessSwitch: "无缝换台",
-  videoProcessing: "画质处理",
-  resolutionLimitHint: "仅 1080P 及以下生效",
+  resolutionLimitHint: "以下选项仅 1080p 及以下生效",
   deinterlace: "自动反交错",
   pictureEnhancement: "画质增强",
 };
@@ -360,9 +370,14 @@ const zhHant: TranslationDict = {
   themeAuto: "自動",
   themeLight: "淺色",
   themeDark: "深色",
+  appearance: "介面風格",
+  appearanceFancy: "Fancy",
+  appearanceSimple: "Simple",
+  pictureInPictureMode: "畫中畫模式",
+  pictureInPictureModeFull: "完整",
+  pictureInPictureModeSimple: "簡潔",
   seamlessSwitch: "無縫換台",
-  videoProcessing: "畫質處理",
-  resolutionLimitHint: "僅 1080P 及以下生效",
+  resolutionLimitHint: "以下選項僅 1080p 及以下生效",
   deinterlace: "自動反交錯",
   pictureEnhancement: "畫質增強",
 };
@@ -376,5 +391,5 @@ export const translations: Record<Locale, TranslationDict> = {
 export type TranslationKey = keyof typeof base;
 
 export function translate(locale: Locale, key: TranslationKey): string {
-  return translations[locale][key] ?? base[key];
+  return translations[locale][key] ?? base[key] ?? key;
 }

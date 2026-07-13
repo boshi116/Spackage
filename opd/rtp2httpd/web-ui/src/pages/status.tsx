@@ -1,5 +1,5 @@
 import { Activity, Gauge, Layers, Users } from "lucide-react";
-import { StrictMode, useCallback, useMemo, useState } from "react";
+import { StrictMode, startTransition, useCallback, useDeferredValue, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ConnectionsSection } from "../components/status/connections-section";
 import { LogsSection } from "../components/status/logs-section";
@@ -14,6 +14,7 @@ import { useStatusApi } from "../hooks/use-status-api";
 import { useStatusTranslation } from "../hooks/use-status-translation";
 import { useTheme } from "../hooks/use-theme";
 import { formatBandwidth, formatBytes, formatDuration } from "../lib/format";
+import type { Locale } from "../lib/locale";
 import { mergeClients } from "../lib/status";
 import type { ClientRow, LogEntry, StatusPayload } from "../types";
 import type { ConnectionState } from "../types/ui";
@@ -26,14 +27,17 @@ const LOG_LEVELS: Array<{ value: number; label: string }> = [
   { value: 4, label: "DEBUG" },
 ];
 
+const LOG_LEVEL_OPTIONS = LOG_LEVELS.map((level) => ({ value: String(level.value), label: level.label }));
+const EMPTY_WORKERS: NonNullable<StatusPayload["workers"]> = [];
+
 const MAX_LOG_ENTRIES = 500;
 
 function StatusPage() {
-  const { locale, setLocale } = useLocale("status-locale");
+  const { locale, setLocale } = useLocale("rtp2httpd-status-locale");
   const t = useStatusTranslation(locale);
 
-  const { theme, setTheme } = useTheme("status-theme");
-  const { bandwidthUnit, setBandwidthUnit } = useBandwidthUnit("status-bandwidth-unit");
+  const { theme, setTheme } = useTheme("rtp2httpd-status-theme");
+  const { bandwidthUnit, setBandwidthUnit } = useBandwidthUnit("rtp2httpd-status-bandwidth-unit");
   const { disconnectClient, setLogLevel, clearLogs, reloadConfig, restartWorkers } = useStatusApi();
 
   const [connectionState, setConnectionState] = useState<ConnectionState>("reconnecting");
@@ -73,6 +77,24 @@ function StatusPage() {
     });
     return showDisconnected ? values : values.filter((client) => !client.isDisconnected);
   }, [clientsMap, showDisconnected]);
+  const deferredClients = useDeferredValue(clients);
+  const deferredLogs = useDeferredValue(logs);
+  const workers = payload?.workers ?? EMPTY_WORKERS;
+  const deferredWorkers = useDeferredValue(workers);
+
+  const handleLocaleChange = useCallback(
+    (nextLocale: Locale) => {
+      startTransition(() => setLocale(nextLocale));
+    },
+    [setLocale],
+  );
+
+  const handleThemeChange = useCallback(
+    (nextTheme: Parameters<typeof setTheme>[0]) => {
+      startTransition(() => setTheme(nextTheme));
+    },
+    [setTheme],
+  );
 
   const handleDisconnect = useCallback(
     async (clientId: string) => {
@@ -196,9 +218,9 @@ function StatusPage() {
             uptime={uptime}
             version={payload?.version ?? "--"}
             locale={locale}
-            onLocaleChange={setLocale}
+            onLocaleChange={handleLocaleChange}
             theme={theme}
-            onThemeChange={setTheme}
+            onThemeChange={handleThemeChange}
             bandwidthUnit={bandwidthUnit}
             onBandwidthUnitChange={setBandwidthUnit}
           />
@@ -206,7 +228,7 @@ function StatusPage() {
           <SummaryStats stats={stats} />
 
           <ConnectionsSection
-            clients={clients}
+            clients={deferredClients}
             locale={locale}
             showDisconnected={showDisconnected}
             onShowDisconnectedChange={setShowDisconnected}
@@ -215,14 +237,11 @@ function StatusPage() {
             bandwidthUnit={bandwidthUnit}
           />
 
-          <WorkersSection workers={payload?.workers ?? []} locale={locale} bandwidthUnit={bandwidthUnit} />
+          <WorkersSection workers={deferredWorkers} locale={locale} bandwidthUnit={bandwidthUnit} />
 
           <LogsSection
-            logs={logs}
-            options={LOG_LEVELS.map((level) => ({
-              value: String(level.value),
-              label: level.label,
-            }))}
+            logs={deferredLogs}
+            options={LOG_LEVEL_OPTIONS}
             logLevelValue={logLevelValue}
             onLogLevelChange={handleLogLevelChange}
             disabled={!logLevelValue}

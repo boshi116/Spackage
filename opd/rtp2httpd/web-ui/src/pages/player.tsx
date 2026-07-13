@@ -1,22 +1,37 @@
 import { clsx } from "clsx";
 import { AlertTriangle, ExternalLink, ListChecks, RefreshCw } from "lucide-react";
-import { Activity, StrictMode, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity,
+  StrictMode,
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 import {
   ChannelList,
   nextScrollBehaviorRef as channelListNextScrollBehaviorRef,
 } from "../components/player/channel-list";
 import { EPGView, nextScrollBehaviorRef as epgViewNextScrollBehaviorRef } from "../components/player/epg-view";
+import { PlaybackTimeProvider } from "../components/player/playback-time-context";
 import { SettingsDropdown } from "../components/player/settings-dropdown";
 import { VideoPlayer } from "../components/player/video-player";
 import { Button, buttonVariants } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { useLocale } from "../hooks/use-locale";
+import { usePersistedEnum } from "../hooks/use-persisted-enum";
+import { usePlayerAppearance } from "../hooks/use-player-appearance";
 import { usePlayerTranslation } from "../hooks/use-player-translation";
 import { useTheme } from "../hooks/use-theme";
+import { isDocumentPictureInPictureSupported } from "../lib/document-picture-in-picture";
 import { type EPGData, fillEPGGaps, getCurrentProgram, getEPGChannelId, loadEPG } from "../lib/epg-parser";
 import type { Locale } from "../lib/locale";
 import { buildCatchupSegments, clampCatchupStartTime, parseM3U } from "../lib/m3u-parser";
+import { isLGWebOS } from "../lib/platform";
 import {
   getAutoDeinterlace,
   getLastChannelId,
@@ -32,9 +47,10 @@ import {
   saveSidebarVisible,
 } from "../lib/player-storage";
 import { buildAppPath } from "../lib/url";
-import type { PlayerSegment } from "../mpegts";
-import { mseToWallClock, NEAR_LIVE_EDGE_MS } from "../mpegts/player/wall-clock";
+import { getPlaybackBackendKind, type PlayerSegment } from "../playback-engine";
+import { mseToWallClock, NEAR_LIVE_EDGE_MS } from "../playback-engine/timeline/wall-clock";
 import type { Channel, M3UMetadata } from "../types/player";
+import { PICTURE_IN_PICTURE_MODES, type PictureInPictureMode } from "../types/ui";
 
 function getM3UIntegrationGuideUrl(locale: Locale) {
   return locale === "en"
@@ -77,8 +93,18 @@ function shouldInsetSidebarRight(): boolean {
 }
 
 function PlayerPage() {
-  const { locale, setLocale } = useLocale("player-locale");
-  const { theme, setTheme } = useTheme("player-theme");
+  const playbackBackendKind = getPlaybackBackendKind();
+  const supportsMSEVideoProcessing = playbackBackendKind === "mse";
+  const supportsSeamlessSwitch = !isLGWebOS();
+  const supportsDocumentPictureInPicture = isDocumentPictureInPictureSupported();
+  const { locale, setLocale } = useLocale("rtp2httpd-player-locale");
+  const { theme, setTheme } = useTheme("rtp2httpd-player-theme");
+  const { appearance, setAppearance } = usePlayerAppearance();
+  const [pictureInPictureMode, setPictureInPictureMode] = usePersistedEnum<PictureInPictureMode>(
+    "rtp2httpd-player-picture-in-picture-mode",
+    "document",
+    PICTURE_IN_PICTURE_MODES,
+  );
   const t = usePlayerTranslation(locale);
 
   const [metadata, setMetadata] = useState<M3UMetadata | null>(null);
@@ -90,13 +116,18 @@ function PlayerPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRevealing, setIsRevealing] = useState(false);
   const [showSidebar, setShowSidebar] = useState(() => getSidebarVisible());
-  const [sidebarView, setSidebarView] = useState<"channels" | "epg">("channels");
+  const [selectedSidebarView, setSelectedSidebarView] = useState<"channels" | "epg">("channels");
+  const [renderedSidebarView, setRenderedSidebarView] = useState<"channels" | "epg">("channels");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [insetSidebarRight, setInsetSidebarRight] = useState(shouldInsetSidebarRight);
-  const [seamlessSwitch, setSeamlessSwitch] = useState(() => getSeamlessSwitch());
-  const [autoDeinterlace, setAutoDeinterlace] = useState(() => getAutoDeinterlace());
-  const [pictureEnhancement, setPictureEnhancement] = useState(() => getPictureEnhancement());
+  const [seamlessSwitch, setSeamlessSwitch] = useState(() => (supportsSeamlessSwitch ? getSeamlessSwitch() : false));
+  const [autoDeinterlace, setAutoDeinterlace] = useState(() =>
+    supportsMSEVideoProcessing ? getAutoDeinterlace() : false,
+  );
+  const [pictureEnhancement, setPictureEnhancement] = useState(() =>
+    supportsMSEVideoProcessing ? getPictureEnhancement() : false,
+  );
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const isSimulatedFullscreenRef = useRef(false);
 
@@ -109,6 +140,9 @@ function PlayerPage() {
 
   // Track current video playback time in seconds (relative to stream start)
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
+  const deferredCurrentVideoTime = useDeferredValue(currentVideoTime);
+  const currentVideoTimeRef = useRef(0);
+  const currentVideoSecondRef = useRef(0);
 
   // Track active source index for multi-source channels
   const [activeSourceIndex, setActiveSourceIndex] = useState(0);
@@ -169,7 +203,11 @@ function PlayerPage() {
 
     // Source supports catchup: use it
     if (activeSource.catchup && activeSource.catchupSource) {
-      setPlaybackSegments(buildCatchupSegments(activeSource, streamStartTime));
+      setPlaybackSegments(
+        buildCatchupSegments(activeSource, streamStartTime, {
+          overlapMs: playbackBackendKind === "native" ? 0 : undefined,
+        }),
+      );
       setPlayMode("catchup");
       return;
     }
@@ -186,17 +224,26 @@ function PlayerPage() {
     // No source supports catchup, fall back to live
     setSeekAtLiveEdge(true);
     setStreamStartTime(new Date());
-  }, [currentChannel, activeSource, activeSourceIndex, streamStartTime, seekAtLiveEdge]);
+  }, [currentChannel, activeSource, activeSourceIndex, streamStartTime, seekAtLiveEdge, playbackBackendKind]);
 
-  const handleVideoSeek = useCallback((seekTime: Date, goingLive: boolean) => {
+  const resetCurrentVideoTime = useCallback(() => {
+    currentVideoTimeRef.current = 0;
+    currentVideoSecondRef.current = 0;
     setCurrentVideoTime(0);
-    setSeekAtLiveEdge(goingLive);
-    if (goingLive) {
-      setStreamStartTime(new Date());
-    } else {
-      setStreamStartTime(clampCatchupStartTime(seekTime));
-    }
   }, []);
+
+  const handleVideoSeek = useCallback(
+    (seekTime: Date, goingLive: boolean) => {
+      resetCurrentVideoTime();
+      setSeekAtLiveEdge(goingLive);
+      if (goingLive) {
+        setStreamStartTime(new Date());
+      } else {
+        setStreamStartTime(clampCatchupStartTime(seekTime));
+      }
+    },
+    [resetCurrentVideoTime],
+  );
 
   const handleProgramSelect = useCallback(
     (programStart: Date, programEnd: Date) => {
@@ -213,11 +260,12 @@ function PlayerPage() {
         setStreamStartTime(new Date());
       } else {
         // Preserve current playback position when switching source in catchup mode
-        setStreamStartTime(mseToWallClock(currentVideoTime, streamStartTime));
+        setStreamStartTime(mseToWallClock(currentVideoTimeRef.current, streamStartTime));
       }
+      resetCurrentVideoTime();
       setActiveSourceIndex(sourceIndex);
     },
-    [playMode, streamStartTime, currentVideoTime],
+    [playMode, resetCurrentVideoTime, streamStartTime],
   );
 
   const handlePlaybackStarted = useCallback(() => {
@@ -226,13 +274,17 @@ function PlayerPage() {
     }
   }, [currentChannel, activeSourceIndex]);
 
-  const selectChannel = useCallback((channel: Channel) => {
-    setCurrentChannel(channel);
-    const lastSource = getLastSourceIndex(channel.id);
-    setActiveSourceIndex(lastSource < channel.sources.length ? lastSource : 0);
-    setSeekAtLiveEdge(true);
-    setStreamStartTime(new Date());
-  }, []);
+  const selectChannel = useCallback(
+    (channel: Channel) => {
+      resetCurrentVideoTime();
+      setCurrentChannel(channel);
+      const lastSource = getLastSourceIndex(channel.id);
+      setActiveSourceIndex(lastSource < channel.sources.length ? lastSource : 0);
+      setSeekAtLiveEdge(true);
+      setStreamStartTime(new Date());
+    },
+    [resetCurrentVideoTime],
+  );
 
   // Save last played channel when in live mode
   useEffect(() => {
@@ -242,7 +294,38 @@ function PlayerPage() {
   }, [currentChannel, playMode]);
 
   const handleCurrentVideoTimeChange = useCallback((time: number) => {
-    startTransition(() => setCurrentVideoTime(time));
+    currentVideoTimeRef.current = time;
+    const currentSecond = Math.floor(time);
+    if (currentSecond === currentVideoSecondRef.current) return;
+    currentVideoSecondRef.current = currentSecond;
+    setCurrentVideoTime(time);
+  }, []);
+
+  const handleLocaleChange = useCallback(
+    (nextLocale: Locale) => {
+      startTransition(() => setLocale(nextLocale));
+    },
+    [setLocale],
+  );
+
+  const handleThemeChange = useCallback(
+    (nextTheme: Parameters<typeof setTheme>[0]) => {
+      startTransition(() => setTheme(nextTheme));
+    },
+    [setTheme],
+  );
+
+  const handleAppearanceChange = useCallback(
+    (nextAppearance: Parameters<typeof setAppearance>[0]) => {
+      startTransition(() => setAppearance(nextAppearance));
+    },
+    [setAppearance],
+  );
+
+  const handleSidebarViewChange = useCallback((view: "channels" | "epg") => {
+    (view === "channels" ? channelListNextScrollBehaviorRef : epgViewNextScrollBehaviorRef).current = "instant";
+    setSelectedSidebarView(view);
+    startTransition(() => setRenderedSidebarView(view));
   }, []);
 
   const handleChannelNavigate = useCallback(
@@ -279,17 +362,22 @@ function PlayerPage() {
 
       const response = await fetch(buildAppPath("/playlist.m3u"));
       if (!response.ok) {
-        throw new Error(t("failedToLoadPlaylist"));
+        throw new Error("failedToLoadPlaylist");
       }
 
       const content = await response.text();
       const parsed = parseM3U(content);
 
       if (parsed.channels.length === 0) {
-        throw new Error(t("emptyPlaylist"));
+        throw new Error("emptyPlaylist");
       }
 
       setMetadata(parsed);
+
+      // Start the initial channel while the EPG loads, but keep the startup overlay visible until parsing finishes.
+      const lastChannelId = getLastChannelId();
+      const channelToSelect = parsed.channels.find((channel) => channel.id === lastChannelId) ?? parsed.channels[0];
+      selectChannel(channelToSelect);
 
       // Load EPG if available
       if (parsed.tvgUrl) {
@@ -305,38 +393,20 @@ function PlayerPage() {
         // Build EPG URL with token if available
         const epgUrl = parsed.tvgUrl.replace(".gz", "");
 
-        // Load EPG and filter to only channels in M3U
-        loadEPG(epgUrl, validChannelIds)
-          .then((epg) => {
-            // Fill gaps in EPG data with 2-hour fallback programs for catchup-capable channels
-            const filledEpg = fillEPGGaps(epg, parsed.channels);
-            startTransition(() => setEpgData(filledEpg));
-          })
-          .catch((err) => {
-            console.error("Failed to load EPG:", err);
-            // Even if EPG loading fails, generate fallback programs for catchup-capable channels
-            const fallbackEpg = fillEPGGaps({}, parsed.channels);
-            startTransition(() => setEpgData(fallbackEpg));
-          });
+        // Keep the startup overlay visible while the EPG is fetched and parsed on the main thread.
+        try {
+          const epg = await loadEPG(epgUrl, validChannelIds);
+          // Fill gaps in EPG data with 2-hour fallback programs for catchup-capable channels.
+          setEpgData(fillEPGGaps(epg, parsed.channels));
+        } catch (err) {
+          console.error("Failed to load EPG:", err);
+          // Even if EPG loading fails, generate fallback programs for catchup-capable channels.
+          setEpgData(fillEPGGaps({}, parsed.channels));
+        }
       } else {
         // No EPG URL provided, generate fallback programs for catchup-capable channels
         const fallbackEpg = fillEPGGaps({}, parsed.channels);
-        startTransition(() => setEpgData(fallbackEpg));
-      }
-
-      // Try to restore last played channel, otherwise select first channel
-      if (parsed.channels.length > 0) {
-        const lastChannelId = getLastChannelId();
-        let channelToSelect = parsed.channels[0];
-
-        if (lastChannelId) {
-          const lastChannel = parsed.channels.find((ch) => ch.id === lastChannelId);
-          if (lastChannel) {
-            channelToSelect = lastChannel;
-          }
-        }
-
-        selectChannel(channelToSelect);
+        setEpgData(fallbackEpg);
       }
 
       // Trigger reveal animation
@@ -345,11 +415,10 @@ function PlayerPage() {
         setIsLoading(false);
       }, 500); // Match animate-zoom-fade-out duration
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : t("failedToLoadPlaylist");
-      setError(errorMsg);
+      setError(err instanceof Error ? err.message : "failedToLoadPlaylist");
       setIsLoading(false);
     }
-  }, [t, selectChannel]);
+  }, [selectChannel]);
 
   // Load playlist on mount
   useEffect(() => {
@@ -367,9 +436,9 @@ function PlayerPage() {
     if (!epgChannelId) return null;
 
     // Calculate absolute time based on stream start + current video position
-    const absoluteTime = mseToWallClock(currentVideoTime, streamStartTime);
+    const absoluteTime = mseToWallClock(deferredCurrentVideoTime, streamStartTime);
     return getCurrentProgram(epgChannelId, epgData, absoluteTime);
-  }, [currentChannel, epgData, streamStartTime, currentVideoTime]);
+  }, [currentChannel, epgData, streamStartTime, deferredCurrentVideoTime]);
 
   const handleVideoError = useCallback((err: string) => {
     setError(err);
@@ -424,10 +493,14 @@ function PlayerPage() {
     }
   }, [isMobile]);
 
-  const handleSeamlessSwitchChange = useCallback((enabled: boolean) => {
-    setSeamlessSwitch(enabled);
-    saveSeamlessSwitch(enabled);
-  }, []);
+  const handleSeamlessSwitchChange = useCallback(
+    (enabled: boolean) => {
+      if (!supportsSeamlessSwitch) return;
+      setSeamlessSwitch(enabled);
+      saveSeamlessSwitch(enabled);
+    },
+    [supportsSeamlessSwitch],
+  );
 
   const handleAutoDeinterlaceChange = useCallback((enabled: boolean) => {
     setAutoDeinterlace(enabled);
@@ -452,29 +525,43 @@ function PlayerPage() {
       <div className="shrink-0">
         <SettingsDropdown
           locale={locale}
-          onLocaleChange={setLocale}
+          onLocaleChange={handleLocaleChange}
           theme={theme}
-          onThemeChange={setTheme}
+          onThemeChange={handleThemeChange}
+          appearance={appearance}
+          onAppearanceChange={handleAppearanceChange}
+          pictureInPictureMode={pictureInPictureMode}
+          onPictureInPictureModeChange={setPictureInPictureMode}
+          showPictureInPictureMode={supportsDocumentPictureInPicture}
           seamlessSwitch={seamlessSwitch}
           onSeamlessSwitchChange={handleSeamlessSwitchChange}
+          showSeamlessSwitch={supportsSeamlessSwitch}
           autoDeinterlace={autoDeinterlace}
           onAutoDeinterlaceChange={handleAutoDeinterlaceChange}
           pictureEnhancement={pictureEnhancement}
           onPictureEnhancementChange={handlePictureEnhancementChange}
+          showVideoProcessing={supportsMSEVideoProcessing}
         />
       </div>
     );
   }, [
     locale,
     theme,
+    appearance,
+    pictureInPictureMode,
     seamlessSwitch,
     autoDeinterlace,
     pictureEnhancement,
-    setLocale,
-    setTheme,
+    handleLocaleChange,
+    handleThemeChange,
+    handleAppearanceChange,
+    setPictureInPictureMode,
     handleSeamlessSwitchChange,
     handleAutoDeinterlaceChange,
     handlePictureEnhancementChange,
+    supportsSeamlessSwitch,
+    supportsDocumentPictureInPicture,
+    supportsMSEVideoProcessing,
   ]);
 
   const hasPlaylistLoadError = Boolean(error && !metadata);
@@ -482,7 +569,7 @@ function PlayerPage() {
     return (
       <div
         ref={pageContainerRef}
-        className="player-viewport-height relative flex flex-col bg-[radial-gradient(circle_at_92%_8%,rgba(59,130,246,0.15),transparent_28%),radial-gradient(circle_at_72%_92%,rgba(99,102,241,0.13),transparent_32%),linear-gradient(145deg,#f8fbff,#edf2ff)] dark:bg-[radial-gradient(circle_at_88%_10%,rgba(59,130,246,0.1),transparent_30%),radial-gradient(circle_at_70%_88%,rgba(99,102,241,0.12),transparent_34%),linear-gradient(145deg,#050b18,#090d24)]"
+        className="player-performance-page-background player-performance-scope player-viewport-height relative flex flex-col bg-[radial-gradient(circle_at_92%_8%,rgba(59,130,246,0.15),transparent_28%),radial-gradient(circle_at_72%_92%,rgba(99,102,241,0.13),transparent_32%),linear-gradient(145deg,#f8fbff,#edf2ff)] dark:bg-[radial-gradient(circle_at_88%_10%,rgba(59,130,246,0.1),transparent_30%),radial-gradient(circle_at_70%_88%,rgba(99,102,241,0.12),transparent_34%),linear-gradient(145deg,#050b18,#090d24)]"
       >
         <title>{t("title")}</title>
 
@@ -490,54 +577,52 @@ function PlayerPage() {
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           {/* Video Player - Mobile: fixed aspect ratio at top, Desktop: fills left side */}
           <div className="w-full sticky md:static md:flex-1 shrink-0">
-            <VideoPlayer
-              channel={currentChannel}
-              segments={playbackSegments}
-              playMode={playMode}
-              onError={handleVideoError}
-              locale={locale}
-              currentProgram={currentVideoProgram}
-              onSeek={handleVideoSeek}
-              onStreamStartTimeChange={setStreamStartTime}
-              streamStartTime={streamStartTime}
-              currentVideoTime={currentVideoTime}
-              onCurrentVideoTimeChange={handleCurrentVideoTimeChange}
-              onChannelNavigate={handleChannelNavigate}
-              showSidebar={showSidebar}
-              onToggleSidebar={handleToggleSidebar}
-              isFullscreen={isFullscreen}
-              onFullscreenToggle={handleFullscreenToggle}
-              seamlessSwitch={seamlessSwitch}
-              autoDeinterlace={autoDeinterlace}
-              pictureEnhancement={pictureEnhancement}
-              activeSourceIndex={activeSourceIndex}
-              onSourceChange={handleSourceChange}
-              onPlaybackStarted={handlePlaybackStarted}
-            />
+            <PlaybackTimeProvider value={currentVideoTime}>
+              <VideoPlayer
+                channel={currentChannel}
+                segments={playbackSegments}
+                playMode={playMode}
+                onError={handleVideoError}
+                locale={locale}
+                currentProgram={currentVideoProgram}
+                onSeek={handleVideoSeek}
+                onStreamStartTimeChange={setStreamStartTime}
+                streamStartTime={streamStartTime}
+                onCurrentVideoTimeChange={handleCurrentVideoTimeChange}
+                onChannelNavigate={handleChannelNavigate}
+                showSidebar={showSidebar}
+                onToggleSidebar={handleToggleSidebar}
+                isFullscreen={isFullscreen}
+                onFullscreenToggle={handleFullscreenToggle}
+                seamlessSwitch={supportsSeamlessSwitch && seamlessSwitch}
+                autoDeinterlace={autoDeinterlace}
+                pictureEnhancement={pictureEnhancement}
+                pictureInPictureMode={pictureInPictureMode}
+                activeSourceIndex={activeSourceIndex}
+                onSourceChange={handleSourceChange}
+                onPlaybackStarted={handlePlaybackStarted}
+              />
+            </PlaybackTimeProvider>
           </div>
 
           {/* Sidebar - Mobile: always visible (below video, hidden in fullscreen), Desktop: toggle-able side panel (visible in fullscreen) */}
           <div
             className={clsx(
-              "flex w-full flex-1 flex-col overflow-hidden border-blue-950/10 border-t bg-white/68 pl-[env(safe-area-inset-left)] shadow-[-14px_0_40px_rgba(30,64,175,0.06)] backdrop-blur-2xl dark:border-blue-100/10 dark:bg-[linear-gradient(160deg,rgba(5,13,32,0.96),rgba(17,16,49,0.92))] dark:shadow-[-18px_0_48px_rgba(1,7,24,0.28)] md:w-80 md:flex-initial md:border-t-0 md:border-l md:pt-[env(safe-area-inset-top)] md:pl-0",
+              "player-performance-panel-background flex w-full flex-1 flex-col overflow-hidden border-blue-950/10 border-t bg-white/68 pl-[env(safe-area-inset-left)] shadow-[-14px_0_40px_rgba(30,64,175,0.06)] backdrop-blur-2xl dark:border-blue-100/10 dark:bg-[linear-gradient(160deg,rgba(5,13,32,0.96),rgba(17,16,49,0.92))] dark:shadow-[-18px_0_48px_rgba(1,7,24,0.28)] md:w-80 md:flex-initial md:border-t-0 md:border-l md:pt-[env(safe-area-inset-top)] md:pl-0",
               insetSidebarRight && "pr-[env(safe-area-inset-right)]",
               (showSidebar || isMobile) && !(isFullscreen && isMobile) ? "" : "hidden",
             )}
           >
             {/* Sidebar Tabs */}
-            <div className="flex shrink-0 items-center border-blue-950/10 border-b bg-white/44 shadow-[0_8px_24px_rgba(30,64,175,0.045)] backdrop-blur-xl dark:border-blue-100/10 dark:bg-[linear-gradient(90deg,#1a2035,#292643)]">
+            <div className="player-performance-panel-background flex shrink-0 items-center border-blue-950/10 border-b bg-white/44 shadow-[0_8px_24px_rgba(30,64,175,0.045)] backdrop-blur-xl dark:border-blue-100/10 dark:bg-[linear-gradient(90deg,#1a2035,#292643)]">
               {(["channels", "epg"] as const).map((view) => (
                 <button
                   type="button"
                   key={view}
-                  onClick={() => {
-                    (view === "channels" ? channelListNextScrollBehaviorRef : epgViewNextScrollBehaviorRef).current =
-                      "instant";
-                    setSidebarView(view);
-                  }}
+                  onClick={() => handleSidebarViewChange(view)}
                   className={clsx(
-                    "min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap border-b-2 px-3 py-2 text-center font-semibold text-xs leading-5 tracking-[0.01em] transition-[color,background-color,border-color,box-shadow] md:px-4 md:py-3 md:text-sm",
-                    sidebarView === view
+                    "player-performance-motion min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap border-b-2 px-3 py-2 text-center font-semibold text-xs leading-5 tracking-[0.01em] transition-[color,background-color,border-color,box-shadow] md:px-4 md:py-3 md:text-sm",
+                    selectedSidebarView === view
                       ? "border-blue-500 bg-[linear-gradient(to_top,rgba(59,130,246,0.12),transparent)] text-blue-700 shadow-[inset_0_-1px_0_rgba(59,130,246,0.18)] dark:border-blue-300 dark:text-blue-200"
                       : "cursor-pointer border-transparent text-slate-500 hover:bg-blue-400/5 hover:text-blue-700 dark:text-slate-400 dark:hover:text-blue-100",
                   )}
@@ -549,7 +634,7 @@ function PlayerPage() {
 
             {/* Sidebar Content */}
             <div className="flex-1 overflow-hidden">
-              <Activity mode={sidebarView === "channels" ? "visible" : "hidden"}>
+              <Activity mode={renderedSidebarView === "channels" ? "visible" : "hidden"}>
                 <ChannelList
                   channels={metadata?.channels}
                   groups={metadata?.groups}
@@ -560,7 +645,7 @@ function PlayerPage() {
                   epgData={epgData}
                 />
               </Activity>
-              <Activity mode={sidebarView === "epg" ? "visible" : "hidden"}>
+              <Activity mode={renderedSidebarView === "epg" ? "visible" : "hidden"}>
                 <EPGView
                   channelId={currentChannel ? getEPGChannelId(currentChannel, epgData) : null}
                   epgData={epgData}
@@ -578,13 +663,13 @@ function PlayerPage() {
         {isLoading && (
           <div
             className={clsx(
-              "absolute inset-0 z-50 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.16),transparent_28%),radial-gradient(circle_at_65%_60%,rgba(99,102,241,0.14),transparent_35%),linear-gradient(145deg,#f8fbff,#edf2ff)] pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] dark:bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.11),transparent_30%),radial-gradient(circle_at_65%_60%,rgba(99,102,241,0.12),transparent_38%),linear-gradient(145deg,#050b18,#090d24)]",
+              "player-performance-page-background player-performance-motion absolute inset-0 z-50 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.16),transparent_28%),radial-gradient(circle_at_65%_60%,rgba(99,102,241,0.14),transparent_35%),linear-gradient(145deg,#f8fbff,#edf2ff)] pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] dark:bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.11),transparent_30%),radial-gradient(circle_at_65%_60%,rgba(99,102,241,0.12),transparent_38%),linear-gradient(145deg,#050b18,#090d24)]",
               isRevealing && "animate-zoom-fade-out",
             )}
           >
             <div className="text-center space-y-4">
               {/* Loading spinner */}
-              <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-950/10 border-t-blue-500 border-r-indigo-500 shadow-[0_0_28px_rgba(59,130,246,0.22)] dark:border-blue-100/10 dark:border-t-blue-300 dark:border-r-indigo-400" />
+              <div className="player-performance-loading-spinner mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-950/10 border-t-blue-500 border-r-indigo-500 shadow-[0_0_28px_rgba(59,130,246,0.22)] dark:border-blue-100/10 dark:border-t-blue-300 dark:border-r-indigo-400" />
             </div>
           </div>
         )}
@@ -593,12 +678,13 @@ function PlayerPage() {
   }
 
   const playlistErrorHints = [t("playlistErrorHintReachable"), t("playlistErrorHintFormat")];
+  const errorMessage = error ? t(error) : null;
 
   return (
-    <div className="player-viewport-height overflow-y-auto bg-[radial-gradient(circle_at_18%_14%,rgba(59,130,246,0.16),transparent_28%),radial-gradient(circle_at_84%_82%,rgba(99,102,241,0.16),transparent_32%),linear-gradient(145deg,#f8fbff,#edf2ff)] dark:bg-[radial-gradient(circle_at_18%_14%,rgba(59,130,246,0.1),transparent_30%),radial-gradient(circle_at_84%_82%,rgba(99,102,241,0.13),transparent_34%),linear-gradient(145deg,#050b18,#090d24)]">
+    <div className="player-performance-page-background player-performance-scope player-viewport-height overflow-y-auto bg-[radial-gradient(circle_at_18%_14%,rgba(59,130,246,0.16),transparent_28%),radial-gradient(circle_at_84%_82%,rgba(99,102,241,0.16),transparent_32%),linear-gradient(145deg,#f8fbff,#edf2ff)] dark:bg-[radial-gradient(circle_at_18%_14%,rgba(59,130,246,0.1),transparent_30%),radial-gradient(circle_at_84%_82%,rgba(99,102,241,0.13),transparent_34%),linear-gradient(145deg,#050b18,#090d24)]">
       <title>{t("title")}</title>
       <div className="mx-auto flex min-h-full w-[calc(100%-2rem)] max-w-5xl items-center py-8 sm:w-[calc(100%-3rem)]">
-        <Card className="min-w-0 w-full overflow-hidden rounded-3xl border-blue-900/10 bg-white/72 shadow-[0_28px_80px_rgba(30,64,175,0.16),inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-2xl dark:border-blue-100/12 dark:bg-[linear-gradient(145deg,rgba(7,20,43,0.9),rgba(26,24,72,0.82))] dark:shadow-[0_30px_90px_rgba(1,7,24,0.62),inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <Card className="player-performance-panel-background min-w-0 w-full overflow-hidden rounded-3xl border-blue-900/10 bg-white/72 shadow-[0_28px_80px_rgba(30,64,175,0.16),inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-2xl dark:border-blue-100/12 dark:bg-[linear-gradient(145deg,rgba(7,20,43,0.9),rgba(26,24,72,0.82))] dark:shadow-[0_30px_90px_rgba(1,7,24,0.62),inset_0_1px_0_rgba(255,255,255,0.08)]">
           <div className="grid min-w-0 md:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="min-w-0 p-6 sm:p-8 md:p-10">
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-rose-300/20 bg-[linear-gradient(145deg,rgba(251,113,133,0.16),rgba(99,102,241,0.12))] text-rose-500 shadow-[0_12px_28px_rgba(225,29,72,0.12)] dark:text-rose-300">
@@ -636,7 +722,7 @@ function PlayerPage() {
                   type="button"
                   variant="outline"
                   onClick={loadPlaylist}
-                  className="w-full gap-2 rounded-xl border-primary/20 bg-[linear-gradient(135deg,#0e7490,#4338ca)] text-white shadow-[0_10px_28px_rgba(37,99,235,0.24)] transition-[color,background-color,border-color] hover:border-primary/30 hover:bg-[linear-gradient(135deg,#0e7490,#4338ca)] hover:text-white sm:w-auto"
+                  className="w-full gap-2 rounded-xl border-primary/20 bg-blue-700 bg-[linear-gradient(135deg,#0e7490,#4338ca)] text-white shadow-[0_10px_28px_rgba(37,99,235,0.24)] transition-[color,background-color,border-color] hover:border-primary/30 hover:bg-blue-700 hover:bg-[linear-gradient(135deg,#0e7490,#4338ca)] hover:text-white sm:w-auto"
                 >
                   <RefreshCw className="h-4 w-4" aria-hidden="true" />
                   {t("retry")}
@@ -663,7 +749,7 @@ function PlayerPage() {
                 {buildAppPath("/playlist.m3u")}
               </div>
               <div className="mt-6 text-sm font-semibold text-foreground">{t("technicalDetails")}</div>
-              <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{error}</p>
+              <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{errorMessage}</p>
             </div>
           </div>
         </Card>
