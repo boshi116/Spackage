@@ -22,6 +22,11 @@ var getWanStatus = rpc.declare({ object: 'network.interface', method: 'dump', ex
 var callNetCheckWifi = rpc.declare({ object: 'netwiz', method: 'check_wifi', expect: { '': {} } });
 var callSetPassword = rpc.declare({ object: 'netwiz', method: 'set_password', params: ['password'], expect: { result: 0 } });
 var callSystemBoard = rpc.declare({ object: 'system', method: 'board', expect: { '': {} } });
+
+// 单一插件的局部备份与恢复接口
+var callBackupPlugin = rpc.declare({ object: 'netwiz', method: 'backup_plugin_config', params: ['plugin'], expect: { '': {} } });
+var callRestorePlugin = rpc.declare({ object: 'netwiz', method: 'restore_plugin_config', params: ['plugin'], expect: { '': {} } });
+
 // 增加智能备份和恢复的接口声明
 var callSmartBackup = rpc.declare({ object: 'netwiz', method: 'smart_backup', params: ['type'], expect: { '': {} } });
 var callCheckBackup = rpc.declare({ object: 'netwiz', method: 'check_backup', expect: { '': {} } });
@@ -1424,10 +1429,10 @@ return view.extend({
                                                     }
                                                 }).catch(function(err) {
                                                     var errStr = String(err).toLowerCase();
-                                                    // 智能拦截超时报错：后台其实还在干活，只是闪存写入慢
+                                                    // 智能拦截超时报错：后台还在运行。
                                                     if (errStr.indexOf('timed out') !== -1 || errStr.indexOf('timeout') !== -1) {
                                                         openModal({ 
-                                                            title: T['M_REP_PROC_TIT'] || 'Processing', 
+                                                            title: T['M_REP_PROC_TIT'] || 'Processing',
                                                             msg: (T['MSG_WAIT'] || 'Please wait...') + '<br><br><span style="font-size:13px;color:#64748b;line-height:1.6;">' + (T['M_HW_WAIT'] || 'Hardware execution takes longer, running in background...') + '</span>', 
                                                             spin: true, hideCancel: true, hideOk: true 
                                                         });
@@ -3857,7 +3862,7 @@ return view.extend({
             }
         }
 
-        // ==========================================
+       // ==========================================
         // 原生备份与恢复配置逻辑绑定
         // ==========================================
         
@@ -3867,18 +3872,18 @@ return view.extend({
             if (!file) return;
 
             openModal({
-                title: '⚠️ ' + (T['M_RST_CONF_TIT'] || '恢复配置确认'),
+                title: '⚠️ ' + (T['M_RST_CONF_TIT'] || 'Restore Configuration Confirm'),
                 msg: '<div style="color:#ef4444; font-size:15px; font-weight:bold; margin-bottom:10px;">' +
-                     (T['M_RST_CONF_WARN'] || '警告：恢复配置将覆盖当前所有设置，并在完成后自动重启路由器！') + '</div>' +
-                     '<div style="color:#475569; font-size:14px;">选中文件：' + escapeHTML(file.name) + '</div>',
-                okText: '🚀 ' + (T['BTN_RST_START'] || '确认恢复'),
-                cancelText: T['BTN_CANCEL'] || '取消',
+                     (T['M_RST_CONF_WARN'] || 'Warning: Restoring the configuration will overwrite all current settings and automatically restart the router upon completion!') + '</div>' +
+                     '<div style="color:#475569; font-size:14px;">' + (T['M_SEL_FILE'] || 'Selected file: ') + escapeHTML(file.name) + '</div>',
+                okText: '🚀 ' + (T['BTN_RST_START'] || 'Confirm Restore'),
+                cancelText: T['BTN_CANCEL'] || 'Cancel',
                 isDanger: true,
                 onOk: function() {
                     openModal({
-                        title: T['M_RST_CONF_TIT'] || '正在恢复配置',
+                        title: T['M_RST_CONF_TIT_ING'] || 'Restoring Configuration',
                         msg: '<div style="text-align:center; padding:10px 0; color:#64748b;">' +
-                             (T['MSG_RESTORE_UPLOADING'] || '正在上传备份文件，请勿断开电源...') +
+                             (T['MSG_RESTORE_UPLOADING'] || 'Uploading backup file, please do not disconnect power...') +
                              '<br><div id="nw-upload-progress" style="font-size:24px; color:#3b82f6; font-weight:bold; margin-top:10px; font-family:monospace;">0%</div></div>',
                         spin: true
                     });
@@ -3907,30 +3912,30 @@ return view.extend({
                     xhr.onload = function() {
                         if (xhr.status === 200) {
                             var pEl = document.getElementById('nw-upload-progress');
-                            if (pEl) pEl.innerHTML = '<span style="color:#10b981; font-size:16px;">' + (T['M_RST_DELIVERED'] || '文件已送达，开始执行恢复...') + '</span>';
+                            if (pEl) pEl.innerHTML = '<span style="color:#10b981; font-size:16px;">' + (T['M_RST_DELIVERED'] || 'File delivered, starting restore...') + '</span>';
 
-                            // 修正：使用文件顶部预先声明好的 callSysRestore 方法正确传参
+                            // 使用文件顶部预先声明好的 callSysRestore 方法正确传参
                             callSysRestore(true, '/tmp/backup_restore.tar.gz').then(function() {
                                 var rebootSec = 0;
                                 setInterval(function() {
                                     rebootSec++;
-                                    if (pEl) pEl.innerHTML = '<span style="color:#3b82f6; font-size:16px;">🔄 ' + (T['MSG_REBOOTING'] || '系统正在重启...') + ' (' + rebootSec + 's)</span>';
+                                    if (pEl) pEl.innerHTML = '<span style="color:#3b82f6; font-size:16px;">🔄 ' + (T['MSG_REBOOTING'] || 'System is restarting...') + ' (' + rebootSec + 's)</span>';
                                     if (rebootSec > 60) window.location.reload();
                                 }, 1000);
                             }).catch(function(err) {
-                                if (pEl) pEl.innerHTML = '<span style="color:#f59e0b; font-size:16px;">⏳ 恢复指令已下发，设备可能正在重启中...</span>';
+                                if (pEl) pEl.innerHTML = '<span style="color:#f59e0b; font-size:16px;">⏳ ' + (T['M_RST_CMD_SENT'] || 'Restore command issued, device may be restarting...') + '</span>';
                                 setTimeout(function(){ window.location.reload(); }, 60000);
                             });
 
                         } else {
                             document.getElementById('file-restore-config').value = '';
-                            openModal({ title: T['M_SYS_ERR'] || '错误', msg: '上传失败: ' + xhr.status, hideCancel: true, okText: T['M_CLOSE'] || '关闭' });
+                            openModal({ title: T['M_SYS_ERR'] || 'Error', msg: (T['M_UPL_FAIL_STAT'] || 'Upload failed: %s').replace('%s', xhr.status), hideCancel: true, okText: T['M_CLOSE'] || 'Close' });
                         }
                     };
 
                     xhr.onerror = function() {
                         document.getElementById('file-restore-config').value = '';
-                        openModal({ title: T['M_RST_NET_ERR'] || '网络错误', msg: T['M_RST_NET_INTR'] || '网络连接意外中断！', hideCancel: true, okText: T['M_CLOSE'] || '关闭' });
+                        openModal({ title: T['M_RST_NET_ERR'] || 'Network Error', msg: T['M_RST_NET_INTR'] || 'Network connection unexpectedly interrupted!', hideCancel: true, okText: T['M_CLOSE'] || 'Close' });
                     };
 
                     xhr.send(fd);
@@ -3938,54 +3943,193 @@ return view.extend({
             });
         };
 
-        // 将点击事件挂载到全局 container，利用事件冒泡无视 DOM 加载顺序
-        container.addEventListener('click', function(e) {
+        // 将点击事件挂载到最高层级 document，防止被拦截或 container 未就绪
+        document.addEventListener('click', function(e) {
             
-            // 1. 拦截备份配置点击
-            var btnBackup = e.target.closest('#btn-backup-config');
+            // 1. 拦截备份：前端接收 Base64 并触发浏览器下载
+            var btnBackup = e.target.closest('#nw-btn-backup-plugin');
             if (btnBackup) {
                 e.preventDefault();
+                
+                var selPlugin = document.getElementById('nw-repair-select');
+                if (!selPlugin || !selPlugin.value) return;
+                var pName = selPlugin.value;
+                
                 openModal({
-                    title: T['M_BAK_CONF_TIT'] || '备份配置',
-                    msg: '<div style="text-align:center; padding:15px 0; color:#3b82f6;">⏳ ' + (T['M_BAK_CONF_MSG'] || '正在生成并下载配置备份，请稍候...') + '</div>',
-                    spin: true,
-                    hideCancel: true,
-                    hideOk: true
+                    title: '📦 ' + (T['M_BAK_ING_TIT'] || 'Backing up'),
+                    msg: '<div style="text-align:center; padding:15px 0; color:#3b82f6;">⏳ ' +
+                        (T['M_BAK_ING_MSG'] || 'Precisely packing %s config and generating download, please wait...').replace('%s', '<b>' + pName + '</b>') +
+                        '</div>',
+                    spin: true, hideCancel: true, hideOk: true
                 });
+                
+                callBackupPlugin(pName).then(function(r) {
+                    if (r && String(r.result) === '0' && r.url) {
+                        
+                        var a = document.createElement('a');
+                        a.href = r.url;
+                        a.download = pName + '_config_backup.tar';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
 
-                var backupUrl = window.location.origin + '/cgi-bin/cgi-backup';
-                var a = document.createElement('a');
-                a.href = backupUrl;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-
-                setTimeout(function() {
-                    var gm = document.getElementById('nw-global-modal');
-                    if (gm) gm.style.display = 'none';
-                }, 2500);
+                        openModal({
+                            title: T['M_BAK_SUCC_TIT'] || 'Backup Successful',
+                            msg: '<div style="color:#10b981; font-weight:bold; text-align:center;">' + (T['M_BAK_SUCC_MSG'] || 'The file contains core assets and is downloading in the background. Please check your browser!') + '</div>', 
+                            okText: T['M_CLOSE'] || 'Close',
+                            hideCancel: true
+                        });
+                    } else {
+                        openModal({ title: '❌ ' + (T['M_BAK_FAIL_TIT'] || 'Backup Failed'), msg: (T['M_BAK_FAIL_MSG'] || 'Config not found or packaging error. Please check if the plugin is installed.'), okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                    }
+                }).catch(function(err) {
+                    openModal({ title: '❌ ' + (T['M_REQ_FAIL_TIT'] || 'Request Failed'), msg: (T['M_REQ_FAIL_MSG'] || 'API request failed: %s').replace('%s', err), okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                });
             }
 
-            // 2. 拦截恢复配置点击
-            var btnRestore = e.target.closest('#btn-restore-config');
+            // 2. 拦截恢复：呼出文件选择框上传，然后触发解压
+            var btnRestore = e.target.closest('#nw-btn-restore-plugin');
             if (btnRestore) {
                 e.preventDefault();
-                
-                // 动态防御：如果 HTML 骨架里没写 input type="file"，用 JS 动态捏一个出来
-                var fileRestoreConfig = document.getElementById('file-restore-config');
-                if (!fileRestoreConfig) {
-                    fileRestoreConfig = document.createElement('input');
-                    fileRestoreConfig.type = 'file';
-                    fileRestoreConfig.id = 'file-restore-config';
-                    fileRestoreConfig.style.display = 'none';
-                    document.body.appendChild(fileRestoreConfig);
-                    
-                    // 只需挂载一次 change 监听
-                    fileRestoreConfig.addEventListener('change', handleRestoreUpload);
+
+                var selPlugin = document.getElementById('nw-repair-select');
+                if (!selPlugin || !selPlugin.value) return;
+                var pName = selPlugin.value;
+
+                var fileInput = document.getElementById('file-restore-plugin-local');
+                if (!fileInput) {
+                    fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.id = 'file-restore-plugin-local';
+                    fileInput.style.display = 'none';
+                    document.body.appendChild(fileInput);
+
+                    fileInput.addEventListener('change', function(evt) {
+                        var file = evt.target.files[0];
+                        if (!file) return;
+
+                        // 动态获取下拉框最新选择的值
+                        var selPluginNow = document.getElementById('nw-repair-select');
+                        var currentPName = selPluginNow ? selPluginNow.value : '';
+                        if (!currentPName) return;
+
+                        var fileName = file.name.toLowerCase();
+
+                        // 防呆 1：检查文件格式
+                        if (!fileName.endsWith('.tar.gz') && !fileName.endsWith('.tar')) {
+                            openModal({ 
+                                title: '❌ ' + (T['M_FMT_ERR_TIT'] || 'Format Error'), 
+                                msg: T['M_FMT_ERR_MSG'] || 'Please upload a valid .tar or .tar.gz backup file!', 
+                                okText: T['M_CLOSE'] || 'Close', 
+                                hideCancel: true 
+                            });
+                            fileInput.value = '';
+                            return;
+                        }
+
+                        // 防呆 2：检查文件名是否包含该插件的名称 (允许稍微模糊的匹配)
+                        if (fileName.indexOf(currentPName.toLowerCase()) === -1) {
+                            openModal({ 
+                                title: '⚠️ ' + (T['M_WARN_TIT'] || 'Warning'), 
+                                msg: '<div style="color:#f59e0b;">' + 
+                                     (T['M_WARN_MSG'] || 'The selected file does not seem to belong to %s.<br>File name: %f<br>Are you sure you want to continue?')
+                                         .replace('%s', '<b>' + currentPName + '</b>')
+                                         .replace('%f', file.name) + 
+                                     '</div>', 
+                                okText: T['BTN_FORCE_RST'] || 'Force Restore', 
+                                cancelText: T['BTN_CANCEL'] || 'Cancel',
+                                isDanger: true,
+                                onOk: function() { startUploadRestore(file, currentPName); } // 强制，则放行
+                            });
+                            fileInput.value = '';
+                            return;
+                        }
+
+                        // 验证通过，开始上传
+                        startUploadRestore(file, currentPName);
+                    });
+
+                    // 上传逻辑抽离成一个独立函数，方便调用
+                    function startUploadRestore(file, pName) {
+
+                        openModal({
+                            title: '⚡ ' + (T['M_RST_ING_TIT'] || 'Restoring'),
+                            msg: '<div style="text-align:center; padding:15px 0; color:#10b981;">⏳ ' +
+                                (T['M_RST_ING_MSG'] || 'Uploading and restoring %s config...').replace('%s', '<b>' + pName + '</b>') +
+                                '</div>',
+                            spin: true, hideCancel: true, hideOk: true
+                        });
+
+                        var fd = new FormData();
+                        var sid = (typeof L !== 'undefined' && L.env && L.env.sessionid) ? L.env.sessionid : "";
+                        if (!sid) {
+                            var match = document.cookie.match(/sysauth_http=([^;]+)/) || document.cookie.match(/sysauth=([^;]+)/);
+                            if (match) sid = match[1];
+                        }
+                        fd.append("sessionid", sid);
+                        fd.append("filename", "/tmp/plugin_restore_tmp.tar.gz");
+                        fd.append("file", file);
+
+                        var xhr = new XMLHttpRequest();
+                        xhr.open('POST', '/cgi-bin/cgi-upload', true);
+                        xhr.onload = function() {
+                            if (xhr.status === 200) {
+                                callRestorePlugin(pName).then(function(r) {
+                                    if (r && String(r.result) === '0') {
+                                        openModal({
+                                            title: '✅ ' + (T['M_RST_SUCC_TIT'] || 'Restore Successful'),
+                                            // 倒计时自动刷新
+                                            msg: '<div style="color:#10b981; font-weight:bold; text-align:center;">' +
+                                                (T['M_RST_SUCC_MSG'] || '%s config restored! Service is restarting in the background...').replace('%s', '<b>' + pName + '</b>') +
+                                                '</div><div id="nw-reload-countdown" style="text-align:center; color:#64748b; margin-top:10px; font-size:13px;"></div>',
+                                            okText: T['M_RELOAD'] || 'Reload Page',
+                                            hideCancel: true,
+                                            onOk: function() { window.location.reload(); }
+                                        });
+
+                                        // 倒计时 5 秒后自动刷新
+                                        var sec = 5;
+                                        var cdEl = document.getElementById('nw-reload-countdown');
+                                        var timer = setInterval(function() {
+                                            sec--;
+                                            if (cdEl) cdEl.innerText = (T['M_AUTO_RELOAD'] || 'Auto reloading in %s seconds...').replace('%s', sec);
+                                            if (sec <= 0) {
+                                                clearInterval(timer);
+                                                window.location.reload();
+                                            }
+                                        }, 1000);
+
+                                    } else {
+                                        var errMsg = T['M_RST_FAIL_MSG'] || 'Failed to extract or restart service.';
+                                        if (r && String(r.result) === '3') {
+                                            errMsg = T['M_ERR_FILE_CORRUPT'] || 'The uploaded file is corrupted or not a valid archive!';
+                                        } else if (r && String(r.result) === '4') {
+                                            errMsg = (T['M_ERR_FILE_MISMATCH'] || 'The archive content does not match %s!').replace('%s', '<b>' + pName + '</b>');
+                                        } else if (r && String(r.result) === '5') {
+                                            // 捕获解压失败错误
+                                            errMsg = T['M_ERR_EXTRACT'] || 'Failed to extract files to the system! (Storage full or permission denied)';
+                                        }
+                                        
+                                        openModal({ 
+                                            title: '❌ ' + (T['M_RST_FAIL_TIT'] || 'Restore Failed'), 
+                                            msg: errMsg, 
+                                            okText: T['M_CLOSE'] || 'Close', 
+                                            hideCancel: true 
+                                        });
+                                    }
+                                }).catch(function(err) {
+                                    openModal({ title: '❌ ' + (T['M_REQ_FAIL_TIT'] || 'Request Failed'), msg: (T['M_REQ_FAIL_MSG'] || 'API request failed: %s').replace('%s', err), okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                                });
+                            } else {
+                                openModal({ title: '❌ ' + (T['M_UPL_FAIL_TIT'] || 'Upload Failed'), msg: (T['M_UPL_FAIL_MSG'] || 'File upload rejected, status code: %s').replace('%s', xhr.status), okText: T['M_CLOSE'] || 'Close', hideCancel: true });
+                            }
+                        };
+                        xhr.send(fd);
+                    }
                 }
-                
-                fileRestoreConfig.value = ''; 
-                fileRestoreConfig.click();
+                // 每次点击都清空旧文件并唤起系统选择框
+                fileInput.value = '';
+                fileInput.click();
             }
         });
         // ==========================================
