@@ -1,0 +1,44 @@
+{
+  "luci-app-lanspeed": {
+    "description": "Read LAN Speed status and update collector interface settings",
+    "read": {
+      "ubus": {
+        "lanspeed": [
+          "status",
+          "clients",
+          "overview",
+          "health",
+          "interfaces",
+          "sysdevices",
+          "diagnostics",
+          "client_connections"
+        ],
+        "uci": [
+          "get"
+        ]
+      },
+      "uci": [
+        "lanspeed",
+        "dhcp"
+      ]
+    },
+    "write": {
+      "ubus": {
+        "luci": [
+          "setInitAction"
+        ],
+        "uci": [
+          "set",
+          "delete",
+          "add",
+          "apply",
+          "revert"
+        ]
+      },
+      "uci": [
+        "lanspeed",
+        "dhcp"
+      ]
+    }
+  }
+}

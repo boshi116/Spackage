@@ -1,0 +1,43 @@
+{
+  "contract_version": 1,
+  "devices": [
+    {
+      "name": "br-lan",
+      "selected": true,
+      "observed": false,
+      "recommended_lan": true,
+      "collect_allowed": true,
+      "collect_reason": "eligible_bridge",
+      "is_bridge": true,
+      "is_bridge_port": false,
+      "is_nss_ifb": false,
+      "speed_mbps": 1000
+    },
+    {
+      "name": "nssifb",
+      "selected": false,
+      "observed": true,
+      "recommended_lan": false,
+      "collect_allowed": false,
+      "collect_reason": "nssifb_observe_only",
+      "is_bridge": false,
+      "is_bridge_port": false,
+      "is_nss_ifb": true
+    }
+  ],
+  "current_ifnames": [
+    "br-lan"
+  ],
+  "current_observed": [
+    "nssifb"
+  ],
+  "current_excluded": [],
+  "configured_ifnames": ["br-lan"],
+  "configured_observed": ["nssifb"],
+  "configured_excluded": [],
+  "orphaned": [],
+  "limits": {
+    "max_configured": 16,
+    "max_name_length": 31
+  }
+}

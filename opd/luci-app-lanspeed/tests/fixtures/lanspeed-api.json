@@ -1,0 +1,422 @@
+{
+  "status": {
+    "mode": "Unsupported",
+    "confidence": "unsupported",
+    "warnings": [
+      "stub_no_live_metrics"
+    ],
+    "evidence": {
+      "source": "lanspeedd_stub",
+      "method": "status",
+      "fixture_safe": true,
+      "live_metrics": false,
+      "probe_failures": {
+        "items": [],
+        "total": 0,
+        "truncated": false
+      },
+      "bpf": {
+        "enabled": true,
+        "collect_target_count": 1,
+        "expected_hook_count": 2,
+        "attached_hook_count": 0,
+        "object_loaded": false,
+        "attach_state": "not_attempted",
+        "map_state": "not_attempted",
+        "last_complete_snapshot_ms": null,
+        "retained_fresh_snapshot": false,
+        "reason_code": "package_missing"
+      }
+    },
+    "refresh_interval_ms": 1000,
+    "collector_mode": "auto",
+    "rate_collector_mode": "auto",
+    "access_edge_mode": "active",
+    "conn_collector_mode": "auto",
+    "version": "1.1.5-r8",
+    "capabilities": {
+      "bpf": false,
+      "bpf_supported": false,
+      "bpf_package": false,
+      "bpf_object": false,
+      "bpf_runtime_metrics": false,
+      "conntrack_fallback": true,
+      "live_metrics": false,
+      "fw4": false,
+      "nft": false,
+      "software_flow_offload": false,
+      "hardware_flow_offload": false,
+      "nss": false,
+      "nss_ecm_offload": false,
+      "nss_ppe_offload": false,
+      "nss_ecm_node": false,
+      "nss_ecm_bpf": false,
+      "nss_bridge_mgr": false,
+      "nss_ifb": false,
+      "nss_nsm": false,
+      "nss_dp": false,
+      "nss_mcs": false,
+      "fullcone": false,
+      "nf_conntrack_acct": false,
+      "flowtable_counter": false,
+      "tc": false,
+      "tc_clsact": false,
+      "existing_tc_filters": false,
+      "ifb": false,
+      "sqm": false,
+      "qosify": false,
+      "openclash": false,
+      "openclash_fake_ip": false,
+      "openclash_tun_mix": false,
+      "openclash_redirect_dns": false,
+      "openclash_dns_chain_complete": false,
+      "openclash_router_self_proxy": false,
+      "openclash_udp_proxy": false,
+      "openclash_ipv6": false,
+      "dae": false,
+      "homeproxy": false,
+      "lan_bridge": false,
+      "vlan": false,
+      "wlan": false,
+      "lan_edge": false,
+      "safe_attach": false,
+      "map_full": false
+    },
+    "active_client_window_ms": 10000,
+    "active_client_min_bps": 1,
+    "overview_window_samples": 240
+  },
+  "clients": {
+    "clients": [
+      {
+        "mac": "02:00:00:00:00:01",
+        "identity_key": "02:00:00:00:00:01@lan",
+        "zone": "lan",
+        "interface": "br-lan",
+        "ips": [
+          "192.0.2.10"
+        ],
+        "hostname": "fixture-client",
+        "rx_bps": 0,
+        "tx_bps": 0,
+        "last_seen": 0,
+        "collector_mode": "stub",
+        "confidence": "unsupported",
+        "warnings": [
+          "stub_no_live_metrics"
+        ]
+      }
+    ],
+    "evidence": {
+      "source": "lanspeedd_stub",
+      "method": "clients",
+      "fixture_safe": true,
+      "live_metrics": false
+    }
+  },
+  "overview": {
+    "samples": [
+      {
+        "sample_ms": 0,
+        "tx_bps": 0,
+        "rx_bps": 0,
+        "client_count": 1,
+        "active_clients": 0,
+        "tcp_conns": 0,
+        "udp_conns": 0,
+        "udp_dns_conns": 0,
+        "udp_other_conns": 0
+      }
+    ],
+    "max_samples": 240,
+    "sample_source": "clients_refresh_daemon_ring",
+    "conn_semantics": "conntrack_current_tcp_established_assured_udp_assured_dns_split",
+    "overview_window_samples": 240,
+    "active_client_window_ms": 10000,
+    "active_client_min_bps": 1
+  },
+  "health": {
+    "mode": "Unsupported",
+    "confidence": "unsupported",
+    "capabilities": {
+      "bpf": false,
+      "bpf_supported": false,
+      "bpf_package": false,
+      "bpf_object": false,
+      "bpf_runtime_metrics": false,
+      "conntrack_fallback": true,
+      "live_metrics": false,
+      "fw4": false,
+      "nft": false,
+      "software_flow_offload": false,
+      "hardware_flow_offload": false,
+      "nss": false,
+      "nss_ecm_offload": false,
+      "nss_ppe_offload": false,
+      "nss_ecm_node": false,
+      "nss_ecm_bpf": false,
+      "nss_bridge_mgr": false,
+      "nss_ifb": false,
+      "nss_nsm": false,
+      "nss_dp": false,
+      "nss_mcs": false,
+      "fullcone": false,
+      "nf_conntrack_acct": false,
+      "flowtable_counter": false,
+      "tc": false,
+      "tc_clsact": false,
+      "existing_tc_filters": false,
+      "ifb": false,
+      "sqm": false,
+      "qosify": false,
+      "openclash": false,
+      "openclash_fake_ip": false,
+      "openclash_tun_mix": false,
+      "openclash_redirect_dns": false,
+      "openclash_dns_chain_complete": false,
+      "openclash_router_self_proxy": false,
+      "openclash_udp_proxy": false,
+      "openclash_ipv6": false,
+      "dae": false,
+      "homeproxy": false,
+      "lan_bridge": false,
+      "vlan": false,
+      "wlan": false,
+      "lan_edge": false,
+      "safe_attach": false,
+      "map_full": false
+    },
+    "conflicts": [],
+    "warnings": [
+      "stub_no_live_metrics"
+    ],
+    "evidence": {
+      "source": "lanspeedd_stub",
+      "method": "health",
+      "fixture_safe": true,
+      "live_metrics": false,
+      "probe_failures": {
+        "items": [],
+        "total": 0,
+        "truncated": false
+      },
+      "bpf": {
+        "enabled": true,
+        "collect_target_count": 1,
+        "expected_hook_count": 2,
+        "attached_hook_count": 0,
+        "object_loaded": false,
+        "attach_state": "not_attempted",
+        "map_state": "not_attempted",
+        "last_complete_snapshot_ms": null,
+        "retained_fresh_snapshot": false,
+        "reason_code": "package_missing"
+      }
+    }
+  },
+  "interfaces": {
+    "interfaces": [
+      {
+        "name": "br-lan",
+        "role": "lan",
+        "status": "pending",
+        "evidence": {
+          "configured": true,
+          "source": "uci_default",
+          "live_probe": false
+        }
+      }
+    ],
+    "evidence": {
+      "source": "lanspeedd_stub",
+      "method": "interfaces",
+      "fixture_safe": true,
+      "live_metrics": false
+    }
+  },
+  "sysdevices": {
+    "contract_version": 1,
+    "devices": [
+      {
+        "name": "br-lan",
+        "selected": true,
+        "observed": false,
+        "recommended_lan": true,
+        "collect_allowed": true,
+        "collect_reason": "eligible_bridge",
+        "is_bridge": true,
+        "is_bridge_port": false,
+        "is_nss_ifb": false,
+        "speed_mbps": 1000
+      },
+      {
+        "name": "nssifb",
+        "selected": false,
+        "observed": true,
+        "recommended_lan": false,
+        "collect_allowed": false,
+        "collect_reason": "nssifb_observe_only",
+        "is_bridge": false,
+        "is_bridge_port": false,
+        "is_nss_ifb": true
+      }
+    ],
+    "current_ifnames": [
+      "br-lan"
+    ],
+    "current_observed": [
+      "nssifb"
+    ],
+    "current_excluded": [],
+    "configured_ifnames": ["br-lan"],
+    "configured_observed": ["nssifb"],
+    "configured_excluded": [],
+    "orphaned": [],
+    "limits": {
+      "max_configured": 16,
+      "max_name_length": 31
+    }
+  },
+  "diagnostics": {
+    "contract_version": 1,
+    "service": {
+      "state": "running",
+      "ubus_connected": true
+    },
+    "collection": {
+      "state": "fresh",
+      "generation": 1,
+      "last_attempt_ms": 0,
+      "last_success_ms": 0,
+      "age_ms": 0,
+      "refresh_interval_ms": 1000,
+      "consecutive_failures": 0,
+      "retained": false,
+      "last_error": null
+    },
+    "data_path": {
+      "configured_rate": "auto",
+      "effective_rate": "unsupported",
+      "configured_connection": "auto",
+      "effective_connection": "unsupported",
+      "fallback_active": false,
+      "reason_code": "no_live_rate_collector"
+    },
+    "interfaces": {
+      "state": "degraded",
+      "total": 1,
+      "available": 0,
+      "missing": 0,
+      "sample_ms": 0
+    },
+    "connection": {
+      "state": "unavailable",
+      "source": null,
+      "entries_seen": null,
+      "entries_matched": null,
+      "parse_errors": null
+    },
+    "subsystems": [
+      {
+        "id": "bpf",
+        "state": "unavailable",
+        "code": "bpf_unavailable"
+      },
+      {
+        "id": "tc",
+        "state": "unavailable",
+        "code": "tc_unavailable"
+      },
+      {
+        "id": "conntrack",
+        "state": "unavailable",
+        "code": "conntrack_unavailable"
+      },
+      {
+        "id": "nss",
+        "state": "disabled",
+        "code": "nss_not_present"
+      },
+      {
+        "id": "identity",
+        "state": "healthy",
+        "code": null
+      },
+      {
+        "id": "ubus",
+        "state": "healthy",
+        "code": null
+      }
+    ],
+    "versions": {
+      "daemon": "1.1.5-r8",
+      "package": "1.1.5-r8",
+      "contract_version": 1,
+      "schema_version": 1
+    },
+    "alerts": [
+      {
+        "id": "live_metrics_unavailable",
+        "severity": "warning",
+        "component": "runtime",
+        "state": "active",
+        "message_public": "No supported live-rate collector is currently producing data."
+      }
+    ],
+    "config_issues": [
+      {
+        "id": "interface_exclude_compatibility_only",
+        "severity": "info",
+        "option": "interface_exclude",
+        "state": "compatibility_only",
+        "message_public": "interface_exclude is retained for compatibility and does not change the attach set."
+      }
+    ]
+  },
+  "client_connections": {
+    "available": true,
+    "sample_ms": 12345,
+    "client": {
+      "identity_key": "02:00:00:00:00:01@lan",
+      "hostname": "fixture-client",
+      "mac": "02:00:00:00:00:01",
+      "ips": [
+        "192.0.2.10",
+        "2001:db8:1::10"
+      ],
+      "interface": "br-lan",
+      "zone": "lan"
+    },
+    "total_connections": 2,
+    "returned_connections": 2,
+    "truncated": false,
+    "limit": 2048,
+    "conn_source": "conntrack_netlink",
+    "conn_semantics": "conntrack_current_tcp_established_assured_udp_assured_dns_split",
+    "connections": [
+      {
+        "client_ip": "192.0.2.10",
+        "client_port": 53000,
+        "remote_ip": "198.51.100.53",
+        "remote_port": 53,
+        "protocol": "udp",
+        "state": "assured",
+        "direction": "outbound",
+        "tx_bps": 8000,
+        "rx_bps": 16000
+      },
+      {
+        "client_ip": "2001:db8:1::10",
+        "client_port": 443,
+        "remote_ip": "2001:db8:ffff::20",
+        "remote_port": 54001,
+        "protocol": "tcp",
+        "state": "established",
+        "direction": "inbound",
+        "tx_bps": 32000,
+        "rx_bps": 64000
+      }
+    ],
+    "warnings": []
+  }
+}
