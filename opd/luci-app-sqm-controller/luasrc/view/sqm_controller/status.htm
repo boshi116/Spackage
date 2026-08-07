@@ -1,0 +1,338 @@
+<%+header%>
+
+<style>
+.sqm-wrap { width:100%; max-width:none; box-sizing:border-box; color:#1d2939; }
+.sqm-page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px; }
+.sqm-page-head h2 { width:auto; margin:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; font-size:22px; color:#1d2939; }
+.sqm-page-sub { margin-top:6px; color:#667085; font-size:13px; line-height:1.6; }
+.sqm-refresh { flex:0 0 auto; min-width:42px; height:36px; font-size:18px; line-height:1; }
+.sqm-refresh.is-loading { opacity:.65; pointer-events:none; }
+.sqm-health { display:flex; align-items:center; gap:12px; min-height:54px; margin-bottom:12px; padding:13px 16px; border:1px solid #b7e4c7; border-left:4px solid #16a34a; border-radius:8px; background:#f0fdf4; }
+.sqm-health.warn { border-color:#fed7aa; border-left-color:#f59e0b; background:#fff7ed; }
+.sqm-health.error { border-color:#fecaca; border-left-color:#dc2626; background:#fef2f2; }
+.sqm-health.loading { border-color:#dbe3ef; border-left-color:#64748b; background:#f8fafc; }
+.sqm-health-dot { width:10px; height:10px; flex:0 0 auto; border-radius:50%; background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.12); }
+.sqm-health.warn .sqm-health-dot { background:#f59e0b; box-shadow:0 0 0 4px rgba(245,158,11,.13); }
+.sqm-health.error .sqm-health-dot { background:#dc2626; box-shadow:0 0 0 4px rgba(220,38,38,.12); }
+.sqm-health.loading .sqm-health-dot { background:#64748b; box-shadow:0 0 0 4px rgba(100,116,139,.12); }
+.sqm-health-title { font-size:15px; font-weight:600; }
+.sqm-health-desc { margin-top:2px; color:#667085; font-size:12px; line-height:1.5; }
+.sqm-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:12px; }
+.sqm-summary-item { min-width:0; padding:13px 14px; border:1px solid #e3e7ee; border-radius:8px; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+.sqm-label { color:#667085; font-size:12px; }
+.sqm-summary-value { display:flex; align-items:center; gap:7px; min-height:25px; margin-top:6px; font-size:17px; font-weight:600; overflow-wrap:anywhere; }
+.sqm-status-dot { display:inline-block; width:8px; height:8px; flex:0 0 auto; border-radius:50%; background:#94a3b8; }
+.sqm-status-dot.ok { background:#16a34a; }
+.sqm-status-dot.warn { background:#f59e0b; }
+.sqm-status-dot.error { background:#dc2626; }
+.sqm-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+.sqm-card { min-width:0; padding:14px 16px; border:1px solid #e3e7ee; border-radius:8px; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+.sqm-card h3 { margin:0 0 12px; color:#1d2939; font-size:15px; }
+.sqm-detail-list { margin:0; }
+.sqm-detail-row { display:grid; grid-template-columns:minmax(110px,1fr) minmax(0,1.4fr); gap:12px; align-items:center; min-height:35px; border-top:1px solid #f0f2f5; }
+.sqm-detail-row:first-child { border-top:0; }
+.sqm-detail-row dt { color:#667085; font-size:12px; }
+.sqm-detail-row dd { margin:0; text-align:right; font-size:13px; font-weight:500; overflow-wrap:anywhere; }
+.sqm-secondary { color:#667085; font-weight:400; }
+.sqm-validation { margin-bottom:12px; }
+.sqm-validation-head { display:flex; align-items:center; gap:8px; }
+.sqm-validation-mark { color:#16a34a; font-size:17px; font-weight:700; }
+.sqm-validation.warn .sqm-validation-mark { color:#f59e0b; }
+.sqm-validation.error .sqm-validation-mark { color:#dc2626; }
+.sqm-validation h3 { margin:0; }
+.sqm-validation-summary { margin-top:5px; color:#667085; font-size:12px; }
+.sqm-validation-groups { display:none; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:12px; padding-top:12px; border-top:1px solid #f0f2f5; }
+.sqm-validation-groups.visible { display:grid; }
+.sqm-validation-group-title { font-size:12px; font-weight:600; }
+.sqm-list { margin:7px 0 0; padding-left:18px; color:#475467; font-size:13px; }
+.sqm-list li { margin:4px 0; }
+.sqm-raw { margin-bottom:8px; border:1px solid #e3e7ee; border-radius:8px; background:#fff; overflow:hidden; }
+.sqm-raw summary { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; cursor:pointer; font-size:14px; font-weight:600; list-style:none; user-select:none; }
+.sqm-raw summary::-webkit-details-marker { display:none; }
+.sqm-raw summary::after { content:'+'; color:#667085; font-size:19px; font-weight:400; }
+.sqm-raw[open] summary::after { content:'−'; }
+.sqm-raw pre { max-height:420px; margin:0; padding:14px 16px; overflow:auto; border-top:1px solid #e3e7ee; background:#111827; color:#d1fae5; font:12px/1.55 Consolas,Monaco,monospace; white-space:pre-wrap; word-break:break-word; }
+.sqm-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; margin-top:14px; padding-top:14px; border-top:1px solid #e3e7ee; }
+.sqm-actions-note { margin-right:auto; color:#667085; font-size:12px; }
+.sqm-danger { color:#b42318 !important; border-color:#f2b8b5 !important; }
+.sqm-action:disabled { opacity:.55; cursor:not-allowed; }
+@media (max-width:980px) {
+  .sqm-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .sqm-grid { grid-template-columns:1fr; }
+}
+@media (max-width:560px) {
+  .sqm-page-head { align-items:center; }
+  .sqm-summary { grid-template-columns:1fr 1fr; }
+  .sqm-summary-item { padding:11px 12px; }
+  .sqm-summary-value { font-size:15px; }
+  .sqm-validation-groups { grid-template-columns:1fr; }
+  .sqm-actions-note { width:100%; margin:0 0 4px; }
+}
+</style>
+
+<div class="cbi-map sqm-wrap">
+  <div class="sqm-page-head">
+    <div>
+      <h2>状态监控</h2>
+      <div class="sqm-page-sub">查看队列、分类链路和策略任务的实际运行状态。</div>
+    </div>
+    <button id="refresh-button" class="cbi-button sqm-refresh" type="button" onclick="refreshStatus()" title="刷新状态" aria-label="刷新状态">↻</button>
+  </div>
+
+  <div id="health-banner" class="sqm-health loading">
+    <span class="sqm-health-dot"></span>
+    <div>
+      <div id="health-title" class="sqm-health-title">正在读取运行状态</div>
+      <div id="health-description" class="sqm-health-desc">正在检查 TC 队列和分类链路。</div>
+    </div>
+  </div>
+
+  <div class="sqm-summary">
+    <div class="sqm-summary-item">
+      <div class="sqm-label">队列状态</div>
+      <div class="sqm-summary-value"><span id="queue-dot" class="sqm-status-dot"></span><span id="queue-status">--</span></div>
+    </div>
+    <div class="sqm-summary-item">
+      <div class="sqm-label">分类链路</div>
+      <div class="sqm-summary-value"><span id="classifier-dot" class="sqm-status-dot"></span><span id="classifier-status">--</span></div>
+    </div>
+    <div class="sqm-summary-item">
+      <div class="sqm-label">队列后端</div>
+      <div class="sqm-summary-value"><span id="backend-dot" class="sqm-status-dot"></span><span id="queue-backend">--</span></div>
+    </div>
+    <div class="sqm-summary-item">
+      <div class="sqm-label">策略模式</div>
+      <div class="sqm-summary-value"><span id="policy-dot" class="sqm-status-dot"></span><span id="policy-mode">--</span></div>
+    </div>
+  </div>
+
+  <div class="sqm-grid">
+    <section class="sqm-card">
+      <h3>运行详情</h3>
+      <dl class="sqm-detail-list">
+        <div class="sqm-detail-row"><dt>TC 队列</dt><dd id="tc-text">--</dd></div>
+        <div class="sqm-detail-row"><dt>ECN</dt><dd id="ecn-text">--</dd></div>
+        <div class="sqm-detail-row"><dt>上传分类队列</dt><dd id="upload-queues">--</dd></div>
+        <div class="sqm-detail-row"><dt>下载分类队列</dt><dd id="download-queues">--</dd></div>
+        <div class="sqm-detail-row"><dt>服务进程</dt><dd id="service-process">--</dd></div>
+      </dl>
+    </section>
+
+    <section class="sqm-card">
+      <h3>后端与策略</h3>
+      <dl class="sqm-detail-list">
+        <div class="sqm-detail-row"><dt>配置队列后端</dt><dd id="configured-backend">--</dd></div>
+        <div class="sqm-detail-row"><dt>活动分类后端</dt><dd id="active-backend">--</dd></div>
+        <div class="sqm-detail-row"><dt>策略定时任务</dt><dd id="policy-cron-present">--</dd></div>
+        <div class="sqm-detail-row"><dt>定时表达式</dt><dd id="policy-cron-expression">--</dd></div>
+        <div class="sqm-detail-row"><dt>规则冲突</dt><dd id="rule-conflicts-count">--</dd></div>
+      </dl>
+    </section>
+  </div>
+
+  <section id="validation-card" class="sqm-card sqm-validation">
+    <div class="sqm-validation-head"><span id="validation-mark" class="sqm-validation-mark">✓</span><h3 id="validation-title">配置校验</h3></div>
+    <div id="validation-summary" class="sqm-validation-summary">正在读取校验结果。</div>
+    <div id="validation-groups" class="sqm-validation-groups">
+      <div><div class="sqm-validation-group-title">错误</div><ul id="validation-errors" class="sqm-list"></ul></div>
+      <div><div class="sqm-validation-group-title">警告</div><ul id="validation-warnings" class="sqm-list"></ul></div>
+    </div>
+  </section>
+
+  <details class="sqm-raw">
+    <summary>WAN TC 原始输出</summary>
+    <pre id="tc-wan">正在读取...</pre>
+  </details>
+  <details class="sqm-raw">
+    <summary>IFB0 TC 原始输出</summary>
+    <pre id="tc-ifb">正在读取...</pre>
+  </details>
+
+  <div class="sqm-actions">
+    <span class="sqm-actions-note">操作完成后会自动刷新当前状态。</span>
+    <button class="cbi-button cbi-button-apply sqm-action" type="button" onclick="startService()">启动</button>
+    <button class="cbi-button cbi-button-reload sqm-action" type="button" onclick="restartService()">重启</button>
+    <button class="cbi-button cbi-button-reset sqm-danger sqm-action" type="button" onclick="stopService()">停止</button>
+  </div>
+</div>
+
+<script>
+function truthy(value) {
+    return value === true || value === 1 || value === "1" || value === "true" || value === "yes";
+}
+
+function hasText(value) {
+    return typeof value === "string" && value.trim().length > 0;
+}
+
+function text(id, value) {
+    document.getElementById(id).textContent = value;
+}
+
+function setDot(id, state) {
+    document.getElementById(id).className = "sqm-status-dot" + (state ? " " + state : "");
+}
+
+function setList(id, items) {
+    var node = document.getElementById(id);
+    node.innerHTML = "";
+    (items || []).forEach(function(item) {
+        var li = document.createElement("li");
+        li.textContent = String(item);
+        node.appendChild(li);
+    });
+}
+
+function emptyTcText(label) {
+    return label + " 队列详情暂不可读。请刷新状态或查看系统日志。";
+}
+
+function updateValidation(errors, warnings) {
+    var card = document.getElementById("validation-card");
+    var groups = document.getElementById("validation-groups");
+    errors = Array.isArray(errors) ? errors : [];
+    warnings = Array.isArray(warnings) ? warnings : [];
+    card.className = "sqm-card sqm-validation";
+    groups.className = "sqm-validation-groups";
+    setList("validation-errors", errors);
+    setList("validation-warnings", warnings);
+
+    if (errors.length) {
+        card.className += " error";
+        groups.className += " visible";
+        text("validation-mark", "!");
+        text("validation-title", "配置校验失败");
+        text("validation-summary", errors.length + " 个错误，" + warnings.length + " 个警告。请先处理错误项。");
+    } else if (warnings.length) {
+        card.className += " warn";
+        groups.className += " visible";
+        text("validation-mark", "!");
+        text("validation-title", "配置校验通过，但有警告");
+        text("validation-summary", warnings.length + " 个警告，不会阻止当前配置运行。");
+    } else {
+        text("validation-mark", "✓");
+        text("validation-title", "配置校验通过");
+        text("validation-summary", "未发现配置错误或警告。");
+    }
+}
+
+function updateHealth(data, runtimeApplied, classifierComplete) {
+    var banner = document.getElementById("health-banner");
+    banner.className = "sqm-health";
+    if (data.error) {
+        banner.className += " error";
+        text("health-title", "状态读取异常");
+        text("health-description", String(data.error));
+    } else if (runtimeApplied && classifierComplete) {
+        text("health-title", "运行正常：队列与分类链路均已生效");
+        text("health-description", "流量整形和分类队列检测完整。");
+    } else if (runtimeApplied) {
+        banner.className += " warn";
+        text("health-title", "队列已生效，但分类链路不完整");
+        text("health-description", "请检查上传、下载分类队列及配置校验结果。");
+    } else {
+        banner.className += " error";
+        text("health-title", "队列尚未生效");
+        text("health-description", "未检测到可用的 TC 队列，请检查服务和后端配置。");
+    }
+}
+
+function refreshStatus() {
+    var refresh = document.getElementById("refresh-button");
+    refresh.className = "cbi-button sqm-refresh is-loading";
+    refresh.disabled = true;
+
+    var cronModeMap = { dry_run:"模拟运行", apply:"自动下发", disabled:"未启用", unknown:"未知" };
+    var ecnMap = { enabled:"已启用", disabled:"已禁用", upload_only:"仅上传启用", download_only:"仅下载启用", partial_enabled:"部分启用", partial_disabled:"部分禁用", unknown:"未知", not_applied:"未应用" };
+
+    fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_status")%>')
+        .then(function(resp) {
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            return resp.json();
+        })
+        .then(function(data) {
+            var uploadQueues = truthy(data.upload_class_queues_present);
+            var downloadQueues = truthy(data.download_class_queues_present);
+            var classifierComplete = truthy(data.classifier_tc_complete) || (uploadQueues && downloadQueues);
+            var runtimeApplied = data.tc_state === "applied" || classifierComplete || hasText(data.tc_wan) || hasText(data.tc_ifb);
+            var pid = String(data.pid || "");
+            var noResident = pid.indexOf("no resident") >= 0;
+            var policyMode = cronModeMap[data.policy_cron_mode] || data.policy_cron_mode || "--";
+            var backend = data.configured_backend || "--";
+
+            updateHealth(data, runtimeApplied, classifierComplete);
+            text("queue-status", runtimeApplied ? "已应用" : "未应用");
+            setDot("queue-dot", runtimeApplied ? "ok" : "error");
+            text("classifier-status", classifierComplete ? "完整" : "不完整");
+            setDot("classifier-dot", classifierComplete ? "ok" : "warn");
+            text("queue-backend", backend);
+            setDot("backend-dot", backend === "--" ? "" : "ok");
+            text("policy-mode", policyMode);
+            setDot("policy-dot", data.policy_cron_mode === "apply" ? "ok" : (data.policy_cron_mode === "dry_run" ? "warn" : ""));
+
+            text("tc-text", runtimeApplied ? "已应用" : "未应用");
+            text("ecn-text", ecnMap[data.ecn_state] || data.ecn_state || "--");
+            text("upload-queues", uploadQueues ? "已挂载" : "未检测到");
+            text("download-queues", downloadQueues ? "已挂载" : "未检测到");
+            text("service-process", noResident ? "无常驻进程（正常）" : (pid || data.service_status || "--"));
+            text("configured-backend", backend);
+            text("active-backend", data.active_backend || "--");
+            text("policy-cron-present", truthy(data.policy_cron_present) ? (policyMode + "（已启用）") : "未启用");
+            text("policy-cron-expression", data.policy_cron_expression || "--");
+            text("rule-conflicts-count", String(data.rule_conflicts_count || 0));
+            text("tc-wan", data.tc_wan || emptyTcText("WAN"));
+            text("tc-ifb", data.tc_ifb || emptyTcText("IFB0"));
+            updateValidation(data.validation_errors, data.validation_warnings);
+        })
+        .catch(function(err) {
+            var message = String(err);
+            updateHealth({ error:message }, false, false);
+            text("queue-status", "读取失败");
+            text("classifier-status", "读取失败");
+            setDot("queue-dot", "error");
+            setDot("classifier-dot", "error");
+            text("tc-wan", message);
+            text("tc-ifb", message);
+            updateValidation([message], []);
+        })
+        .then(function() {
+            refresh.className = "cbi-button sqm-refresh";
+            refresh.disabled = false;
+        });
+}
+
+function setActionsBusy(busy) {
+    var buttons = document.querySelectorAll(".sqm-action");
+    for (var i = 0; i < buttons.length; i++) buttons[i].disabled = busy;
+}
+
+function callService(url) {
+    setActionsBusy(true);
+    return fetch(url)
+        .then(function(resp) {
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            return resp.json();
+        })
+        .then(function(data) {
+            if (!data.success) alert("操作失败: " + (data.output || data.error || "未知错误"));
+            return data;
+        })
+        .catch(function(err) {
+            alert("请求失败: " + String(err));
+            return { success:false, error:String(err) };
+        })
+        .then(function(data) {
+            setActionsBusy(false);
+            refreshStatus();
+            return data;
+        });
+}
+
+function startService() { callService('<%=luci.dispatcher.build_url("admin/services/sqm_controller/start_service")%>'); }
+function stopService() { callService('<%=luci.dispatcher.build_url("admin/services/sqm_controller/stop_service")%>'); }
+function restartService() { callService('<%=luci.dispatcher.build_url("admin/services/sqm_controller/restart_service")%>'); }
+
+window.addEventListener("load", refreshStatus);
+</script>
+
+<%+footer%>

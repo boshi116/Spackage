@@ -1,0 +1,1847 @@
+<%+header%>
+
+<style>
+.sqm-wrap { width:100%; max-width:none; box-sizing:border-box; }
+.sqm-page-head { margin-bottom:12px; border:1px solid #e3e7ee; border-radius:8px; padding:14px 16px; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,0.04); }
+.sqm-page-sub { font-size:13px; color:#667085; line-height:1.6; margin-top:6px; }
+.sqm-topbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:8px 0 12px; }
+.sqm-title { margin:0; font-size:22px; }
+.sqm-note { font-size:12px; color:#666; }
+.sqm-badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; color:#fff; background:#777; }
+.sqm-badge.ok { background:#2e7d32; }
+.sqm-badge.warn { background:#ed6c02; }
+.sqm-badge.bad { background:#d32f2f; }
+.sqm-card { border:1px solid #e3e7ee; border-radius:8px; padding:12px; background:#fff; margin-bottom:12px; box-shadow:0 1px 2px rgba(15,23,42,0.04); }
+.sqm-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+@media (max-width: 1100px) { .sqm-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width: 700px) { .sqm-grid { grid-template-columns:1fr; } }
+.sqm-k { font-size:12px; color:#666; }
+.sqm-v { font-size:24px; font-weight:600; margin-top:2px; }
+.sqm-sub { font-size:12px; color:#666; margin-top:6px; line-height:1.5; }
+.sqm-err { color:#b3261e; white-space:pre-wrap; }
+.sqm-card-title { font-size:16px; font-weight:600; margin:0 0 10px; }
+.sqm-alert { border:1px solid #fde2b7; border-left:4px solid #ed6c02; border-radius:6px; background:#fff8ec; color:#8a4b00; padding:8px 10px; font-size:12px; line-height:1.5; margin:8px 0; }
+.sqm-alert.bad { border-color:#f4b6b6; border-left-color:#d32f2f; background:#fff5f5; color:#9f1b1b; }
+.sqm-table { width:100%; border-collapse:collapse; }
+.sqm-table th, .sqm-table td { border-bottom:1px solid #eee; text-align:left; padding:6px; font-size:13px; vertical-align:top; }
+.sqm-table tbody tr.sqm-rule-hit { background:#f6fbf6; }
+.sqm-table tbody tr.sqm-rule-idle { color:#777; }
+.sqm-rule-tools { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:8px 0 10px; }
+.sqm-rule-summary { display:flex; flex-wrap:wrap; gap:8px; }
+.sqm-rule-toggle { display:flex; align-items:center; gap:6px; font-size:12px; color:#667085; }
+.sqm-rule-idle-wrap { margin-top:10px; border-top:1px dashed #e5e7eb; padding-top:10px; }
+.sqm-rule-idle-wrap summary { cursor:pointer; font-size:13px; color:#475467; font-weight:600; }
+.sqm-rule-idle-note { margin-top:6px; }
+.sqm-mini-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+.sqm-preline { white-space:pre-wrap; }
+.sqm-list { margin:0; padding-left:18px; }
+.sqm-list li { margin:4px 0; }
+@media (max-width: 900px) { .sqm-mini-grid { grid-template-columns:1fr; } }
+
+/* Tabs */
+.sqm-tabs { display:flex; gap:4px; margin-bottom:12px; border-bottom:2px solid #e5e5e5; }
+.sqm-tab-btn { padding:8px 20px; border:none; background:#f5f5f5; cursor:pointer; font-size:14px; border-radius:6px 6px 0 0; color:#666; }
+.sqm-tab-btn.active { background:#fff; color:#333; font-weight:600; border:2px solid #e5e5e5; border-bottom:2px solid #fff; margin-bottom:-2px; }
+.sqm-tab-panel { display:none; }
+.sqm-tab-panel.active { display:block; }
+
+/* Rule groups (port heuristics) */
+.sqm-rule-group { margin-bottom:8px; border:1px solid #eee; border-radius:6px; overflow:hidden; }
+.sqm-rule-group-header { padding:8px 12px; font-weight:600; font-size:13px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+.sqm-rule-group-header.gaming { background:#e8f5e9; color:#2e7d32; }
+.sqm-rule-group-header.streaming { background:#e3f2fd; color:#1565c0; }
+.sqm-rule-group-header.bulk { background:#fff3e0; color:#e65100; }
+.sqm-rule-group-header.other { background:#f5f5f5; color:#616161; }
+.sqm-rule-group-body { display:none; padding:8px 12px; }
+.sqm-rule-group-body.open { display:block; }
+
+/* Modal */
+.sqm-modal-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:flex-start; padding-top:60px; }
+.sqm-modal-overlay.open { display:flex; }
+.sqm-modal { background:#fff; border-radius:10px; padding:20px; max-width:520px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 8px 30px rgba(0,0,0,0.2); }
+.sqm-modal h3 { margin:0 0 16px; font-size:18px; }
+.sqm-modal .sqm-form-row { margin-bottom:12px; }
+.sqm-modal label { display:block; font-size:13px; color:#666; margin-bottom:4px; }
+.sqm-modal input, .sqm-modal select { width:100%; padding:6px 10px; border:1px solid #ccc; border-radius:4px; font-size:14px; box-sizing:border-box; }
+.sqm-modal .sqm-form-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+.sqm-modal .sqm-form-actions button { padding:6px 16px; border:none; border-radius:4px; font-size:14px; cursor:pointer; }
+.sqm-btn-primary { background:#3370ff; color:#fff; }
+.sqm-btn-primary:hover { background:#2860e0; }
+.sqm-btn-danger { background:#d32f2f; color:#fff; }
+.sqm-btn-danger:hover { background:#b71c1c; }
+.sqm-btn-cancel { background:#e0e0e0; color:#333; }
+.sqm-btn-cancel:hover { background:#ccc; }
+.sqm-btn-sm { padding:2px 10px; font-size:12px; border:none; border-radius:3px; cursor:pointer; margin-left:4px; }
+.sqm-btn-edit { background:#3370ff; color:#fff; }
+.sqm-btn-del { background:#d32f2f; color:#fff; }
+
+/* Stats mini cards */
+.sqm-stats-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+@media (max-width: 900px) { .sqm-stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.sqm-stat-card { text-align:center; padding:12px; border:1px solid #eee; border-radius:6px; background:#fafafa; }
+.sqm-stat-val { font-size:28px; font-weight:600; }
+.sqm-stat-label { font-size:12px; color:#666; margin-top:4px; }
+
+/* Section subtitle */
+.sqm-section-subtitle { font-size:14px; font-weight:600; color:#555; margin:16px 0 8px; padding-bottom:4px; border-bottom:1px solid #eee; }
+
+/* Conf tag */
+.sqm-conf-tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px; color:#fff; }
+.sqm-conf-tag.high { background:#2e7d32; }
+.sqm-conf-tag.med { background:#ed6c02; }
+.sqm-conf-tag.low { background:#9e9e9e; }
+
+/* Category card color accents */
+.sqm-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:8px 0 12px; }
+.sqm-toolbar-left, .sqm-toolbar-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.sqm-overview-grid { display:grid; grid-template-columns:minmax(360px,1.15fr) minmax(360px,0.85fr); gap:12px; align-items:stretch; }
+@media (max-width: 900px) { .sqm-overview-grid { grid-template-columns:1fr; } }
+.sqm-card-total { border-left:4px solid #3370ff; min-height:132px; display:flex; flex-direction:column; justify-content:space-between; }
+.sqm-total-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.sqm-total-meta { display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:8px; }
+.sqm-total-meta span { color:#5f6b7a; font-size:12px; }
+.sqm-card-cat { border-left:4px solid #e0e0e0; min-height:92px; }
+.sqm-card-cat.other { border-left-color:#9e9e9e; background:#fafafa; }
+.sqm-card-cat.gaming { border-left-color:#2e7d32; background:#f6fbf6; }
+.sqm-card-cat.streaming { border-left-color:#1565c0; background:#f5f8ff; }
+.sqm-card-cat.bulk { border-left-color:#e65100; background:#fffbf5; }
+.sqm-cat-label { font-size:12px; font-weight:600; margin-bottom:2px; }
+.sqm-card-cat.other .sqm-cat-label { color:#9e9e9e; }
+.sqm-card-cat.gaming .sqm-cat-label { color:#2e7d32; }
+.sqm-card-cat.streaming .sqm-cat-label { color:#1565c0; }
+.sqm-card-cat.bulk .sqm-cat-label { color:#e65100; }
+.sqm-card-total .sqm-v { font-size:32px; color:#1a1a1a; }
+.sqm-policy-card { min-height:132px; display:flex; flex-direction:column; }
+.sqm-policy-title { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.sqm-policy-title .sqm-card-title { margin:0; }
+.sqm-policy-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+.sqm-policy-metric { border:1px solid #edf0f5; border-radius:6px; background:#fafbfc; padding:8px; min-width:0; }
+.sqm-policy-metric strong { display:block; font-size:20px; line-height:1.2; color:#222b45; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sqm-policy-metric span { display:block; font-size:12px; color:#667085; margin-top:4px; }
+.sqm-policy-meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; }
+.sqm-chip { display:inline-flex; align-items:center; border-radius:999px; padding:2px 8px; font-size:12px; background:#f2f4f7; color:#475467; }
+.sqm-chip.ok { background:#e8f5e9; color:#2e7d32; }
+.sqm-chip.warn { background:#fff3e0; color:#b25e09; }
+.sqm-chip.bad { background:#fdecec; color:#b3261e; }
+.sqm-policy-log { margin-top:8px; font-size:12px; }
+
+/* Responsive table wrapper */
+.sqm-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+@media (max-width: 600px) {
+  .sqm-table-wrap table th,
+  .sqm-table-wrap table td { padding:4px 3px; font-size:11px; white-space:nowrap; }
+}
+
+/* DNS rule hit rows */
+.sqm-dns-hit-row { background:#f5f8ff !important; }
+.sqm-dns-hit-row td:first-child { font-size:12px; }
+.sqm-ai-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+.sqm-ai-box { min-height:180px; width:100%; box-sizing:border-box; font-family:Consolas,Monaco,monospace; font-size:12px; border:1px solid #d0d5dd; border-radius:6px; padding:8px; resize:vertical; background:#fff; }
+.sqm-ai-result { border-left:4px solid #667085; border-radius:6px; padding:8px 10px; background:#f8fafc; color:#344054; font-size:13px; line-height:1.5; margin-top:8px; white-space:pre-wrap; }
+.sqm-ai-result.ok { border-color:#2e7d32; background:#f1f8f1; color:#1b5e20; }
+.sqm-ai-result.warn { border-color:#ed6c02; background:#fff8ed; color:#8a4b00; }
+.sqm-ai-result.bad { border-color:#d32f2f; background:#fff1f1; color:#9a1f1a; }
+@media (max-width: 900px) { .sqm-ai-grid { grid-template-columns:1fr; } }
+
+/* Section divider title */
+.sqm-section-title { display:flex; align-items:center; gap:8px; margin:16px 0 10px; font-size:15px; font-weight:600; color:#444; }
+.sqm-section-title::after { content:""; flex:1; height:1px; background:#e5e5e5; }
+</style>
+
+<div class="cbi-map sqm-wrap">
+  <div class="sqm-page-head">
+    <h2 class="sqm-title">流量分类</h2>
+    <div class="sqm-page-sub">查看当前分类结果、主类流量占比、未知流量分析，以及域名规则和端口规则的工作状态。</div>
+  </div>
+
+  <div id="nss-banner" style="display:none;border-left:4px solid #ed6c02;">
+    <div class="sqm-card-title">NSS 硬件模式</div>
+    <div class="sqm-sub" id="nss-banner-text"></div>
+  </div>
+
+  <div class="sqm-tabs">
+    <button class="sqm-tab-btn active" data-tab="tab-stats">分类统计</button>
+    <button class="sqm-tab-btn" data-tab="tab-dns">域名规则</button>
+    <button class="sqm-tab-btn" data-tab="tab-ports">端口规则</button>
+  </div>
+
+  <!-- ==================== Tab 1: 分类统计（原 traffic.htm 功能） ==================== -->
+  <div id="tab-stats" class="sqm-tab-panel active">
+    <div class="sqm-toolbar">
+      <div class="sqm-toolbar-left">
+        <span id="status-badge" class="sqm-badge">--</span>
+        <label>设备:
+          <select id="dev-select">
+            <option value="ifb0">ifb0（下载）</option>
+            <option value="iface">接口（上传）</option>
+          </select>
+        </label>
+      </div>
+      <div class="sqm-toolbar-right">
+        <label><input id="auto-refresh" type="checkbox" checked> 自动刷新（3 秒）</label>
+        <button class="cbi-button cbi-button-action" id="btn-refresh">立即刷新</button>
+      </div>
+    </div>
+
+    <div class="sqm-overview-grid">
+      <div class="sqm-card sqm-card-total">
+        <div class="sqm-total-head">
+          <div>
+            <div class="sqm-k">总速率</div>
+            <div class="sqm-v"><span id="total-kbps">--</span> kbps</div>
+          </div>
+          <span class="sqm-chip" id="policy-run-chip">分类质量 --</span>
+        </div>
+        <div class="sqm-total-meta">
+          <span>采样: <span id="dt-val">--</span>s</span>
+          <span>设备: <span id="dev-val">--</span></span>
+          <span>时间: <span id="time-val">--</span></span>
+        </div>
+        <div id="error-box" class="sqm-sub sqm-err"></div>
+      </div>
+
+      <div class="sqm-card sqm-policy-card" id="policy-policy-card">
+        <div class="sqm-policy-title">
+          <div class="sqm-card-title">分类概览</div>
+          <span class="sqm-note" id="policy-policy-note">--</span>
+        </div>
+        <div class="sqm-policy-metrics">
+          <div class="sqm-policy-metric">
+            <strong id="policy-decision-to">--</strong>
+            <span>主业务占比</span>
+          </div>
+          <div class="sqm-policy-metric">
+            <strong id="policy-confidence">--</strong>
+            <span>未识别流量</span>
+          </div>
+          <div class="sqm-policy-metric">
+            <strong id="policy-quality">--</strong>
+            <span>分类质量</span>
+          </div>
+        </div>
+        <div class="sqm-sub" id="policy-decision-reason">--</div>
+        <div class="sqm-sub" id="policy-traffic-info">--</div>
+        <div class="sqm-policy-meta" id="policy-policy-meta">--</div>
+      </div>
+    </div>
+
+    <div class="sqm-grid">
+      <div class="sqm-card sqm-card-cat other">
+        <div class="sqm-cat-label">默认/其他类</div>
+        <div class="sqm-v"><span id="kbps-other">--</span> kbps</div>
+        <div class="sqm-sub">占比: <span id="pct-other">--</span>%</div>
+        <details class="sqm-sub"><summary>高级信息</summary>队列: <span id="classid-other">--</span> | bytes: <span id="bytes-other">--</span> | packets: <span id="packets-other">--</span></details>
+      </div>
+      <div class="sqm-card sqm-card-cat gaming">
+        <div class="sqm-cat-label">低时延类（游戏/会议）</div>
+        <div class="sqm-v"><span id="kbps-gaming">--</span> kbps</div>
+        <div class="sqm-sub">占比: <span id="pct-gaming">--</span>%</div>
+        <details class="sqm-sub"><summary>高级信息</summary>队列: <span id="classid-gaming">--</span> | bytes: <span id="bytes-gaming">--</span> | packets: <span id="packets-gaming">--</span></details>
+      </div>
+      <div class="sqm-card sqm-card-cat streaming">
+        <div class="sqm-cat-label">流媒体类</div>
+        <div class="sqm-v"><span id="kbps-streaming">--</span> kbps</div>
+        <div class="sqm-sub">占比: <span id="pct-streaming">--</span>%</div>
+        <details class="sqm-sub"><summary>高级信息</summary>队列: <span id="classid-streaming">--</span> | bytes: <span id="bytes-streaming">--</span> | packets: <span id="packets-streaming">--</span></details>
+      </div>
+      <div class="sqm-card sqm-card-cat bulk">
+        <div class="sqm-cat-label">批量下载类</div>
+        <div class="sqm-v"><span id="kbps-bulk">--</span> kbps</div>
+        <div class="sqm-sub">占比: <span id="pct-bulk">--</span>%</div>
+        <details class="sqm-sub"><summary>高级信息</summary>队列: <span id="classid-bulk">--</span> | bytes: <span id="bytes-bulk">--</span> | packets: <span id="packets-bulk">--</span></details>
+      </div>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-title">未知流量分析 <span class="sqm-note">（手动刷新，不参与 3 秒轮询）</span></div>
+      <div class="sqm-note">以下内容根据未识别流量日志聚合生成，只用于诊断和规则校准，不会自动写入规则。</div>
+      <div style="margin-top:8px;">
+        <button class="cbi-button cbi-button-action" id="btn-unknown-bytes">刷新占带宽最大的未知流量</button>
+        <button class="cbi-button" id="btn-unknown-count">刷新出现最频繁的未知流量</button>
+      </div>
+      <div id="unknown-summary" class="sqm-sub">尚未刷新</div>
+      <div class="sqm-table-wrap" style="margin-top:8px;">
+        <table class="sqm-table">
+          <thead>
+            <tr>
+              <th>协议</th><th>目标 IP</th><th>端口</th><th>流数</th><th>总字节</th><th>源客户端数</th><th>可能类型</th><th>建议</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="unknown-tbody"><tr><td colspan="9">点击上方按钮刷新</td></tr></tbody>
+        </table>
+      </div>
+      <div id="unknown-suggestions" class="sqm-sub"></div>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-title">规则首次命中统计</div>
+      <div class="sqm-note">默认优先显示当前有命中或有累计计数的规则；空闲规则会折叠收起。该表主要反映规则首次命中计数，不等同于整条流量累计字节。</div>
+      <div class="sqm-rule-tools">
+        <div id="rules-summary" class="sqm-rule-summary">
+          <span class="sqm-chip">活跃规则 --</span>
+          <span class="sqm-chip">空闲规则 --</span>
+        </div>
+        <label class="sqm-rule-toggle"><input id="rules-show-all" type="checkbox"> 显示全部规则</label>
+      </div>
+      <div class="sqm-table-wrap">
+        <table class="sqm-table">
+          <thead>
+            <tr>
+              <th>规则 ID</th>
+              <th>类别</th>
+              <th>协议</th>
+              <th>dport</th>
+              <th>sport</th>
+              <th>mark/置信度</th>
+              <th>classid</th>
+              <th>当前窗口包数</th>
+              <th>当前窗口字节</th>
+              <th>累计包数</th>
+              <th>累计字节</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody id="rules-tbody">
+            <tr><td colspan="12">--</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <details id="idle-rules-wrap" class="sqm-rule-idle-wrap" style="display:none;">
+        <summary id="idle-rules-summary">显示空闲规则</summary>
+        <div class="sqm-note sqm-rule-idle-note">这些规则当前没有窗口命中，也没有累计计数，默认折叠以减少滚动长度。</div>
+        <div class="sqm-table-wrap" style="margin-top:8px;">
+          <table class="sqm-table">
+            <thead>
+              <tr>
+                <th>规则 ID</th>
+                <th>类别</th>
+                <th>协议</th>
+                <th>dport</th>
+                <th>sport</th>
+                <th>mark/置信度</th>
+                <th>classid</th>
+                <th>当前窗口包数</th>
+                <th>当前窗口字节</th>
+                <th>累计包数</th>
+                <th>累计字节</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody id="idle-rules-tbody">
+              <tr><td colspan="12">--</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+
+    <div class="sqm-card" id="dns-rule-hits-card" style="display:none;">
+      <div class="sqm-card-title">DNS 规则活跃映射 <span class="sqm-note">（当前 DNS 缓存中该规则覆盖的活跃 IP 数，不等同于实际流分类命中）</span></div>
+      <div class="sqm-table-wrap">
+        <table class="sqm-table">
+          <thead>
+            <tr>
+              <th>域名模式</th>
+              <th>类别</th>
+              <th>置信度</th>
+              <th>活跃 IP 数</th>
+            </tr>
+          </thead>
+          <tbody id="dns-rule-hits-tbody">
+            <tr><td colspan="4">--</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-title">链路诊断</div>
+      <div class="sqm-mini-grid">
+        <div>
+          <div class="sqm-k">防火墙</div>
+          <div id="pipeline-firewall" class="sqm-sub sqm-preline">--</div>
+        </div>
+        <div>
+          <div class="sqm-k">标记恢复</div>
+          <div id="pipeline-mark-restore" class="sqm-sub sqm-preline">--</div>
+        </div>
+        <div>
+          <div class="sqm-k">TC</div>
+          <div id="pipeline-tc" class="sqm-sub sqm-preline">--</div>
+        </div>
+      </div>
+      <div class="sqm-k">诊断结果</div>
+      <ul id="diagnostics-list" class="sqm-list">
+        <li>--</li>
+      </ul>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-title">策略分配计划 <span class="sqm-note">（最近策略记录，只读）</span></div>
+      <div class="sqm-table-wrap" style="margin-top:8px;">
+        <table class="sqm-table">
+          <thead><tr>
+            <th></th>
+            <th>低时延类</th><th>流媒体类</th><th>批量下载类</th><th>默认/其他类</th>
+          </tr></thead>
+          <tbody id="policy-alloc-tbody">
+            <tr><td>最低保障</td><td>--</td><td>--</td><td>--</td><td>--</td></tr>
+            <tr><td>最高可借用</td><td>--</td><td>--</td><td>--</td><td>--</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <button class="cbi-button cbi-button-action" id="btn-policy-log" style="margin-top:8px;">刷新最近 5 条策略记录</button>
+      <div id="policy-policy-log-list" class="sqm-policy-log"></div>
+    </div>
+  </div>
+
+  <!-- ==================== Tab 2: 域名规则 ==================== -->
+  <div id="tab-dns" class="sqm-tab-panel">
+    <div class="sqm-card">
+      <div class="sqm-card-title">DNS 缓存统计</div>
+      <div class="sqm-stats-grid">
+        <div class="sqm-stat-card">
+          <div class="sqm-stat-val" id="dns-entries">--</div>
+          <div class="sqm-stat-label">活跃规则数</div>
+        </div>
+        <div class="sqm-stat-card">
+          <div class="sqm-stat-val" id="dns-hits">--</div>
+          <div class="sqm-stat-label">活跃 IP 数</div>
+        </div>
+        <div class="sqm-stat-card">
+          <div class="sqm-stat-val" id="dns-misses">--</div>
+          <div class="sqm-stat-label">未命中次数</div>
+        </div>
+        <div class="sqm-stat-card">
+          <div class="sqm-stat-val" id="dns-total-mapped">--</div>
+          <div class="sqm-stat-label">累计映射</div>
+        </div>
+      </div>
+      <div class="sqm-note">最后刷新: <span id="dns-last-refresh">--</span></div>
+      <div id="dns-status-note" class="sqm-note" style="margin-top:6px;"></div>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-title">系统 DNS 域名模式规则 <span class="sqm-note">（内置规则，共 <span id="dns-sys-count">--</span> 条，只读）</span></div>
+      <div class="sqm-rule-tools" style="margin-bottom:8px;">
+        <div id="dns-rules-summary" class="sqm-rule-summary"></div>
+        <label class="sqm-rule-toggle"><input type="checkbox" id="dns-show-all"> 显示全部规则</label>
+      </div>
+      <div id="dns-system-groups"></div>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-title">AI 辅助扩充 DNS 规则 <span class="sqm-note">（离线分析，导入前由本机后端校验）</span></div>
+      <div class="sqm-note">先导出未分类域名，把 JSON 交给 AI 分析；再把 AI 返回的 rules JSON 粘贴回来导入。导入只写用户 DNS 规则库，不修改队列。</div>
+      <div class="sqm-role" style="margin-top:8px;">
+        字段说明：<code>domain</code> 是当前统计的未匹配域名；<code>subdomain_samples</code> 是同一条 CNAME/别名链里观察到的相关域名样本；<code>suggested_pattern</code> 是系统给 AI 的建议粒度，不一定要原样采用。通常建议优先选择“语义明确、不过宽”的模式，例如 <code>api.deepseek.com</code>、<code>dldir1v6.qq.com</code> 或 <code>*.upd.kaspersky.com</code>，避免直接返回 <code>*.com</code>、<code>*.qq.com</code> 这类过宽规则。
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <label class="sqm-note">最低出现次数 <input id="ai-dns-min-count" type="number" min="1" max="100" value="3" style="width:70px;"></label>
+        <label class="sqm-note">导出条数 <input id="ai-dns-limit" type="number" min="10" max="500" value="150" style="width:80px;"></label>
+        <button class="cbi-button cbi-button-action" id="btn-export-ai-dns">导出未分类 DNS</button>
+        <button class="cbi-button" id="btn-copy-ai-dns">复制导出 JSON</button>
+      </div>
+      <div class="sqm-ai-grid">
+        <div>
+          <div class="sqm-k">导出给 AI 的 JSON</div>
+          <textarea id="ai-dns-export-box" class="sqm-ai-box" readonly placeholder="点击“导出未分类 DNS”后，这里会显示可复制给 AI 的 JSON。"></textarea>
+          <div class="sqm-note">复制给 AI 时，重点让它参考 <code>domain</code>、<code>subdomain_samples</code> 和 <code>suggested_pattern</code> 三项一起判断，不要只看最终 CDN 域名；会议/音视频接入相关域名应优先按 <code>streaming</code> 处理，不要误归 <code>other</code>。</div>
+        </div>
+        <div>
+          <div class="sqm-k">粘贴 AI 返回的 rules JSON</div>
+          <textarea id="ai-dns-import-box" class="sqm-ai-box" placeholder='例如：{"rules":[{"pattern":"*.music.126.net","class":"streaming","confidence":0.85,"reason":"网易云音乐音频 CDN"}]}'></textarea>
+          <div style="margin-top:8px;">
+            <button class="cbi-button cbi-button-save" id="btn-import-ai-dns">导入 AI 规则</button>
+          </div>
+        </div>
+      </div>
+      <div id="ai-dns-result" class="sqm-ai-result">尚未操作。</div>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-title">用户自定义 DNS 规则 <span class="sqm-note">（/etc/sqm_controller/dns_rules.json，可编辑）</span></div>
+      <button class="cbi-button cbi-button-add" id="btn-add-dns-rule" style="margin-bottom:8px;">+ 添加规则</button>
+      <button class="cbi-button cbi-button-save" id="btn-save-dns-rules" style="margin-bottom:8px;margin-left:4px;">保存全部</button>
+      <span id="dns-save-msg" class="sqm-note" style="margin-left:8px;"></span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0;">
+        <input id="dns-user-search" placeholder="搜索域名模式 / 来源 / 原因" style="min-width:260px;max-width:420px;">
+        <select id="dns-user-class-filter">
+          <option value="">全部类别</option>
+          <option value="streaming">流媒体类</option>
+          <option value="gaming">低时延类（游戏/会议）</option>
+          <option value="bulk">批量下载类</option>
+          <option value="other">默认/其他类</option>
+        </select>
+        <select id="dns-user-page-size">
+          <option value="20">每页 20 条</option>
+          <option value="50">每页 50 条</option>
+          <option value="100">每页 100 条</option>
+        </select>
+        <label class="sqm-rule-toggle"><input id="dns-user-active-only" type="checkbox"> 仅看活跃规则</label>
+        <span id="dns-user-page-info" class="sqm-note">--</span>
+      </div>
+      <table class="sqm-table">
+        <thead>
+          <tr>
+            <th>域名模式</th>
+            <th>类别</th>
+            <th>置信度</th>
+            <th>活跃 IP 数</th>
+            <th>备注</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="dns-user-rules-tbody">
+          <tr><td colspan="6">加载中...</td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:8px;">
+        <button class="cbi-button" id="btn-dns-user-prev">上一页</button>
+        <button class="cbi-button" id="btn-dns-user-next">下一页</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Tab 3: 端口规则 ==================== -->
+  <div id="tab-ports" class="sqm-tab-panel">
+    <div class="sqm-card">
+      <div class="sqm-card-title">系统端口启发式规则 <span class="sqm-note">（内置规则，只读）</span></div>
+      <div id="port-system-groups"></div>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-title">用户自定义分类规则 <span class="sqm-note">（UCI class_rule，可编辑）</span></div>
+      <button class="cbi-button cbi-button-add" id="btn-add-class-rule" style="margin-bottom:8px;">+ 添加规则</button>
+      <span class="sqm-note" style="margin-left:8px;">修改后需点击「应用分类器」生效</span>
+      <table class="sqm-table">
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>启用</th>
+            <th>类别</th>
+            <th>协议</th>
+            <th>目标端口</th>
+            <th>源端口</th>
+            <th>源 IP</th>
+            <th>目标 IP</th>
+            <th>优先级</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="class-rules-tbody">
+          <tr><td colspan="10">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Rule Edit Modal -->
+<div id="rule-modal" class="sqm-modal-overlay">
+  <div class="sqm-modal">
+    <h3 id="modal-title">编辑规则</h3>
+    <div class="sqm-form-row">
+      <label>规则名称</label>
+      <input id="rule-edit-name" placeholder="例如：game_console_udp_rule">
+    </div>
+    <div class="sqm-form-row">
+      <label>启用</label>
+      <select id="rule-edit-enabled"><option value="1">是</option><option value="0">否</option></select>
+    </div>
+    <div class="sqm-form-row">
+      <label>类别</label>
+      <select id="rule-edit-category">
+        <option value="gaming">低时延类（游戏/会议）</option>
+        <option value="streaming">流媒体类</option>
+        <option value="bulk">批量下载类</option>
+        <option value="other">默认/其他类</option>
+      </select>
+    </div>
+    <div class="sqm-form-row">
+      <label>协议</label>
+      <select id="rule-edit-proto">
+        <option value="all">全部</option>
+        <option value="tcp">TCP</option>
+        <option value="udp">UDP</option>
+      </select>
+    </div>
+    <div class="sqm-form-row">
+      <label>目标端口（单个端口或范围如 27000-27200）</label>
+      <input id="rule-edit-dport" placeholder="例如: 443 或 27000-27200">
+    </div>
+    <div class="sqm-form-row">
+      <label>源端口（可选）</label>
+      <input id="rule-edit-sport" placeholder="留空表示任意">
+    </div>
+    <div class="sqm-form-row">
+      <label>源 IP（可选，CIDR 格式）</label>
+      <input id="rule-edit-src-ip" placeholder="例如: 192.168.1.100/32 或留空">
+    </div>
+    <div class="sqm-form-row">
+      <label>目标 IP（可选，IP 地址或 CIDR）</label>
+      <input id="rule-edit-dst-ip" placeholder="例如: 10.191.135.119 或留空">
+    </div>
+    <div class="sqm-form-row">
+      <label>优先级（0-1000，数值越大优先级越高）</label>
+      <input id="rule-edit-priority" type="number" min="0" max="1000" value="50">
+    </div>
+    <input type="hidden" id="rule-edit-orig-name" value="">
+    <div class="sqm-form-actions">
+      <button class="sqm-btn-cancel" id="btn-modal-cancel">取消</button>
+      <button class="sqm-btn-danger" id="btn-modal-delete" style="display:none;">删除</button>
+      <button class="sqm-btn-primary" id="btn-modal-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- DNS Rule Edit Modal -->
+<div id="dns-modal" class="sqm-modal-overlay">
+  <div class="sqm-modal">
+    <h3 id="dns-modal-title">编辑 DNS 规则</h3>
+    <div class="sqm-form-row">
+      <label>域名模式（fnmatch 通配符，如 *.example.com）</label>
+      <input id="dns-edit-pattern" placeholder="例如: *.bilivideo.com">
+    </div>
+    <div class="sqm-form-row">
+      <label>类别</label>
+      <select id="dns-edit-category">
+        <option value="streaming">流媒体类</option>
+        <option value="gaming">低时延类（游戏/会议）</option>
+        <option value="bulk">批量下载类</option>
+        <option value="other">默认/其他类</option>
+      </select>
+    </div>
+    <div class="sqm-form-row">
+      <label>置信度（0.0 ~ 1.0）</label>
+      <input id="dns-edit-confidence" type="number" min="0" max="1" step="0.01" value="0.85">
+    </div>
+    <div class="sqm-form-row">
+      <label>备注（可选）</label>
+      <textarea id="dns-edit-reason" rows="3" placeholder="例如：知乎主站，属于社交/问答"></textarea>
+    </div>
+    <input type="hidden" id="dns-edit-orig-pattern" value="">
+    <div class="sqm-form-actions">
+      <button class="sqm-btn-cancel" id="btn-dns-modal-cancel">取消</button>
+      <button class="sqm-btn-primary" id="btn-dns-modal-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<script type="text/javascript">
+(function() {
+  var STATS_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_classifier_state")%>';
+  var PORT_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/list_port_heuristics")%>';
+  var DNS_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/list_dns_rules")%>';
+  var ADD_RULE_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/add_class_rule")%>';
+  var UPDATE_RULE_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/update_class_rule")%>';
+  var DELETE_RULE_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/delete_class_rule")%>';
+  var SAVE_DNS_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/save_dns_user_rules")%>';
+  var EXPORT_AI_DNS_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/export_unmatched_dns")%>';
+  var IMPORT_AI_DNS_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/import_ai_dns_rules")%>';
+  var POLICY_LOG_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_policy_log")%>';
+  var UNKNOWN_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/aggregate_unknowns")%>';
+
+  var CLASS_LABELS = { gaming: "低时延类（游戏/会议）", streaming: "流媒体类", bulk: "批量下载类", other: "默认/其他类" };
+  var CATEGORY_LABELS = { other: "默认/其他类", gaming: "低时延类（游戏/会议）", streaming: "流媒体类", bulk: "批量下载类" };
+  var STATUS_LABELS = { hit: "命中", idle: "空闲", disabled: "禁用", error: "错误" };
+  var PIPELINE_STATUS_LABELS = { ok: "正常", warn: "告警", fail: "失败" };
+  var DIAG_LEVEL_LABELS = { info: "提示", warn: "告警", error: "错误" };
+  var DEVICE_LABELS = { ifb0: "ifb0（下载）", iface: "接口（上传）" };
+  var timer = null;
+  var latestPolicyEntry = null;
+  var latestUnknownSuggestions = [];
+  var dnsUserRules = [];  // client-side cache for DNS user rules
+  var dnsHitMap = {};     // pattern → {hits, cls, conf}
+  var dnsUserPage = 1;
+  var portRulesLoaded = false;
+  var dnsRulesLoaded = false;
+  var portRulesPromise = null;
+  var dnsRulesPromise = null;
+
+  // NSS 硬件模式提示：分类功能在 nssfq_codel 单队列下不可用
+  var NSS_STATUS_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_status")%>';
+  (function() {
+    fetch(NSS_STATUS_URL, { cache: "no-store" }).then(function(r) { return r.json(); }).then(function(d) {
+      var nss = d && d.nss;
+      if (nss && nss.resolved_backend === "nss") {
+        var b = el("nss-banner");
+        if (b) {
+          b.style.display = "block";
+          el("nss-banner-text").textContent = "当前为 NSS 硬件模式（nssfq_codel 单队列）：仅支持带宽整形与监控，业务分类/策略中心/分类流量统计不可用。设备: " + (nss.model || "未知")
+        }
+      }
+    }).catch(function() {});
+  })();
+  function el(id) { return document.getElementById(id); }
+  function asNum(v, d) { var n = Number(v); return isFinite(n) ? n : (d || 0); }
+  function fmt(v, d) { var n = Number(v); return isFinite(n) ? n.toFixed(d || 2) : "--"; }
+  function tsText(v) { var n = Number(v); if (!isFinite(n) || n <= 0) return "--"; try { return new Date(n*1000).toLocaleString(); } catch(e) { return "--"; } }
+  function textOrDash(v) { return (v === null || v === undefined || v === "") ? "--" : String(v); }
+  function escapeHtml(v) { return String(v || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;"); }
+  function slug(v) { return textOrDash(v).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").substring(0, 32) || "rule"; }
+  var MODE_LABELS = {
+    auto:"智能自动",
+    balanced:"均衡模式",
+    gaming:"游戏模式",
+    live:"直播模式",
+    meeting:"会议模式",
+    download:"下载模式",
+    streaming:"直播模式",
+    bulk:"下载模式",
+    normal:"普通"
+  };
+  var CONG_LABELS = { normal:"正常", mild:"轻度拥塞", severe:"严重拥塞" };
+  var QUALITY_LABELS = { high:"良好", medium:"一般", low:"偏低", degraded:"下降", caution:"注意", ok:"正常", idle:"空闲" };
+  function zhMode(v) { return MODE_LABELS[v] || v || "--"; }
+  function displayDecisionMode(dec) {
+    dec = dec || {};
+    if (dec.product_mode && dec.product_mode !== "auto") return dec.mode_label || zhMode(dec.product_mode);
+    return zhMode(dec.to || dec.policy_mode || "");
+  }
+  function zhClass(v) { return CLASS_LABELS[v] || (v === "mixed" ? "混合" : (v === "none" ? "无主导" : (v || "--"))); }
+  function zhReason(v) {
+    var s = textOrDash(v);
+    if (s === "--") return s;
+    s = s.replace(/manual mode active/g, "手动模式已启用");
+    s = s.replace(/traffic analyzer failed, classification quality unavailable/g, "业务统计失败，分类质量暂不可用");
+    s = s.replace(/traffic sampling window is resetting, classification quality is warming up/g, "流量采样窗口正在初始化，分类质量预热中");
+    s = s.replace(/no traffic observed/g, "暂无流量");
+    s = s.replace(/classified coverage ([0-9.]+)%, classification unreliable/g, "主业务占比 $1%，分类结果不可靠");
+    s = s.replace(/classified coverage ([0-9.]+)%, classification coverage is low/g, "主业务占比 $1%，主类流量占比较低");
+    s = s.replace(/unknown flow scan failed: (.*)$/g, "未知流量扫描失败：$1");
+    s = s.replace(/configured product mode=([a-z_]+), target=([a-z_]+)/g, function(_, p, m) { return "已选择" + zhMode(p) + "，底层目标=" + zhMode(m); });
+    s = s.replace(/configured policy mode=([a-z_]+)/g, function(_, m) { return "已选择" + zhMode(m); });
+    s = s.replace(/classification unreliable \(unknown traffic ratio exceeds 70%\)/g, "未识别流量超过 70%，分类结果不可靠");
+    s = s.replace(/unknown exceeds 70%, classification unreliable/g, "未识别流量超过 70%，分类结果不可靠");
+    s = s.replace(/severe congestion, but classification unreliable \(unknown>70%\), protect low-latency with conservative floor/g, "严重拥塞，但未识别流量超过 70%，分类不可靠，使用保守保障保护低时延业务");
+    s = s.replace(/severe congestion, gaming traffic dominant, prioritize low latency/g, "严重拥塞，游戏流量占主导，优先保障低时延");
+    s = s.replace(/severe congestion, streaming traffic dominant, prioritize media/g, "严重拥塞，流媒体占主导，优先保障媒体流");
+    s = s.replace(/severe congestion, high unknown traffic \(>=30%\), conservative fallback to balanced/g, "严重拥塞且未识别流量较高（≥30%），保守回退到均衡模式");
+    s = s.replace(/severe congestion, protect interactive traffic by default/g, "严重拥塞，默认保护交互类低时延流量");
+    s = s.replace(/mild congestion/g, "轻度拥塞");
+    s = s.replace(/normal link/g, "链路正常");
+    s = s.replace(/dominant=([a-z_]+)/g, function(_, c) { return "主导业务=" + zhClass(c); });
+    s = s.replace(/target=([a-z_]+)/g, function(_, m) { return "目标模式=" + zhMode(m); });
+    s = s.replace(/but high unknown \(>=30%\), fallback to balanced/g, "但未识别流量较高（≥30%），回退到均衡模式");
+    s = s.replace(/high unknown traffic \(>=30%\)/g, "未识别流量较高（≥30%）");
+    s = s.replace(/cooldown active \((\d+)s remaining\)/g, "冷却中（剩余 $1 秒）");
+    s = s.replace(/debounce pending \((\d+)\/(\d+)\)/g, "防抖确认中（$1/$2）");
+    s = s.replace(/switch to ([a-z_]+)/g, function(_, m) { return "切换到" + zhMode(m); });
+    s = s.replace(/no change/g, "保持不变");
+    return s;
+  }
+
+  // ---- Tab Switching ----
+  function switchTab(tabName) {
+    document.querySelectorAll(".sqm-tab-panel").forEach(function(p) { p.classList.remove("active"); });
+    document.querySelectorAll(".sqm-tab-btn").forEach(function(b) { b.classList.remove("active"); });
+    el(tabName).classList.add("active");
+    document.querySelector("[data-tab='" + tabName + "']").classList.add("active");
+    stopAutoRefresh();
+    if (tabName === "tab-ports") loadPortRules();
+    else if (tabName === "tab-dns") loadDnsRules();
+    else if (tabName === "tab-stats") { loadStats(); startAutoRefresh(); }
+  }
+
+  document.querySelectorAll(".sqm-tab-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() { switchTab(this.dataset.tab); });
+  });
+
+  // ---- Tab 1: Port Rules ----
+  function confTag(c) {
+    if (c >= 0.85) return '<span class="sqm-conf-tag high">高</span>';
+    if (c >= 0.70) return '<span class="sqm-conf-tag med">中</span>';
+    return '<span class="sqm-conf-tag low">低</span>';
+  }
+
+  function setPortRulesLoading() {
+    el("port-system-groups").innerHTML = '<div class="sqm-note">正在加载端口规则...</div>';
+    el("class-rules-tbody").innerHTML = '<tr><td colspan="10" class="sqm-note">正在加载端口规则...</td></tr>';
+  }
+
+  function loadPortRules() {
+    if (portRulesPromise) return portRulesPromise;
+    if (!portRulesLoaded) setPortRulesLoading();
+    portRulesPromise = fetch(PORT_URL, { cache: "no-store" })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.success) { el("port-system-groups").innerHTML = '<div class="sqm-note">加载系统规则失败</div>'; el("class-rules-tbody").innerHTML = '<tr><td colspan="10">加载失败</td></tr>'; return; }
+        renderSystemPortRules(data.system_rules || []);
+        renderClassRules(data.class_rules || []);
+        portRulesLoaded = true;
+      })
+      .catch(function(err) {
+        el("port-system-groups").innerHTML = '<div class="sqm-err">请求失败: ' + (err.message || String(err)) + '</div>';
+        el("class-rules-tbody").innerHTML = '<tr><td colspan="10" class="sqm-note">端口规则加载失败</td></tr>';
+      })
+      .finally(function() {
+        portRulesPromise = null;
+      });
+    return portRulesPromise;
+  }
+
+  function renderSystemPortRules(rules) {
+    var groups = {};
+    rules.forEach(function(r) {
+      var cls = r["class"] || "other";
+      if (!groups[cls]) groups[cls] = [];
+      groups[cls].push(r);
+    });
+
+    var html = "";
+    Object.keys(groups).sort().forEach(function(cls) {
+      var items = groups[cls];
+      html += '<div class="sqm-rule-group">';
+      html += '<div class="sqm-rule-group-header ' + cls + '" onclick="this.nextElementSibling.classList.toggle(\'open\')">';
+      html += '<span>' + (CLASS_LABELS[cls] || cls) + ' 端口规则（' + items.length + ' 条）</span>';
+      html += '<span style="font-size:12px;">&#9660;</span></div>';
+      html += '<div class="sqm-rule-group-body"><table class="sqm-table"><thead><tr><th>协议</th><th>端口范围</th><th>置信度</th></tr></thead><tbody>';
+      items.sort(function(a,b) { return b.confidence - a.confidence; }).forEach(function(r) {
+        var ports = (r.ports || []).map(function(p) { return p[0] === p[1] ? String(p[0]) : p[0] + "-" + p[1]; }).join(", ");
+        html += '<tr><td>' + (r.proto || "").toUpperCase() + '</td><td>' + ports + '</td><td>' + fmt(r.confidence,2) + ' ' + confTag(r.confidence) + '</td></tr>';
+      });
+      html += '</tbody></table></div></div>';
+    });
+    el("port-system-groups").innerHTML = html;
+  }
+
+  function renderClassRules(rules) {
+    var tb = el("class-rules-tbody");
+    tb.innerHTML = "";
+    if (!rules || !rules.length) {
+      tb.innerHTML = '<tr><td colspan="10" class="sqm-note">暂无自定义规则</td></tr>';
+      return;
+    }
+    rules.sort(function(a,b) { return (asNum(b.priority,0) - asNum(a.priority,0)) || ((a.name||"").localeCompare(b.name||"")); });
+    rules.forEach(function(r) {
+      var tr = document.createElement("tr");
+      [
+        textOrDash(r.name),
+        r.enabled ? "是" : "否",
+        CLASS_LABELS[r.category] || r.category || "--",
+        r.proto || "all",
+        textOrDash(r.dport),
+        textOrDash(r.sport),
+        textOrDash(r.src_ip),
+        textOrDash(r.dst_ip),
+        String(r.priority || 50),
+        '<button class="sqm-btn-sm sqm-btn-edit" data-action="edit-class" data-name="' + (r.name||"") + '">编辑</button>' +
+        '<button class="sqm-btn-sm sqm-btn-del" data-action="del-class" data-name="' + (r.name||"") + '">删除</button>'
+      ].forEach(function(v) {
+        var td = document.createElement("td");
+        if (typeof v === "string" && v.indexOf("<button") === 0) {
+          td.innerHTML = v;
+        } else {
+          td.textContent = v;
+        }
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+
+    // Bind edit/delete buttons
+    tb.querySelectorAll("[data-action='edit-class']").forEach(function(btn) {
+      btn.addEventListener("click", function() { openClassRuleModal(this.dataset.name); });
+    });
+    tb.querySelectorAll("[data-action='del-class']").forEach(function(btn) {
+      btn.addEventListener("click", function() { deleteClassRule(this.dataset.name); });
+    });
+  }
+
+  // Class rule CRUD
+  function openClassRuleModal(name) {
+    el("modal-title").textContent = name ? "编辑规则" : "添加规则";
+    el("rule-edit-orig-name").value = name || "";
+    el("btn-modal-delete").style.display = name ? "inline-block" : "none";
+    if (name) {
+      // Find rule data from the rendered table
+      fetch(PORT_URL, { cache: "no-store" }).then(function(r) { return r.json(); }).then(function(data) {
+        var rules = data.class_rules || [];
+        var rule = rules.find(function(r) { return r.name === name; });
+        if (rule) fillClassRuleForm(rule);
+      });
+    } else {
+      fillClassRuleForm({ name: "", enabled: true, category: "gaming", proto: "all", dport: "", sport: "", src_ip: "", priority: 50 });
+    }
+    el("rule-modal").classList.add("open");
+  }
+
+  function fillClassRuleForm(r) {
+    el("rule-edit-name").value = r.name || "";
+    el("rule-edit-enabled").value = r.enabled ? "1" : "0";
+    el("rule-edit-category").value = r.category || "gaming";
+    el("rule-edit-proto").value = r.proto || "all";
+    el("rule-edit-dport").value = r.dport || "";
+    el("rule-edit-sport").value = r.sport || "";
+    el("rule-edit-src-ip").value = r.src_ip || "";
+    el("rule-edit-dst-ip").value = r.dst_ip || "";
+    el("rule-edit-priority").value = String(r.priority || 50);
+  }
+
+  function openClassRuleDraft(draft) {
+    draft = draft || {};
+    el("modal-title").textContent = "添加规则草稿";
+    el("rule-edit-orig-name").value = "";
+    el("btn-modal-delete").style.display = "none";
+    fillClassRuleForm({
+      name: draft.name || "",
+      enabled: true,
+      category: draft.category || "bulk",
+      proto: draft.proto || "all",
+      dport: draft.dport || "",
+      sport: draft.sport || "",
+      src_ip: draft.src_ip || "",
+      dst_ip: draft.dst_ip || "",
+      priority: draft.priority || 300
+    });
+    el("rule-modal").classList.add("open");
+  }
+
+  function draftFromUnknownSuggestion(item) {
+    item = item || {};
+    var category = item.suggested_class || item.category || item.top_guess || "bulk";
+    if (!CLASS_LABELS[category]) category = "bulk";
+    var proto = (item.proto || "all").toLowerCase();
+    if (proto !== "tcp" && proto !== "udp") proto = "all";
+    var dstIp = item.host_ip || item.dst_ip || "";
+    var dport = item.dport !== undefined && item.dport !== null ? String(item.dport) : "";
+    var sport = item.sport !== undefined && item.sport !== null ? String(item.sport) : "";
+    var portPart = dport || sport || "any";
+    return {
+      name: ["unknown", category, proto, slug(dstIp), slug(portPart)].join("_").substring(0, 64),
+      enabled: true,
+      category: category,
+      proto: proto,
+      dport: dport,
+      sport: sport,
+      src_ip: "",
+      dst_ip: dstIp,
+      priority: 300
+    };
+  }
+
+  function draftFromUnknownEntry(item) {
+    item = item || {};
+    var guess = item.suggested_class || item.top_guess || item.guess || "bulk";
+    if (!CLASS_LABELS[guess] || guess === "unknown" || guess === "none" || guess === "mixed") guess = "bulk";
+    var proto = (item.proto || "all").toLowerCase();
+    if (proto !== "tcp" && proto !== "udp") proto = "all";
+    var dport = item.dport !== undefined && item.dport !== null ? String(item.dport) : "";
+    return {
+      name: ["unknown", guess, proto, slug(item.dst_ip), slug(dport || "any")].join("_").substring(0, 64),
+      enabled: true,
+      category: guess,
+      proto: proto,
+      dport: dport,
+      sport: "",
+      src_ip: "",
+      dst_ip: item.dst_ip || "",
+      priority: 250
+    };
+  }
+
+  function saveClassRule() {
+    var origName = el("rule-edit-orig-name").value.trim();
+    var rule = {
+      name: el("rule-edit-name").value.trim(),
+      enabled: el("rule-edit-enabled").value === "1",
+      category: el("rule-edit-category").value,
+      proto: el("rule-edit-proto").value,
+      dport: el("rule-edit-dport").value.trim(),
+      sport: el("rule-edit-sport").value.trim(),
+      src_ip: el("rule-edit-src-ip").value.trim(),
+      dst_ip: el("rule-edit-dst-ip").value.trim(),
+      priority: parseInt(el("rule-edit-priority").value) || 50
+    };
+    if (!rule.name) { alert("请输入规则名称"); return; }
+
+    var url = origName ? UPDATE_RULE_URL : ADD_RULE_URL;
+    if (origName) rule.old_name = origName;
+    if (origName && origName !== rule.name) {
+      // Name changes are handled atomically by the backend update path.
+      fetch(UPDATE_RULE_URL, { method: "POST", body: JSON.stringify(rule) })
+        .then(function(r) { return r.json(); })
+        .then(function(data) { if (data.success) { el("rule-modal").classList.remove("open"); loadPortRules(); } else { alert("保存失败: " + (data.error || "未知错误")); } })
+        .catch(function(err) { alert("请求失败: " + err.message); });
+      return;
+    }
+
+    fetch(url, { method: "POST", body: JSON.stringify(rule) })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { if (data.success) { el("rule-modal").classList.remove("open"); loadPortRules(); } else { alert("保存失败: " + (data.error || "未知错误")); } })
+      .catch(function(err) { alert("请求失败: " + err.message); });
+  }
+
+  function deleteClassRule(name) {
+    if (!confirm("确定删除规则 " + name + "？")) return;
+    fetch(DELETE_RULE_URL + "?name=" + encodeURIComponent(name), { method: "POST" })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { if (data.success) loadPortRules(); else alert("删除失败: " + (data.error || "未知错误")); })
+      .catch(function(err) { alert("请求失败: " + err.message); });
+  }
+
+  el("btn-add-class-rule").addEventListener("click", function() { openClassRuleModal(""); });
+  el("btn-modal-save").addEventListener("click", saveClassRule);
+  el("btn-modal-delete").addEventListener("click", function() { deleteClassRule(el("rule-edit-orig-name").value); el("rule-modal").classList.remove("open"); });
+  el("btn-modal-cancel").addEventListener("click", function() { el("rule-modal").classList.remove("open"); });
+  el("rule-modal").addEventListener("click", function(e) { if (e.target === this) this.classList.remove("open"); });
+
+  // ---- Tab 2: DNS Rules ----
+  function setDnsRulesLoading() {
+    el("dns-system-groups").innerHTML = '<div class="sqm-note">正在加载域名规则...</div>';
+    el("dns-user-rules-tbody").innerHTML = '<tr><td colspan="6" class="sqm-note">正在加载自定义 DNS 规则...</td></tr>';
+    el("dns-user-page-info").textContent = "正在加载...";
+  }
+
+  function loadDnsRules() {
+    if (dnsRulesPromise) return dnsRulesPromise;
+    if (!dnsRulesLoaded) setDnsRulesLoading();
+    dnsRulesPromise = fetch(DNS_URL, { cache: "no-store" })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.success) { el("dns-system-groups").innerHTML = '<div class="sqm-note">加载失败</div>'; return; }
+        dnsHitMap = buildDnsHitMap(data.rule_hit_stats || []);
+        renderDnsStats(data.stats || {}, data.rule_hit_stats || []);
+        renderDnsSystemRules(data.system_rules || [], dnsHitMap);
+        dnsUserRules = data.user_rules || [];
+        renderDnsUserRules(dnsHitMap);
+        dnsRulesLoaded = true;
+      })
+      .catch(function(err) {
+        el("dns-system-groups").innerHTML = '<div class="sqm-err">请求失败</div>';
+        el("dns-user-rules-tbody").innerHTML = '<tr><td colspan="6" class="sqm-note">DNS 规则加载失败</td></tr>';
+        el("dns-user-page-info").textContent = "加载失败";
+      })
+      .finally(function() {
+        dnsRulesPromise = null;
+      });
+    return dnsRulesPromise;
+  }
+
+  function renderDnsStats(stats, ruleHitStats) {
+    var lookupHits = stats.lookup_hits;
+    if (lookupHits === undefined || lookupHits === null) lookupHits = stats.hits || 0;
+    var lookupMisses = stats.lookup_misses;
+    if (lookupMisses === undefined || lookupMisses === null) lookupMisses = stats.misses || 0;
+    var cacheEntries = stats.cache_entries;
+    if (cacheEntries === undefined || cacheEntries === null) cacheEntries = stats.entries || 0;
+    var activePatterns = Array.isArray(ruleHitStats) ? ruleHitStats.filter(function(item) {
+      return Number(item && item.cache_entries || 0) > 0;
+    }).length : 0;
+    el("dns-entries").textContent = String(activePatterns || 0);
+    el("dns-hits").textContent = String(cacheEntries || 0);
+    el("dns-misses").textContent = String(lookupMisses || 0);
+    el("dns-total-mapped").textContent = String(stats.total_mapped || 0);
+    var note = "";
+    if (stats.last_error) {
+      note = "当前 DNS 缓存状态异常：" + stats.last_error + "。域名分类可能暂时未生效。";
+    } else if ((cacheEntries || 0) > 0 && activePatterns > 0) {
+      note = "当前有 " + activePatterns + " 条 DNS 规则覆盖活跃 IP。系统会基于这些映射生成动态分类规则；未命中次数表示诊断查表未命中，不等同于分类失败。";
+    } else if ((cacheEntries || 0) === 0 && (stats.total_mapped || 0) > 0) {
+      note = "当前活跃 DNS 映射为空。历史上曾抓到过域名映射，但最近没有保留下来的活跃缓存。";
+    } else if ((cacheEntries || 0) === 0 && (lookupHits || 0) === 0) {
+      note = "当前还没有可用的 DNS 活跃映射，域名分类可能尚未开始参与。";
+    } else {
+      note = "活跃规则数表示当前至少覆盖 1 个活跃 IP 的域名模式数；活跃 IP 数表示当前 DNS 缓存覆盖到的 IP 数。";
+    }
+    el("dns-status-note").textContent = note;
+    el("dns-last-refresh").textContent = stats.last_refresh ? tsText(stats.last_refresh) : "从未";
+  }
+
+  function updateDnsRulesSummary(activeCount, idleCount, showAll) {
+    el("dns-rules-summary").innerHTML =
+      '<span class="sqm-chip ok">活跃规则 ' + activeCount + '</span>' +
+      '<span class="sqm-chip">零活跃规则 ' + idleCount + '</span>' +
+      '<span class="sqm-chip">' + (showAll ? '当前显示全部' : '当前仅显示活跃') + '</span>';
+  }
+
+  function buildDnsHitMap(ruleHitStats) {
+    var map = {};
+    (ruleHitStats || []).forEach(function(h) { map[h.pattern] = { cache_entries: h.cache_entries || 0, cls: h["class"], conf: h.confidence }; });
+    return map;
+  }
+
+  function renderDnsSystemRules(rules, hitMap) {
+    el("dns-sys-count").textContent = String(rules.length);
+    var hm = hitMap || {};
+    var showAll = !!el("dns-show-all").checked;
+    var groups = {};
+    var activeCount = 0;
+    var idleCount = 0;
+    rules.forEach(function(r) {
+      var cls = r["class"] || "other";
+      if (!groups[cls]) groups[cls] = [];
+      groups[cls].push(r);
+      if ((hm[r.pattern] && hm[r.pattern].cache_entries > 0)) activeCount += 1;
+      else idleCount += 1;
+    });
+    updateDnsRulesSummary(activeCount, idleCount, showAll);
+    var html = "";
+    Object.keys(groups).sort().forEach(function(cls) {
+      var items = groups[cls];
+      var visibleItems = [];
+      var hiddenCount = 0;
+      html += '<div class="sqm-rule-group">';
+      items.sort(function(a,b) {
+        var aEntries = (hm[a.pattern] && hm[a.pattern].cache_entries) || 0;
+        var bEntries = (hm[b.pattern] && hm[b.pattern].cache_entries) || 0;
+        var ha = aEntries > 0 ? 1 : 0;
+        var hb = bEntries > 0 ? 1 : 0;
+        if (ha !== hb) return hb - ha;
+        if (bEntries !== aEntries) return bEntries - aEntries;
+        return b.confidence - a.confidence;
+      }).forEach(function(r) {
+        var entries = (hm[r.pattern] && hm[r.pattern].cache_entries) || 0;
+        if (showAll || entries > 0) visibleItems.push(r);
+        else hiddenCount += 1;
+      });
+      html += '<div class="sqm-rule-group-header ' + cls + '" onclick="this.nextElementSibling.classList.toggle(\'open\')">';
+      html += '<span>' + (CLASS_LABELS[cls] || cls) + ' 域名规则（显示 ' + visibleItems.length + ' / 共 ' + items.length + ' 条）</span>';
+      html += '<span style="font-size:12px;">&#9660;</span></div>';
+      html += '<div class="sqm-rule-group-body"><table class="sqm-table"><thead><tr><th>域名模式</th><th>置信度</th><th>活跃 IP 数</th></tr></thead><tbody>';
+      if (!visibleItems.length) {
+        html += '<tr><td colspan="3" class="sqm-note">当前没有活跃规则，勾选“显示全部规则”后可查看该类别全部规则。</td></tr>';
+      }
+      visibleItems.forEach(function(r) {
+        var hi = hm[r.pattern] || {};
+        html += '<tr><td><code>' + escapeHtml(r.pattern || "") + '</code></td><td>' + fmt(r.confidence,2) + ' ' + confTag(r.confidence) + '</td><td>' + (hi.cache_entries || 0) + '</td></tr>';
+      });
+      if (!showAll && hiddenCount > 0) {
+        html += '<tr><td colspan="3" class="sqm-note">另有 ' + hiddenCount + ' 条当前无活跃 IP 的规则已折叠，勾选“显示全部规则”后可查看。</td></tr>';
+      }
+      html += '</tbody></table></div></div>';
+    });
+    el("dns-system-groups").innerHTML = html;
+  }
+
+  function renderDnsUserRules(hitMap) {
+    var tb = el("dns-user-rules-tbody");
+    tb.innerHTML = "";
+    var info = el("dns-user-page-info");
+    if (!dnsUserRules.length) {
+      tb.innerHTML = '<tr><td colspan="6" class="sqm-note">暂无自定义 DNS 规则</td></tr>';
+      info.textContent = "共 0 条";
+      el("btn-dns-user-prev").disabled = true;
+      el("btn-dns-user-next").disabled = true;
+      return;
+    }
+    var hm = hitMap || {};
+    var query = (el("dns-user-search").value || "").trim().toLowerCase();
+    var clsFilter = el("dns-user-class-filter").value || "";
+    var activeOnly = !!el("dns-user-active-only").checked;
+    var pageSize = Math.max(10, parseInt(el("dns-user-page-size").value, 10) || 20);
+    var filtered = dnsUserRules.map(function(rule, idx) {
+      return { rule: rule || {}, idx: idx };
+    }).filter(function(item) {
+      var r = item.rule;
+      var activeCount = Number((hm[r.pattern] && hm[r.pattern].cache_entries) || 0);
+      if (clsFilter && r["class"] !== clsFilter) return false;
+      if (activeOnly && activeCount <= 0) return false;
+      if (!query) return true;
+      return [
+        r.pattern,
+        r["class"],
+        r.source,
+        r.reason
+      ].join(" ").toLowerCase().indexOf(query) >= 0;
+    });
+    filtered.sort(function(a, b) {
+      var aRule = a.rule || {};
+      var bRule = b.rule || {};
+      var aActive = Number((hm[aRule.pattern] && hm[aRule.pattern].cache_entries) || 0);
+      var bActive = Number((hm[bRule.pattern] && hm[bRule.pattern].cache_entries) || 0);
+      if (bActive !== aActive) return bActive - aActive;
+      var aConf = Number(aRule.confidence || 0);
+      var bConf = Number(bRule.confidence || 0);
+      if (bConf !== aConf) return bConf - aConf;
+      return String(aRule.pattern || "").localeCompare(String(bRule.pattern || ""));
+    });
+    var totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    if (dnsUserPage > totalPages) dnsUserPage = totalPages;
+    if (dnsUserPage < 1) dnsUserPage = 1;
+    var start = (dnsUserPage - 1) * pageSize;
+    var pageItems = filtered.slice(start, start + pageSize);
+    var activeTotal = dnsUserRules.reduce(function(sum, rule) {
+      var pattern = rule && rule.pattern;
+      return sum + (Number((hm[pattern] && hm[pattern].cache_entries) || 0) > 0 ? 1 : 0);
+    }, 0);
+    info.textContent = "显示 " + (filtered.length ? (start + 1) : 0) + "-" + Math.min(start + pageItems.length, filtered.length) + " / 筛选 " + filtered.length + " 条，总计 " + dnsUserRules.length + " 条，活跃 " + activeTotal + " 条";
+    el("btn-dns-user-prev").disabled = dnsUserPage <= 1;
+    el("btn-dns-user-next").disabled = dnsUserPage >= totalPages;
+    if (!pageItems.length) {
+      tb.innerHTML = '<tr><td colspan="6" class="sqm-note">' + (activeOnly ? '当前没有活跃的自定义 DNS 规则' : '没有匹配的 DNS 规则') + '</td></tr>';
+      return;
+    }
+    pageItems.forEach(function(item) {
+      var r = item.rule;
+      var idx = item.idx;
+      var tr = document.createElement("tr");
+      var hi = hm[r.pattern] || {};
+      var reason = String(r.reason || "").trim();
+      var reasonHtml = reason ? escapeHtml(reason) : "";
+      [
+        '<code>' + escapeHtml(r.pattern || "--") + '</code>',
+        CLASS_LABELS[r["class"]] || r["class"] || "--",
+        fmt(r.confidence, 2) + " " + confTag(r.confidence),
+        String(hi.cache_entries || 0),
+        reason ? ('<div title="' + reasonHtml + '" style="max-width:320px;white-space:normal;line-height:1.45;">' + reasonHtml + '</div>') : '<span class="sqm-note">--</span>',
+        '<button class="sqm-btn-sm sqm-btn-edit" data-action="edit-dns" data-idx="' + idx + '">编辑</button>' +
+        '<button class="sqm-btn-sm sqm-btn-del" data-action="del-dns" data-idx="' + idx + '">删除</button>'
+      ].forEach(function(v) {
+        var td = document.createElement("td");
+        td.innerHTML = v;
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+
+    tb.querySelectorAll("[data-action='edit-dns']").forEach(function(btn) {
+      btn.addEventListener("click", function() { openDnsModal(parseInt(this.dataset.idx)); });
+    });
+    tb.querySelectorAll("[data-action='del-dns']").forEach(function(btn) {
+      btn.addEventListener("click", function() { deleteDnsRule(parseInt(this.dataset.idx)); });
+    });
+  }
+
+  function openDnsModal(idx) {
+    el("dns-modal-title").textContent = idx >= 0 ? "编辑 DNS 规则" : "添加 DNS 规则";
+    el("dns-edit-orig-pattern").value = idx >= 0 ? String(idx) : "new";
+    if (idx >= 0 && idx < dnsUserRules.length) {
+      var r = dnsUserRules[idx];
+      el("dns-edit-pattern").value = r.pattern || "";
+      el("dns-edit-category").value = r["class"] || "streaming";
+      el("dns-edit-confidence").value = String(r.confidence !== undefined ? r.confidence : 0.85);
+      el("dns-edit-reason").value = r.reason || "";
+    } else {
+      el("dns-edit-pattern").value = "";
+      el("dns-edit-category").value = "streaming";
+      el("dns-edit-confidence").value = "0.85";
+      el("dns-edit-reason").value = "";
+    }
+    el("dns-modal").classList.add("open");
+  }
+
+  function saveDnsRule() {
+    var origIdx = el("dns-edit-orig-pattern").value;
+    var existingRule = null;
+    if (origIdx !== "new") {
+      var existingIdx = parseInt(origIdx);
+      if (existingIdx >= 0 && existingIdx < dnsUserRules.length) existingRule = dnsUserRules[existingIdx] || null;
+    }
+    var rule = Object.assign({}, existingRule || {}, {
+      pattern: el("dns-edit-pattern").value.trim(),
+      "class": el("dns-edit-category").value,
+      confidence: parseFloat(el("dns-edit-confidence").value) || 0.85,
+      reason: el("dns-edit-reason").value.trim()
+    });
+    if (!rule.source) rule.source = existingRule && existingRule.source ? existingRule.source : "manual";
+    if (rule.enabled === undefined) rule.enabled = true;
+    if (!rule.created_at) rule.created_at = Math.floor(Date.now() / 1000);
+    if (!rule.pattern) { alert("请输入域名模式"); return; }
+
+    if (origIdx === "new") {
+      dnsUserRules.push(rule);
+      dnsUserPage = Math.max(1, Math.ceil(dnsUserRules.length / (parseInt(el("dns-user-page-size").value, 10) || 20)));
+    } else {
+      var idx = parseInt(origIdx);
+      if (idx >= 0 && idx < dnsUserRules.length) dnsUserRules[idx] = rule;
+    }
+    renderDnsUserRules(dnsHitMap);
+    el("dns-modal").classList.remove("open");
+  }
+
+  function deleteDnsRule(idx) {
+    if (!confirm("确定删除此 DNS 规则？")) return;
+    dnsUserRules.splice(idx, 1);
+    renderDnsUserRules(dnsHitMap);
+  }
+
+  function saveAllDnsRules() {
+    el("dns-save-msg").textContent = "保存中...";
+    fetch(SAVE_DNS_URL, { method: "POST", body: JSON.stringify(dnsUserRules) })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) el("dns-save-msg").textContent = "已保存 " + data.count + " 条规则";
+        else el("dns-save-msg").textContent = "保存失败: " + (data.error || "");
+        setTimeout(function() { el("dns-save-msg").textContent = ""; }, 3000);
+      })
+      .catch(function(err) { el("dns-save-msg").textContent = "请求失败"; });
+  }
+
+  function setAiDnsResult(kind, text) {
+    var box = el("ai-dns-result");
+    box.className = "sqm-ai-result " + (kind || "");
+    box.textContent = text || "";
+  }
+
+  function extractJsonText(raw) {
+    var text = String(raw || "").trim();
+    var fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) text = fenced[1].trim();
+    var firstObj = text.indexOf("{"), lastObj = text.lastIndexOf("}");
+    var firstArr = text.indexOf("["), lastArr = text.lastIndexOf("]");
+    if (firstObj >= 0 && lastObj > firstObj && (firstArr < 0 || firstObj < firstArr)) {
+      return text.substring(firstObj, lastObj + 1);
+    }
+    if (firstArr >= 0 && lastArr > firstArr) {
+      return text.substring(firstArr, lastArr + 1);
+    }
+    return text;
+  }
+
+  function exportAiDnsData() {
+    var minCount = Math.max(1, Math.min(100, parseInt(el("ai-dns-min-count").value, 10) || 3));
+    var limit = Math.max(10, Math.min(500, parseInt(el("ai-dns-limit").value, 10) || 150));
+    el("ai-dns-min-count").value = String(minCount);
+    el("ai-dns-limit").value = String(limit);
+    setAiDnsResult("warn", "正在导出未分类 DNS...");
+    fetch(EXPORT_AI_DNS_URL + "?min_count=" + encodeURIComponent(minCount) + "&limit=" + encodeURIComponent(limit) + "&_=" + Date.now(), { cache: "no-store" })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || data.success === false) {
+          setAiDnsResult("bad", "导出失败: " + (data && data.error ? data.error : "未知错误"));
+          return;
+        }
+        el("ai-dns-export-box").value = JSON.stringify(data, null, 2);
+        var summary = data.summary || {};
+        var count = Array.isArray(data.unmatched) ? data.unmatched.length : 0;
+        setAiDnsResult("ok", "已导出 " + count + " 条未分类域名。复制左侧 JSON 给 AI，要求它按 output_format 返回 rules JSON；判断时请同时参考 domain、subdomain_samples 和 suggested_pattern。总未匹配: " + textOrDash(summary.total_unmatched));
+      })
+      .catch(function(err) {
+        setAiDnsResult("bad", "导出请求失败: " + (err && err.message ? err.message : String(err)));
+      });
+  }
+
+  function copyAiDnsExport() {
+    var text = el("ai-dns-export-box").value;
+    if (!text) {
+      setAiDnsResult("warn", "还没有可复制的导出 JSON。");
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        setAiDnsResult("ok", "已复制导出 JSON。");
+      }).catch(function() {
+        el("ai-dns-export-box").select();
+        setAiDnsResult("warn", "浏览器拒绝自动复制，请手动复制左侧文本。");
+      });
+    } else {
+      el("ai-dns-export-box").select();
+      setAiDnsResult("warn", "请手动复制左侧文本。");
+    }
+  }
+
+  function importAiDnsRules() {
+    var raw = el("ai-dns-import-box").value;
+    if (!raw.trim()) {
+      setAiDnsResult("warn", "请先粘贴 AI 返回的 rules JSON。");
+      return;
+    }
+    var jsonText = extractJsonText(raw);
+    var parsed;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (e) {
+      setAiDnsResult("bad", "JSON 解析失败: " + e.message);
+      return;
+    }
+    var rules = Array.isArray(parsed) ? parsed : parsed.rules;
+    if (!Array.isArray(rules) || !rules.length) {
+      setAiDnsResult("bad", "没有找到 rules 数组。AI 返回格式应为 {\"rules\":[...]}。");
+      return;
+    }
+    setAiDnsResult("warn", "正在导入 " + rules.length + " 条候选规则，后端会校验非法、重复和过宽规则...");
+    fetch(IMPORT_AI_DNS_URL, { method: "POST", body: JSON.stringify({ rules: rules }) })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || data.success === false) {
+          setAiDnsResult("bad", "导入失败: " + (data && data.error ? data.error : "未知错误"));
+          return;
+        }
+        var added = Number(data.added || 0);
+        var dup = Number(data.skipped_duplicate || 0);
+        var invalid = Number(data.skipped_invalid || 0);
+        var broad = Number(data.skipped_too_broad || 0);
+        var totalUserRules = textOrDash(data.total_user_rules);
+        var addedRules = Array.isArray(data.added_rules) ? data.added_rules : [];
+        var warnings = Array.isArray(data.warnings) ? data.warnings : [];
+        var outcome = "本次导入没有新增规则。";
+        if (added > 0 && (dup > 0 || invalid > 0 || broad > 0)) {
+          outcome = "本次导入已部分采用候选规则。";
+        } else if (added > 0) {
+          outcome = "本次导入已全部采用通过校验的候选规则。";
+        } else if (broad > 0 || invalid > 0) {
+          outcome = "本次导入未通过校验，请先收窄规则粒度或修正格式。";
+        }
+        var lines = [
+          outcome,
+          "结果摘要：新增 " + added + "，重复跳过 " + dup + "，非法跳过 " + invalid + "，过宽拒绝 " + broad + "。",
+          "当前用户规则数：" + totalUserRules
+        ];
+        if (addedRules.length) {
+          lines.push("已新增规则：");
+          addedRules.slice(0, 8).forEach(function(item) {
+            lines.push("- " + textOrDash(item.pattern) + " -> " + (CLASS_LABELS[item["class"]] || item["class"] || "--") + "（置信度 " + fmt(item.confidence, 2) + "）");
+          });
+          if (addedRules.length > 8) {
+            lines.push("- 其余 " + (addedRules.length - 8) + " 条已省略显示");
+          }
+        }
+        if (warnings.length) {
+          lines.push("被拦截或需注意的项：");
+          warnings.slice(0, 8).forEach(function(w) {
+            lines.push("- " + textOrDash(w.pattern) + ": " + textOrDash(w.reason));
+          });
+          if (warnings.length > 8) {
+            lines.push("- 其余 " + (warnings.length - 8) + " 条警告已省略显示");
+          }
+        }
+        setAiDnsResult(added > 0 ? "ok" : "warn", lines.join("\n"));
+        loadDnsRules();
+      })
+      .catch(function(err) {
+        setAiDnsResult("bad", "导入请求失败: " + (err && err.message ? err.message : String(err)));
+      });
+  }
+
+  el("btn-add-dns-rule").addEventListener("click", function() {
+    openDnsModal(-1);
+  });
+  el("btn-save-dns-rules").addEventListener("click", saveAllDnsRules);
+  el("dns-show-all").addEventListener("change", loadDnsRules);
+  el("dns-user-search").addEventListener("input", function() { dnsUserPage = 1; renderDnsUserRules(dnsHitMap); });
+  el("dns-user-class-filter").addEventListener("change", function() { dnsUserPage = 1; renderDnsUserRules(dnsHitMap); });
+  el("dns-user-page-size").addEventListener("change", function() { dnsUserPage = 1; renderDnsUserRules(dnsHitMap); });
+  el("dns-user-active-only").addEventListener("change", function() { dnsUserPage = 1; renderDnsUserRules(dnsHitMap); });
+  el("btn-dns-user-prev").addEventListener("click", function() { dnsUserPage = Math.max(1, dnsUserPage - 1); renderDnsUserRules(dnsHitMap); });
+  el("btn-dns-user-next").addEventListener("click", function() { dnsUserPage += 1; renderDnsUserRules(dnsHitMap); });
+  el("btn-export-ai-dns").addEventListener("click", exportAiDnsData);
+  el("btn-copy-ai-dns").addEventListener("click", copyAiDnsExport);
+  el("btn-import-ai-dns").addEventListener("click", importAiDnsRules);
+  el("btn-dns-modal-save").addEventListener("click", saveDnsRule);
+  el("btn-dns-modal-cancel").addEventListener("click", function() { el("dns-modal").classList.remove("open"); });
+  el("dns-modal").addEventListener("click", function(e) { if (e.target === this) this.classList.remove("open"); });
+
+  // ---- Tab 3: Classification Stats (original traffic.htm logic) ----
+
+  function setBadge(kind, text) {
+    var node = el("status-badge");
+    node.className = "sqm-badge " + kind;
+    node.textContent = text;
+  }
+  function showError(message) { el("error-box").textContent = message || ""; }
+
+  function normalizeClass(data) {
+    if (!data || typeof data !== "object") return { classid: "--", kbps: 0, pct: 0, bytes: 0, packets: 0 };
+    return { classid: (typeof data.classid === "string" && data.classid) ? data.classid : "--", kbps: asNum(data.tc_kbps,0), pct: asNum(data.pct,0), bytes: asNum(data.tc_bytes,0), packets: asNum(data.tc_packets,0) };
+  }
+  function updateClass(name, data) {
+    el("kbps-" + name).textContent = fmt(data.kbps, 2);
+    el("pct-" + name).textContent = fmt(data.pct, 2);
+    el("bytes-" + name).textContent = String(Math.max(0, Math.floor(data.bytes)));
+    el("packets-" + name).textContent = String(Math.max(0, Math.floor(data.packets)));
+    el("classid-" + name).textContent = data.classid;
+  }
+  function clearDisplay() {
+    ["other","gaming","streaming","bulk"].forEach(function(n) { updateClass(n, normalizeClass(null)); });
+    el("total-kbps").textContent = "--";
+    el("dt-val").textContent = "--";
+    el("dev-val").textContent = "--";
+    el("time-val").textContent = "--";
+    el("pipeline-firewall").textContent = "--";
+    el("pipeline-mark-restore").textContent = "--";
+    el("pipeline-tc").textContent = "--";
+    setRulesEmptyRow("--");
+    setIdleRulesEmptyRow("--");
+    updateRulesSummary(0, 0, false);
+    setDiagnosticsEmptyRow("--");
+    el("dns-rule-hits-card").style.display = "none";
+  }
+  function setRulesEmptyRow(m) { var tb = el("rules-tbody"); tb.innerHTML = ""; var tr = document.createElement("tr"); var td = document.createElement("td"); td.colSpan = 12; td.textContent = m || "--"; tr.appendChild(td); tb.appendChild(tr); }
+  function setIdleRulesEmptyRow(m) { var tb = el("idle-rules-tbody"); tb.innerHTML = ""; var tr = document.createElement("tr"); var td = document.createElement("td"); td.colSpan = 12; td.textContent = m || "--"; tr.appendChild(td); tb.appendChild(tr); }
+  function ruleRank(r) { var s = (r && typeof r.status === "string") ? r.status : ""; if (s === "hit") return 0; if (s === "error") return 1; if (s === "idle") return 3; if (s === "disabled") return 4; return 2; }
+  function ruleRowClass(r) { var s = (r && typeof r.status === "string") ? r.status : ""; if (s === "hit") return "sqm-rule-hit"; if (s === "idle") return "sqm-rule-idle"; return ""; }
+  function isIdleRule(rule) {
+    rule = (rule && typeof rule === "object") ? rule : {};
+    var status = typeof rule.status === "string" ? rule.status : "";
+    var zeroCounters =
+      asNum(rule.last_window_packets, 0) <= 0 &&
+      asNum(rule.last_window_bytes, 0) <= 0 &&
+      asNum(rule.counter_packets, 0) <= 0 &&
+      asNum(rule.counter_bytes, 0) <= 0;
+    return zeroCounters && (status === "idle" || status === "disabled" || status === "");
+  }
+  function buildRuleRow(rule) {
+    rule = (rule && typeof rule === "object") ? rule : {};
+    var isDns = rule.proto === "dns";
+    var tr = document.createElement("tr");
+    var rc = isDns ? "sqm-dns-hit-row" : ruleRowClass(rule);
+    if (rc) tr.className = rc;
+    var cells = [
+      textOrDash(rule.id),
+      (CATEGORY_LABELS[rule.category]||rule.category||"--"),
+      isDns ? "DNS" : textOrDash(rule.proto),
+      textOrDash(rule.dport),
+      textOrDash(rule.sport),
+      isDns ? confTag(parseFloat(rule.mark) || 0) : textOrDash(rule.mark),
+      textOrDash(rule.classid),
+      String(Math.max(0,Math.floor(asNum(rule.last_window_packets,0)))),
+      String(Math.max(0,Math.floor(asNum(rule.last_window_bytes,0)))),
+      String(Math.max(0,Math.floor(asNum(rule.counter_packets,0)))),
+      String(Math.max(0,Math.floor(asNum(rule.counter_bytes,0)))),
+      (STATUS_LABELS[rule.status]||rule.status||"--")
+    ];
+    cells.forEach(function(v, i) {
+      var td = document.createElement("td");
+      if (isDns && i === 5) td.innerHTML = v;
+      else td.textContent = v;
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+  function updateRulesSummary(activeCount, idleCount, showAll) {
+    el("rules-summary").innerHTML =
+      '<span class="sqm-chip ok">活跃规则 ' + activeCount + '</span>' +
+      '<span class="sqm-chip">空闲规则 ' + idleCount + '</span>' +
+      '<span class="sqm-chip">' + (showAll ? '当前显示全部' : '当前仅显示活跃') + '</span>';
+    el("idle-rules-summary").textContent = "显示空闲规则（" + idleCount + "）";
+  }
+
+  function renderRules(rules) {
+    var tb = el("rules-tbody");
+    var idleTb = el("idle-rules-tbody");
+    var idleWrap = el("idle-rules-wrap");
+    var showAll = !!el("rules-show-all").checked;
+    tb.innerHTML = "";
+    idleTb.innerHTML = "";
+    if (!Array.isArray(rules) || !rules.length) {
+      setRulesEmptyRow("暂无规则");
+      setIdleRulesEmptyRow("暂无空闲规则");
+      idleWrap.style.display = "none";
+      updateRulesSummary(0, 0, showAll);
+      return;
+    }
+    var sorted = rules.slice().sort(function(a,b) {
+      var rd = ruleRank(a) - ruleRank(b); if (rd !== 0) return rd;
+      var bd = asNum(b&&b.last_window_bytes,0) - asNum(a&&a.last_window_bytes,0); if (bd !== 0) return bd;
+      var pd = asNum(b&&b.last_window_packets,0) - asNum(a&&a.last_window_packets,0); if (pd !== 0) return pd;
+      var tbd = asNum(b&&b.counter_bytes,0) - asNum(a&&a.counter_bytes,0); if (tbd !== 0) return tbd;
+      return asNum(b&&b.priority,0) - asNum(a&&a.priority,0);
+    });
+    var activeRules = [];
+    var idleRules = [];
+    sorted.forEach(function(rule) {
+      if (isIdleRule(rule)) idleRules.push(rule);
+      else activeRules.push(rule);
+    });
+    updateRulesSummary(activeRules.length, idleRules.length, showAll);
+    if (showAll) {
+      sorted.forEach(function(rule) { tb.appendChild(buildRuleRow(rule)); });
+      if (!sorted.length) setRulesEmptyRow("暂无规则");
+      idleWrap.style.display = "none";
+      setIdleRulesEmptyRow("已在上方显示");
+      return;
+    }
+    if (!activeRules.length) setRulesEmptyRow(idleRules.length ? "当前没有活跃规则，可展开下方空闲规则查看全部。" : "暂无规则");
+    else activeRules.forEach(function(rule) { tb.appendChild(buildRuleRow(rule)); });
+    if (idleRules.length) {
+      idleWrap.style.display = "";
+      idleRules.forEach(function(rule) { idleTb.appendChild(buildRuleRow(rule)); });
+    } else {
+      idleWrap.style.display = "none";
+      setIdleRulesEmptyRow("暂无空闲规则");
+    }
+  }
+
+  function setDiagnosticsEmptyRow(m) { var n = el("diagnostics-list"); n.innerHTML = ""; var li = document.createElement("li"); li.textContent = m || "--"; n.appendChild(li); }
+  function renderPipeline(p) {
+    var fw = (p&&typeof p.firewall==="object")?p.firewall:{}, mr = (p&&typeof p.mark_restore==="object")?p.mark_restore:{}, tc = (p&&typeof p.tc==="object")?p.tc:{};
+    el("pipeline-firewall").textContent = ["状态: "+ (PIPELINE_STATUS_LABELS[fw.status]||fw.status||"--"), "backend: "+textOrDash(fw.backend), "table: "+textOrDash(fw.table), "chain: "+textOrDash(fw.chain), "恢复规则: "+(fw.restore_mark_rule?"是":"否")].join("\n");
+    el("pipeline-mark-restore").textContent = ["状态: "+ (PIPELINE_STATUS_LABELS[mr.status]||mr.status||"--"), "method: "+textOrDash(mr.method), "ingress redirect: "+(mr.ingress_redirect?"是":"否"), "ifb0 up: "+(mr.ifb_up?"是":"否")].join("\n");
+    el("pipeline-tc").textContent = ["状态: "+ (PIPELINE_STATUS_LABELS[tc.status]||tc.status||"--"), "upload root: "+(tc.upload_root_ready?"是":"否"), "download root: "+(tc.download_root_ready?"是":"否"), "upload filters: "+(tc.upload_filters_ready?"是":"否"), "download filters: "+(tc.download_filters_ready?"是":"否")].join("\n");
+  }
+  function renderDiagnostics(items) {
+    var n = el("diagnostics-list"); n.innerHTML = "";
+    if (!Array.isArray(items) || !items.length) { setDiagnosticsEmptyRow("暂无诊断"); return; }
+    items.forEach(function(item) { item = (item&&typeof item==="object")?item:{}; var li = document.createElement("li"); li.textContent = "["+ (DIAG_LEVEL_LABELS[item.level]||item.level||"--") +"] "+textOrDash(item.code)+" - "+textOrDash(item.message); n.appendChild(li); });
+  }
+  function renderDnsRuleHits(hits) {
+    var card = el("dns-rule-hits-card");
+    var tb = el("dns-rule-hits-tbody");
+    tb.innerHTML = "";
+    if (!Array.isArray(hits) || !hits.length) { card.style.display = "none"; return; }
+    var activeHits = hits.filter(function(h) {
+      return Number(h.cache_entries || h.entries || 0) > 0;
+    });
+    if (!activeHits.length) { card.style.display = "none"; return; }
+    card.style.display = "block";
+    activeHits.sort(function(a, b) { return b.cache_entries - a.cache_entries; }).forEach(function(h) {
+      var tr = document.createElement("tr");
+      tr.className = "sqm-dns-hit-row";
+      [
+        '<code>' + textOrDash(h.pattern) + '</code>',
+        CLASS_LABELS[h["class"]] || h["class"] || "--",
+        fmt(h.confidence, 2) + " " + confTag(h.confidence),
+        String(h.cache_entries || 0)
+      ].forEach(function(v) {
+        var td = document.createElement("td");
+        td.innerHTML = v;
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+  }
+
+  function deviceText(actualDev, selectedDev) {
+    if (typeof actualDev !== "string" || !actualDev) return "--";
+    if (selectedDev === "iface" && actualDev !== "ifb0") return "接口（" + actualDev + "）";
+    return DEVICE_LABELS[actualDev] || actualDev;
+  }
+  function buildQuery(dev) { return STATS_URL + "?dev=" + encodeURIComponent(dev || "ifb0"); }
+  function qualityFrom(summary, unknownPct) {
+    var health = (summary && summary.health) || "";
+    if (unknownPct !== null && unknownPct !== undefined && unknownPct > 70) return { label: "偏低", kind: "bad", reason: "未识别流量较高，分类结果仅供参考。" };
+    if (health === "idle") return { label: "空闲", kind: "warn", reason: "当前没有明显流量。" };
+    if (health === "ok") return { label: "较好", kind: "ok", reason: "主类识别处于可用状态。" };
+    return { label: "一般", kind: "warn", reason: "当前主类流量较少，更多流量在默认/其他类，这不等于未识别。" };
+  }
+  function dominantFromCategories(categories) {
+    var best = "none", bestPct = 0;
+    ["gaming","streaming","bulk"].forEach(function(name) {
+      var pct = asNum((categories[name] || {}).pct, 0);
+      if (pct > bestPct) { bestPct = pct; best = name; }
+    });
+    return bestPct >= 5 ? best : "none";
+  }
+  function renderClassificationOverview(data) {
+    var summary = (data && data.summary) || {};
+    var categories = (data && data.categories) || {};
+    var policyTraffic = latestPolicyEntry && latestPolicyEntry.traffic ? latestPolicyEntry.traffic : {};
+    var unknownPct = policyTraffic.unknown_pct;
+    if (unknownPct === undefined || unknownPct === null) unknownPct = null;
+    else unknownPct = asNum(unknownPct, 0);
+    var quality = qualityFrom(summary, unknownPct);
+    var dominant = policyTraffic.dominant || dominantFromCategories(categories);
+    var ratio = asNum(summary.classification_ratio, 0);
+    var classified = asNum(summary.classified_kbps, 0);
+
+    el("policy-decision-to").textContent = fmt(ratio, 0) + "%";
+    el("policy-confidence").textContent = unknownPct === null ? "--" : fmt(unknownPct, 1) + "%";
+    el("policy-quality").textContent = quality.label;
+    el("policy-quality").style.color = quality.kind === "bad" ? "#d32f2f" : (quality.kind === "warn" ? "#ed6c02" : "#2e7d32");
+    el("policy-decision-reason").innerHTML = unknownPct !== null && unknownPct > 70
+      ? '<div class="sqm-alert bad">未识别流量较高，分类结果仅供参考。</div>'
+      : quality.reason;
+    el("policy-traffic-info").textContent = "主类流量: " + fmt(classified, 2) + " kbps | 当前主导业务: " + zhClass(dominant);
+    el("policy-policy-meta").innerHTML =
+      '<span class="sqm-chip ' + quality.kind + '">主业务占比 ' + fmt(ratio, 0) + '%</span>' +
+      '<span class="sqm-chip">默认/其他类 ' + fmt(asNum(summary.other_kbps, 0), 2) + ' kbps</span>' +
+      '<span class="sqm-chip">规则 ' + textOrDash(summary.rules_active) + '/' + textOrDash(summary.rules_total) + '</span>';
+    el("policy-run-chip").className = "sqm-chip " + quality.kind;
+    el("policy-run-chip").textContent = "分类质量 " + quality.label;
+    el("policy-policy-note").textContent = "当前流量识别情况";
+  }
+  function renderPolicyStatus(e) {
+    if (!e || typeof e !== "object") {
+      el("policy-decision-to").textContent = "--";
+      el("policy-confidence").textContent = "--";
+      el("policy-quality").textContent = "--";
+      el("policy-quality").style.color = "";
+      el("policy-decision-reason").textContent = "暂无策略记录";
+      el("policy-traffic-info").textContent = "等待下一条策略记录";
+      el("policy-policy-meta").innerHTML = '<span class="sqm-chip">策略记录暂不可用</span>';
+      el("policy-alloc-tbody").innerHTML = "<tr><td>最低保障</td><td>--</td><td>--</td><td>--</td><td>--</td></tr><tr><td>最高可借用</td><td>--</td><td>--</td><td>--</td><td>--</td></tr>";
+      return;
+    }
+    var dec = e.decision || {};
+    var traf = e.traffic || {};
+    var cq = e.classification_quality || {};
+    var alloc = e.allocation || {};
+    alloc = alloc.allocation || alloc || {};
+    var dto = displayDecisionMode(dec);
+    var dfrom = zhMode(dec.from || "");
+    var isDryRun = (e.dry_run === true || e.dry_run === "true");
+    var isApplied = (e.tc_applied === true || e.tc_applied === "true");
+    var runText = isDryRun ? "模拟运行" : "实际执行";
+    var applyText = isApplied ? "已下发" : "未下发";
+    var runKind = isApplied ? "warn" : (isDryRun ? "ok" : "bad");
+    el("policy-decision-to").textContent = dto;
+    el("policy-confidence").textContent = fmt((dec.confidence||0)*100,0)+"%";
+    el("policy-quality").textContent = QUALITY_LABELS[cq.quality] || cq.quality || "--";
+    if (cq.quality==="low") el("policy-quality").style.color="#d32f2f";
+    else if (cq.quality==="medium") el("policy-quality").style.color="#ed6c02";
+    else el("policy-quality").style.color="#2e7d32";
+    el("policy-decision-reason").textContent = zhReason(dec.reason);
+    el("policy-traffic-info").textContent = "主业务占比: "+fmt(traf.classification_ratio||0,1)+"% | 未识别: "+fmt(traf.unknown_pct||0,1)+"% | 流量: "+fmt(traf.total_kbps,1)+" kbps";
+    el("policy-policy-meta").innerHTML =
+      '<span class="sqm-chip ' + runKind + '">' + runText + '</span>' +
+      '<span class="sqm-chip ' + (isApplied ? "warn" : "ok") + '">' + applyText + '</span>' +
+      '<span class="sqm-chip">拥塞: ' + (CONG_LABELS[e.congestion&&e.congestion.level] || textOrDash(e.congestion&&e.congestion.level)) + '</span>' +
+      '<span class="sqm-chip">' + tsText(e.time) + '</span>';
+    var tb = el("policy-alloc-tbody");
+    tb.innerHTML = "<tr><td>最低保障</td><td>"+fmt((alloc.gaming||{}).rate_pct,0)+"%</td><td>"+fmt((alloc.streaming||{}).rate_pct,0)+"%</td><td>"+fmt((alloc.bulk||{}).rate_pct,0)+"%</td><td>"+fmt((alloc.other||{}).rate_pct,0)+"%</td></tr><tr><td>最高可借用</td><td>"+fmt((alloc.gaming||{}).ceil_pct,0)+"%</td><td>"+fmt((alloc.streaming||{}).ceil_pct,0)+"%</td><td>"+fmt((alloc.bulk||{}).ceil_pct,0)+"%</td><td>"+fmt((alloc.other||{}).ceil_pct,0)+"%</td></tr>";
+  }
+  function loadPolicyHistory() {
+    fetch(POLICY_LOG_URL + "?limit=5&_=" + Date.now(), { cache: "no-store" }).then(function(r){return r.json();}).then(function(data){
+      var div = el("policy-policy-log-list");
+      if (!data || !data.success || !data.entries || !data.entries.length) { div.innerHTML = "<div class=\"sqm-note\">暂无策略日志，等待定时任务生成记录</div>"; return; }
+      var h = "<table class=\"sqm-table\"><thead><tr><th>时间</th><th>模式</th><th>下发</th><th>from→to</th><th>切换</th><th>置信度</th><th>未识别%</th><th>原因</th></tr></thead><tbody>";
+      data.entries.forEach(function(e){
+        var dec = e.decision || {};
+        var isDryRun = (e.dry_run === true || e.dry_run === "true");
+        var isApplied = (e.tc_applied === true || e.tc_applied === "true");
+        h += "<tr><td>"+tsText(e.time)+"</td><td>"+(isDryRun?"模拟运行":"实际执行")+"</td><td>"+(isApplied?"已下发":"未下发")+"</td><td>"+zhMode(dec.from||"")+"→"+displayDecisionMode(dec)+"</td><td>"+(dec.changed?"是":"否")+"</td><td>"+fmt((dec.confidence||0)*100,0)+"%</td><td>"+fmt((e.traffic||{}).unknown_pct||0,1)+"%</td><td>"+textOrDash(zhReason(dec.reason).substring(0,50))+"</td></tr>";
+      });
+      h += "</tbody></table>";
+      div.innerHTML = h;
+    }).catch(function(){el("policy-policy-log-list").innerHTML = "<div class=\"sqm-note\">加载策略日志失败</div>";});
+  }
+  el("btn-policy-log").addEventListener("click", loadPolicyHistory);
+
+  function renderUnknowns(data, sortBy) {
+    var tb = el("unknown-tbody");
+    var summary = el("unknown-summary");
+    var sugg = el("unknown-suggestions");
+    tb.innerHTML = "";
+    sugg.innerHTML = "";
+    if (!data || !data.success) {
+      tb.innerHTML = '<tr><td colspan="9">未知流量分析加载失败</td></tr>';
+      summary.textContent = data && data.error ? data.error : "加载失败";
+      return;
+    }
+    var entries = data.entries || [];
+    summary.textContent = "排序方式: " + (sortBy === "count" ? "出现频率" : "总字节") + " | 聚合条目: " + entries.length;
+    if (!entries.length) {
+      tb.innerHTML = '<tr><td colspan="9">暂无未知流量记录</td></tr>';
+    } else {
+      entries.forEach(function(item) {
+        var guess = item.top_guess || item.guess || "--";
+        var tr = document.createElement("tr");
+        [
+          textOrDash(item.proto),
+          textOrDash(item.dst_ip),
+          textOrDash(item.dport),
+          String(item.count || 0),
+          String(item.total_bytes || 0),
+          String(item.src_count || 0),
+          zhClass(guess),
+          item.suggested_class ? zhClass(item.suggested_class) : "--"
+        ].forEach(function(v) {
+          var td = document.createElement("td");
+          td.textContent = v;
+          tr.appendChild(td);
+        });
+        var actionTd = document.createElement("td");
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "sqm-btn-sm sqm-btn-edit";
+        btn.textContent = "生成草稿";
+        btn.disabled = !item.dst_ip || !item.dport;
+        btn.title = btn.disabled ? "缺少目标 IP 或端口，无法生成端口规则草稿" : "生成规则草稿，不会自动保存或下发";
+        btn.addEventListener("click", function() {
+          openClassRuleDraft(draftFromUnknownEntry(item));
+        });
+        actionTd.appendChild(btn);
+        tr.appendChild(actionTd);
+        tb.appendChild(tr);
+      });
+    }
+    var suggestions = data.suggestions || [];
+    latestUnknownSuggestions = suggestions;
+    if (suggestions.length) {
+      var info = document.createElement("div");
+      info.className = "sqm-alert";
+      info.textContent = "以下建议由系统根据未识别流量统计生成。点击“生成规则草稿”只会填入编辑框，不会自动保存或下发。";
+      sugg.appendChild(info);
+      var list = document.createElement("ul");
+      list.className = "sqm-list";
+      suggestions.slice(0, 6).forEach(function(item) {
+        var li = document.createElement("li");
+        var text = document.createElement("span");
+        text.textContent = zhClass(item.suggested_class) + " | " + textOrDash(item.target_rule) + " | 置信度 " + fmt(asNum(item.confidence,0) * 100, 0) + "% | 需确认";
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "sqm-btn-sm sqm-btn-edit";
+        btn.style.marginLeft = "8px";
+        btn.textContent = "生成规则草稿";
+        btn.addEventListener("click", function() {
+          openClassRuleDraft(draftFromUnknownSuggestion(item));
+        });
+        li.appendChild(text);
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+      sugg.appendChild(list);
+    }
+  }
+  function loadUnknowns(sortBy) {
+    el("unknown-summary").textContent = "加载中...";
+    fetch(UNKNOWN_URL + "?limit=10&sort_by=" + encodeURIComponent(sortBy || "bytes") + "&_=" + Date.now(), { cache: "no-store" })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { renderUnknowns(data, sortBy || "bytes"); })
+      .catch(function(err) {
+        el("unknown-summary").textContent = "请求失败: " + (err && err.message ? err.message : String(err));
+        el("unknown-tbody").innerHTML = '<tr><td colspan="9">请求失败</td></tr>';
+      });
+  }
+  el("btn-unknown-bytes").addEventListener("click", function() { loadUnknowns("bytes"); });
+  el("btn-unknown-count").addEventListener("click", function() { loadUnknowns("count"); });
+  el("rules-show-all").addEventListener("change", function() { loadStats(); });
+
+  function loadStats() {
+    var selectedDev = (el("dev-select").value || "ifb0").trim();
+    fetch(POLICY_LOG_URL + "?limit=1", { cache: "no-store" }).then(function(r){return r.json();}).then(function(pd){if(pd&&pd.success&&pd.entries&&pd.entries.length>0){latestPolicyEntry=pd.entries[0];renderPolicyStatus(pd.entries[0]);}else{latestPolicyEntry=null;renderPolicyStatus(null);}}).catch(function(){latestPolicyEntry=null;renderPolicyStatus(null);});
+    fetch(buildQuery(selectedDev), { cache: "no-store" })
+      .then(function(resp) { if (!resp.ok) throw new Error("HTTP "+resp.status); return resp.json(); })
+      .then(function(data) {
+        if (!data || typeof data !== "object") throw new Error("invalid json");
+        var ok = !!data.success;
+        var cls = (data.categories && typeof data.categories === "object") ? data.categories : {};
+        var rules = Array.isArray(data.rules) ? data.rules : [];
+        var summary = (data.summary && typeof data.summary === "object") ? data.summary : {};
+        var pipeline = (data.pipeline && typeof data.pipeline === "object") ? data.pipeline : {};
+        var diagnostics = Array.isArray(data.diagnostics) ? data.diagnostics : [];
+        var total = asNum(summary.total_kbps,0);
+        var dt = asNum(data.window_sec,0);
+        var focusDev = (typeof data.focus_dev === "string" && data.focus_dev) ? data.focus_dev : selectedDev;
+        ["other","gaming","streaming","bulk"].forEach(function(n) { updateClass(n, normalizeClass(cls[n])); });
+        el("total-kbps").textContent = fmt(total,2);
+        el("dt-val").textContent = fmt(dt,3);
+        el("dev-val").textContent = deviceText(focusDev, selectedDev);
+        el("time-val").textContent = tsText(data.time);
+        renderClassificationOverview(data);
+        renderRules(rules);
+        renderDnsRuleHits(data.dns_rule_hits || []);
+        renderPipeline(pipeline);
+        renderDiagnostics(diagnostics);
+        if (!ok) { setBadge("bad","失败"); showError(data.error || data.output || "后端返回 success=false"); return; }
+        showError("");
+        if (total > 0) setBadge("ok","正常"); else setBadge("warn","空闲");
+      })
+      .catch(function(err) { clearDisplay(); setBadge("bad","失败"); showError("请求失败: "+(err&&err.message?err.message:String(err))); });
+  }
+
+  function startAutoRefresh() { if (el("auto-refresh").checked) timer = setInterval(loadStats, 3000); }
+  function stopAutoRefresh() { if (timer) { clearInterval(timer); timer = null; } }
+  function preloadRuleTabs() {
+    window.setTimeout(function() {
+      loadPortRules();
+      loadDnsRules();
+    }, 120);
+  }
+
+  el("btn-refresh").addEventListener("click", loadStats);
+  el("auto-refresh").addEventListener("change", function() { stopAutoRefresh(); startAutoRefresh(); });
+  el("dev-select").addEventListener("change", loadStats);
+
+  // ---- Init ----
+  // Start with Tab 1 (分类统计)
+  loadStats();
+  startAutoRefresh();
+  preloadRuleTabs();
+  setBadge("warn", "空闲");
+})();
+</script>
+
+<%+footer%>

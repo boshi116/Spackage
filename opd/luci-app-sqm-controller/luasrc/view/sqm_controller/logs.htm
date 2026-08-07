@@ -1,0 +1,173 @@
+<%+header%>
+
+<style>
+.sqm-logs { width:100%; box-sizing:border-box; color:#1d2939; }
+.sqm-logs-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin:0 0 12px; }
+.sqm-logs-head h2 { width:auto; margin:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; color:#1d2939; font-size:22px; }
+.sqm-logs-sub { margin-top:6px; color:#667085; font-size:13px; line-height:1.55; }
+.sqm-live { display:flex; align-items:center; gap:7px; flex:0 0 auto; margin-top:2px; color:#475467; font-size:12px; white-space:nowrap; }
+.sqm-live-dot { width:8px; height:8px; border-radius:50%; background:#94a3b8; }
+.sqm-live.is-on .sqm-live-dot { background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.12); }
+.sqm-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 12px; padding:10px 12px; border:1px solid #e3e7ee; border-radius:8px; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+.sqm-tool-group { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.sqm-tool-divider { width:1px; height:24px; background:#e3e7ee; margin:0 2px; }
+.sqm-toolbar .cbi-button { min-height:34px; margin:0; }
+.sqm-toolbar .sqm-danger { color:#b42318; border-color:#f2b8b5; }
+.sqm-filter { width:170px; min-height:34px; box-sizing:border-box; }
+.sqm-filter-level { width:92px; min-height:34px; box-sizing:border-box; }
+.sqm-check { display:inline-flex; align-items:center; gap:5px; color:#475467; font-size:12px; white-space:nowrap; }
+.sqm-last { color:#667085; font-size:12px; white-space:nowrap; }
+.sqm-main { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:12px; align-items:start; }
+.sqm-card { min-width:0; border:1px solid #e3e7ee; border-radius:8px; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+.sqm-card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:46px; padding:0 14px; border-bottom:1px solid #edf0f4; }
+.sqm-card-head h3 { margin:0; font-size:15px; color:#1d2939; }
+.sqm-card-meta { color:#667085; font-size:12px; }
+.sqm-log { height:480px; margin:0; padding:12px 14px; overflow:auto; background:#111827; color:#d1fae5; font:12px/1.55 Consolas,Monaco,monospace; white-space:pre-wrap; word-break:break-word; }
+.sqm-side-card { overflow:hidden; }
+.sqm-self-check { min-height:150px; max-height:480px; margin:0; padding:12px 14px; overflow:auto; background:#111827; color:#d1fae5; font:12px/1.55 Consolas,Monaco,monospace; white-space:pre-wrap; word-break:break-word; }
+.sqm-empty { display:flex; flex-direction:column; justify-content:center; min-height:150px; padding:14px; box-sizing:border-box; color:#667085; font-size:13px; line-height:1.6; }
+.sqm-empty strong { color:#344054; font-size:14px; }
+.sqm-maintenance { margin-top:12px; overflow:hidden; }
+.sqm-maintenance summary { display:flex; align-items:center; justify-content:space-between; padding:13px 14px; cursor:pointer; color:#1d2939; font-size:14px; font-weight:600; list-style:none; }
+.sqm-maintenance summary::-webkit-details-marker { display:none; }
+.sqm-maintenance summary::after { content:'+'; color:#667085; font-size:19px; font-weight:400; }
+.sqm-maintenance[open] summary { border-bottom:1px solid #edf0f4; }
+.sqm-maintenance[open] summary::after { content:'−'; }
+.sqm-maint-body { padding:14px; }
+.sqm-help { margin:0 0 12px; color:#667085; font-size:12px; line-height:1.6; }
+.sqm-maint-row { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-top:10px; }
+.sqm-maint-row:first-of-type { margin-top:0; }
+.sqm-restore { display:none; max-height:220px; margin:12px 0 0; padding:10px 12px; overflow:auto; border-radius:6px; background:#111827; color:#d1fae5; font:12px/1.55 Consolas,Monaco,monospace; white-space:pre-wrap; }
+.sqm-restore.visible { display:block; }
+@media (max-width:980px) { .sqm-main { grid-template-columns:1fr; } .sqm-self-check { min-height:110px; max-height:260px; } }
+@media (max-width:620px) { .sqm-logs-head { flex-direction:column; gap:4px; } .sqm-toolbar { align-items:flex-start; } .sqm-tool-divider { display:none; } .sqm-filter { width:100%; } .sqm-log { height:400px; } .sqm-last { width:100%; } }
+</style>
+
+<div class="cbi-map sqm-logs">
+  <div class="sqm-logs-head">
+    <div>
+      <h2>系统日志</h2>
+      <div class="sqm-logs-sub">查看控制器运行记录，执行自检，或导出与恢复配置。</div>
+    </div>
+    <div id="live-state" class="sqm-live is-on"><span class="sqm-live-dot"></span><span id="live-text">自动刷新已开启</span></div>
+  </div>
+
+  <div class="sqm-toolbar">
+    <div class="sqm-tool-group">
+      <button class="cbi-button" type="button" onclick="loadLogs()">刷新</button>
+      <button class="cbi-button cbi-button-apply" type="button" onclick="downloadLog()">下载</button>
+      <button class="cbi-button" type="button" onclick="rotateLogs()">轮转</button>
+      <span class="sqm-tool-divider"></span>
+      <button class="cbi-button" type="button" onclick="runSelfCheck()">运行自检</button>
+      <button class="cbi-button sqm-danger" type="button" onclick="clearLogs()">清空</button>
+    </div>
+    <div class="sqm-tool-group">
+      <input id="log-filter" class="cbi-input-text sqm-filter" type="search" placeholder="筛选日志" oninput="renderLogs()" />
+      <select id="log-level" class="cbi-input-select sqm-filter-level" onchange="renderLogs()">
+        <option value="">全部</option><option value="ERROR">错误</option><option value="WARN">警告</option><option value="INFO">信息</option>
+      </select>
+      <label class="sqm-check"><input type="checkbox" id="tail" checked onchange="renderLogs()" />最后 200 行</label>
+      <label class="sqm-check"><input type="checkbox" id="auto" checked onchange="toggleAuto()" />自动刷新</label>
+      <span id="last" class="sqm-last">未刷新</span>
+    </div>
+  </div>
+
+  <div class="sqm-main">
+    <section class="sqm-card">
+      <div class="sqm-card-head"><h3>日志内容</h3><span id="log-count" class="sqm-card-meta">0 行</span></div>
+      <pre id="log" class="sqm-log">正在读取日志...</pre>
+    </section>
+    <section class="sqm-card sqm-side-card">
+      <div class="sqm-card-head"><h3>自检结果</h3><span id="self-check-state" class="sqm-card-meta">尚未运行</span></div>
+      <div id="self-check-empty" class="sqm-empty"><strong>尚未执行自检</strong>运行自检会检查接口、TC 队列、分类链路和当前后端状态。</div>
+      <pre id="self-check" class="sqm-self-check" hidden></pre>
+    </section>
+  </div>
+
+  <details class="sqm-card sqm-maintenance">
+    <summary>配置备份与恢复</summary>
+    <div class="sqm-maint-body">
+      <p class="sqm-help">用于迁移配置。恢复前会进行校验；默认仅导入保存，不会立即重启或应用运行态。</p>
+      <div class="sqm-maint-row"><button class="cbi-button" type="button" onclick="downloadBackup()">导出当前配置</button></div>
+      <div class="sqm-maint-row">
+        <input type="file" id="backup-file" />
+        <label class="sqm-check"><input type="checkbox" id="apply-now" /> 导入后立即应用</label>
+        <button class="cbi-button cbi-button-apply" type="button" onclick="restoreBackup()">导入并恢复</button>
+      </div>
+      <pre id="restore-result" class="sqm-restore"></pre>
+    </div>
+  </details>
+</div>
+
+<script>
+var timer = null;
+var rawLogContent = '';
+
+function nowText() { var d = new Date(); var t = function(n) { return n < 10 ? '0' + n : '' + n; }; return t(d.getHours()) + ':' + t(d.getMinutes()) + ':' + t(d.getSeconds()); }
+function setText(id, value) { document.getElementById(id).textContent = value; }
+
+function updateLiveState() {
+  var on = document.getElementById('auto').checked;
+  document.getElementById('live-state').className = 'sqm-live' + (on ? ' is-on' : '');
+  setText('live-text', on ? '自动刷新已开启' : '自动刷新已关闭');
+}
+
+function toggleAuto() {
+  var enabled = document.getElementById('auto').checked;
+  if (enabled && !timer) timer = setInterval(loadLogs, 3000);
+  if (!enabled && timer) { clearInterval(timer); timer = null; }
+  updateLiveState();
+}
+
+function renderLogs() {
+  var lines = rawLogContent ? rawLogContent.split('\n') : [];
+  var keyword = document.getElementById('log-filter').value.trim().toLowerCase();
+  var level = document.getElementById('log-level').value;
+  if (level) lines = lines.filter(function(line) { return line.indexOf('[' + level + ']') >= 0; });
+  if (keyword) lines = lines.filter(function(line) { return line.toLowerCase().indexOf(keyword) >= 0; });
+  if (document.getElementById('tail').checked) lines = lines.slice(-200);
+  if (lines.length && lines[lines.length - 1] === '') lines.pop();
+  var el = document.getElementById('log');
+  el.textContent = lines.length ? lines.join('\n') : '没有匹配的日志';
+  el.scrollTop = el.scrollHeight;
+  setText('log-count', lines.length + ' 行');
+}
+
+function loadLogs() {
+  fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_logs")%>')
+    .then(function(r) { return r.json(); })
+    .then(function(d) { rawLogContent = d && typeof d.content === 'string' ? d.content : ''; renderLogs(); setText('last', '刷新于 ' + nowText()); })
+    .catch(function(err) { rawLogContent = '读取失败: ' + String(err); renderLogs(); setText('last', '读取失败'); });
+}
+
+function clearLogs() { if (!window.confirm('确定清空当前日志吗？')) return; fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/clear_logs")%>').then(function(r) { return r.json(); }).then(loadLogs).catch(function(err) { rawLogContent = '清空失败: ' + String(err); renderLogs(); }); }
+function downloadLog() { window.location = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/download_log")%>'; }
+function safeVal(v) { if (v === undefined || v === null) return '-'; if (typeof v === 'boolean') return v ? '是' : '否'; if (typeof v === 'object') return JSON.stringify(v); return String(v); }
+function formatChanges(changes) { if (!changes || Object.keys(changes).length === 0) return '无配置变更'; return Object.keys(changes).sort().map(function(key) { var item = changes[key] || {}; return key + ': ' + safeVal(item.from) + ' -> ' + safeVal(item.to); }).join('\n'); }
+function downloadBackup() { window.location = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/backup_config")%>'; }
+
+function restoreBackup() {
+  var fileEl = document.getElementById('backup-file'); var outEl = document.getElementById('restore-result');
+  outEl.className = 'sqm-restore visible';
+  if (!fileEl.files || !fileEl.files.length) { outEl.textContent = '请先选择备份文件'; return; }
+  var fd = new FormData(); fd.append('backup_file', fileEl.files[0]); fd.append('apply_now', document.getElementById('apply-now').checked ? '1' : '0'); outEl.textContent = '正在校验并恢复配置...';
+  fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/restore_config")%>', { method:'POST', body:fd })
+    .then(function(r) { return r.json(); }).then(function(d) { var lines = ['恢复结果: ' + (d.success ? '成功' : '失败')]; if (d.error) lines.push('错误: ' + d.error); if (d.backup_path) lines.push('备份文件: ' + d.backup_path); if (d.validation) { lines.push('校验通过: ' + (d.validation.valid ? '是' : '否')); if (d.validation.errors && d.validation.errors.length) lines.push('校验错误: ' + d.validation.errors.join('; ')); if (d.validation.warnings && d.validation.warnings.length) lines.push('校验警告: ' + d.validation.warnings.join('; ')); } if (d.runtime) { lines.push('已应用运行态: ' + safeVal(d.runtime.applied)); lines.push('重启服务成功: ' + safeVal(d.runtime.restart_success)); lines.push('运行态说明: ' + safeVal(d.runtime.message)); } lines.push('配置变更:'); lines.push(formatChanges(d.changes)); outEl.textContent = lines.join('\n'); })
+    .catch(function(err) { outEl.textContent = '恢复失败: ' + String(err); });
+}
+
+function rotateLogs() { fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/rotate_logs")%>').then(function(r) { return r.json(); }).then(function(d) { if (!d.success) alert('轮转失败: ' + (d.error || d.output || '未知错误')); loadLogs(); }).catch(function(err) { alert('轮转失败: ' + String(err)); }); }
+
+function runSelfCheck() {
+  var el = document.getElementById('self-check'); var empty = document.getElementById('self-check-empty');
+  empty.hidden = true; el.hidden = false; el.textContent = '自检中...'; setText('self-check-state', '正在检查');
+  fetch('<%=luci.dispatcher.build_url("admin/services/sqm_controller/self_check")%>').then(function(r) { return r.json(); }).then(function(d) {
+    if (d && d.checks) { var lines = ['结果: ' + (d.success ? '通过' : '发现问题'), '接口: ' + (d.interface || '-'), '']; d.checks.forEach(function(item) { lines.push('[' + (item.ok ? '通过' : '失败') + '] ' + item.name + ' - ' + (item.detail || '')); }); el.textContent = lines.join('\n'); setText('self-check-state', d.success ? '检查通过' : '需要处理'); }
+    else { el.textContent = JSON.stringify(d, null, 2); setText('self-check-state', '已完成'); }
+  }).catch(function(err) { el.textContent = '自检失败: ' + String(err); setText('self-check-state', '检查失败'); });
+}
+
+window.addEventListener('load', function() { loadLogs(); toggleAuto(); });
+</script>
+
+<%+footer%>

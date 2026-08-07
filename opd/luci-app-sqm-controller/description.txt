@@ -1,0 +1,31 @@
+SQM Controller 是一个面向 OpenWrt 的智能队列管理（Smart Queue Management, SQM）控制器，
+提供图形化 LuCI Web 界面和 Python 后端，用于组织流量分类、拥塞检测、策略判断、
+带宽分配与队列下发。
+
+本项目支持 fq_codel 与 cake 两种常用队列算法，可用于缓解网络缓冲膨胀
+（Bufferbloat），提升多设备、多连接环境下的低时延体验与带宽公平性。
+
+队列后端支持自动检测、软件模式和可选的 Qualcomm NSS 硬件模式。软件模式使用
+HTB + IFB 并提供完整分类与策略能力；NSS 模式仅适用于带 NSS 固件的 IPQ807x
+设备，需要额外安装 sqm-scripts、sqm-scripts-nss、kmod-qca-nss-drv-qdisc 和
+kmod-qca-nss-drv-igs。NSS 组件不是本软件包的通用硬依赖，因此不影响 x86 打包。
+
+4.0 版本的主要能力包括：
+- 支持上行与下行独立带宽设置
+- 使用 HTB + IFB 实现上下行统一整形
+- 基于 nftables + conntrack + tc filter 进行流量分类
+- 支持 DNS 映射、TLS SNI 补充识别与未知流量聚合
+- 提供 dry-run 策略评估与手动 apply 下发分离机制
+- 提供状态监控、分类统计、策略中心、自检与日志页面
+- 后台每分钟持久化监控数据，支持 1 分钟至 24 小时历史窗口
+- 可选支持 sqm-scripts-nss 硬件队列，并在不兼容设备上阻止强制启用
+- 支持用户 DNS 规则管理与 AI 辅助规则导入闭环
+- 支持 UCI 配置持久化与 init.d / cron 运行方式
+
+适用平台：
+- OpenWrt 23.05 及以上版本
+- 需要内核支持：ifb、htb、fq_codel、cake
+- NSS 模式仅支持 Qualcomm IPQ807x 与对应 NSS 固件/模块
+
+软件模式是独立实现，不依赖官方 sqm-scripts；可选 NSS 模式通过 sqm-scripts-nss
+接管基础带宽整形。项目适合在 OpenWrt 设备上做自定义部署、调优和二次开发。

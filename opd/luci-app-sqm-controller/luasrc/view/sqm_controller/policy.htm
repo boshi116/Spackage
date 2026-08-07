@@ -1,0 +1,593 @@
+<%
+local uci = require("luci.model.uci").cursor()
+local function pv(key, default)
+  local v = uci:get("sqm_controller", "policy", key)
+  return (v ~= nil and v ~= "") and v or default
+end
+local policy_enabled = pv("enabled", "1")
+local policy_mode = pv("mode", "auto")
+local cron_expr = pv("cron_expression", "*/1 * * * *")
+local policy_mode_labels = {
+  auto = "智能自动",
+  balanced = "均衡模式",
+  gaming = "游戏模式",
+  live = "直播模式",
+  meeting = "会议模式",
+  download = "下载模式",
+  streaming = "直播模式",
+  bulk = "下载模式"
+}
+local policy_mode_label = policy_mode_labels[policy_mode] or policy_mode
+%>
+<%+header%>
+
+<style>
+.sqm-wrap { width:100%; max-width:none; box-sizing:border-box; }
+.sqm-page-head { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:12px; border:1px solid #e3e7ee; border-radius:8px; padding:14px 16px; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,0.04); }
+.sqm-title { margin:0; font-size:22px; font-weight:700; color:#1d2939; line-height:1.3; }
+.sqm-head-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.sqm-badge { display:inline-flex; align-items:center; border-radius:999px; padding:3px 10px; font-size:12px; color:#fff; background:#667085; }
+.sqm-badge.ok { background:#2e7d32; }
+.sqm-badge.warn { background:#ed6c02; }
+.sqm-badge.bad { background:#d32f2f; }
+.sqm-card { border:1px solid #e3e7ee; border-radius:8px; padding:12px; background:#fff; margin-bottom:12px; box-shadow:0 1px 2px rgba(15,23,42,0.04); }
+.sqm-overview { display:grid; grid-template-columns:minmax(380px,1.15fr) minmax(360px,0.85fr); gap:12px; }
+.sqm-grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.sqm-grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.sqm-grid-4 { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+@media (max-width: 980px) { .sqm-overview, .sqm-grid-2, .sqm-grid-3, .sqm-grid-4 { grid-template-columns:1fr; } }
+.sqm-k { font-size:12px; color:#667085; }
+.sqm-v { font-size:22px; font-weight:600; margin-top:3px; color:#222b45; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sqm-v-lg { font-size:32px; font-weight:700; margin-top:4px; color:#101828; }
+.sqm-sub { font-size:12px; color:#667085; line-height:1.5; margin-top:6px; }
+.sqm-card-title { font-size:16px; font-weight:600; margin:0 0 10px; color:#1d2939; }
+.sqm-metric-card { min-height:88px; }
+.sqm-chipline { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.sqm-chip { display:inline-flex; align-items:center; border-radius:999px; padding:2px 8px; font-size:12px; background:#f2f4f7; color:#475467; }
+.sqm-chip.ok { background:#e8f5e9; color:#2e7d32; }
+.sqm-chip.warn { background:#fff3e0; color:#b25e09; }
+.sqm-chip.bad { background:#fdecec; color:#b3261e; }
+.sqm-alert { border-left:4px solid #667085; border-radius:6px; padding:8px 10px; background:#f8fafc; color:#344054; font-size:13px; line-height:1.5; }
+.sqm-alert.ok { border-color:#2e7d32; background:#f1f8f1; color:#1b5e20; }
+.sqm-alert.warn { border-color:#ed6c02; background:#fff8ed; color:#8a4b00; }
+.sqm-alert.bad { border-color:#d32f2f; background:#fff1f1; color:#9a1f1a; }
+.sqm-split { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+@media (max-width: 700px) { .sqm-split { grid-template-columns:1fr; } }
+.sqm-bar-row { margin:10px 0; }
+.sqm-bar-head { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:#344054; }
+.sqm-bar-wrap { background:#eef2f6; border-radius:999px; height:8px; overflow:hidden; margin-top:5px; }
+.sqm-bar { height:100%; border-radius:999px; width:0; transition:width .25s; }
+.sqm-bar.gaming { background:#2e7d32; }
+.sqm-bar.streaming { background:#1565c0; }
+.sqm-bar.bulk { background:#e65100; }
+.sqm-bar.other { background:#667085; }
+.sqm-bar.unknown { background:#b3261e; }
+.sqm-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.sqm-table { width:100%; border-collapse:collapse; }
+.sqm-table th, .sqm-table td { border-bottom:1px solid #eef2f6; text-align:left; padding:7px 8px; font-size:13px; vertical-align:top; }
+.sqm-table th { background:#f8fafc; color:#344054; font-weight:600; }
+.sqm-table tbody tr:hover { background:#fafafa; }
+.sqm-pre { border:1px solid #e3e7ee; border-radius:6px; background:#fafafa; padding:8px; max-height:320px; overflow:auto; margin:8px 0 0; white-space:pre-wrap; font-size:12px; }
+</style>
+
+<div class="cbi-map sqm-wrap">
+  <div class="sqm-page-head">
+    <div>
+      <div class="sqm-title">策略中心</div>
+      <div class="sqm-sub">根据拥塞等级和业务占比生成调度建议；当前页面默认只读取最近策略记录，不会触发队列下发。</div>
+    </div>
+    <div class="sqm-head-actions">
+      <span id="status-badge" class="sqm-badge">--</span>
+      <button id="btn-refresh" class="cbi-button cbi-button-apply">刷新</button>
+      <button id="btn-run" class="cbi-button cbi-button-action">运行一次模拟判断</button>
+    </div>
+  </div>
+
+  <div id="nss-banner" style="display:none;border:1px solid #ed6c02;border-left:4px solid #ed6c02;border-radius:8px;padding:10px 14px;background:#fff8ed;margin-bottom:12px;">
+    <b>NSS 硬件模式</b>：<span id="nss-banner-text"></span>
+  </div>
+
+  <div class="sqm-overview">
+    <div class="sqm-card">
+      <div class="sqm-card-title">最近策略状态</div>
+      <div class="sqm-split">
+        <div>
+          <div class="sqm-k">建议模式</div>
+          <div id="mode-val" class="sqm-v-lg">--</div>
+          <div id="mode-sub" class="sqm-sub">--</div>
+        </div>
+        <div>
+          <div class="sqm-k">判断原因</div>
+          <div id="reason-val" class="sqm-sub">--</div>
+        </div>
+      </div>
+      <div id="run-meta" class="sqm-chipline">
+        <span class="sqm-chip">--</span>
+      </div>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-title">链路状态</div>
+      <div class="sqm-grid-2">
+        <div>
+          <div class="sqm-k">拥塞等级</div>
+          <div id="cong-val" class="sqm-v">--</div>
+        </div>
+        <div>
+          <div class="sqm-k">分类质量</div>
+          <div id="quality-val" class="sqm-v">--</div>
+        </div>
+      </div>
+      <div id="metrics-line" class="sqm-sub">--</div>
+      <div id="quality-line" class="sqm-sub">--</div>
+    </div>
+  </div>
+
+  <div class="sqm-grid-4">
+    <div class="sqm-card sqm-metric-card">
+      <div class="sqm-k">总流量</div>
+      <div id="total-val" class="sqm-v">--</div>
+      <div id="total-sub" class="sqm-sub">--</div>
+    </div>
+    <div class="sqm-card sqm-metric-card">
+      <div class="sqm-k">主业务占比</div>
+      <div id="coverage-val" class="sqm-v">--</div>
+      <div class="sqm-sub">低时延 / 流媒体 / 批量</div>
+    </div>
+    <div class="sqm-card sqm-metric-card">
+      <div class="sqm-k">未识别诊断</div>
+      <div id="unknown-val" class="sqm-v">--</div>
+      <div id="unknown-sub" class="sqm-sub">--</div>
+    </div>
+    <div class="sqm-card sqm-metric-card">
+      <div class="sqm-k">主导业务</div>
+      <div id="dominant-val" class="sqm-v">--</div>
+      <div id="dns-sub" class="sqm-sub">--</div>
+    </div>
+  </div>
+
+  <div class="sqm-grid-2">
+    <div class="sqm-card">
+      <div class="sqm-card-title">带宽分配计划</div>
+      <div id="alloc-hint" class="sqm-sub">--</div>
+      <div id="alloc-bars"></div>
+    </div>
+
+    <div class="sqm-card">
+      <div class="sqm-card-title">业务占比</div>
+      <div id="traffic-bars"></div>
+    </div>
+  </div>
+
+  <div class="sqm-card">
+    <div class="sqm-card-title">最近策略记录</div>
+    <div class="sqm-table-wrap">
+      <table class="sqm-table">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>策略模式</th>
+            <th>下发状态</th>
+            <th>拥塞</th>
+            <th>置信度</th>
+            <th>未识别</th>
+            <th>原因</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody"><tr><td colspan="7">--</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="sqm-card">
+    <div class="sqm-card-title">运行安全状态</div>
+    <div id="safety-alert" class="sqm-alert">正在读取策略运行方式...</div>
+    <div class="sqm-grid-3" style="margin-top:10px;">
+      <div><div class="sqm-k">定时任务</div><div id="safety-cron-present" class="sqm-sub">--</div></div>
+      <div><div class="sqm-k">运行方式</div><div id="safety-mode" class="sqm-sub">--</div></div>
+      <div><div class="sqm-k">最近记录</div><div id="safety-last" class="sqm-sub">--</div></div>
+    </div>
+    <details style="margin-top:8px;">
+      <summary style="font-size:12px;color:#667085;cursor:pointer;">查看定时任务命令</summary>
+      <pre id="safety-command" class="sqm-pre" style="max-height:120px;">--</pre>
+    </details>
+  </div>
+
+  <div class="sqm-card">
+    <div class="sqm-card-title">策略配置</div>
+    <div class="sqm-grid-3">
+      <div><div class="sqm-k">策略引擎</div><div class="sqm-sub"><%=policy_enabled == "1" and "已启用" or "已禁用"%> / <%=policy_mode_label%></div></div>
+      <div><div class="sqm-k">定时表达式</div><div class="sqm-sub"><%=cron_expr%></div></div>
+      <div><div class="sqm-k">执行方式</div><div class="sqm-sub">当前页面只读取策略记录；是否自动下发以运行方式和最近记录为准。</div></div>
+    </div>
+  </div>
+
+  <details>
+    <summary style="font-size:13px;color:#666;cursor:pointer;">原始接口数据</summary>
+    <pre id="raw" class="sqm-pre">--</pre>
+  </details>
+</div>
+
+<script>
+(function() {
+  var LOG_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_policy_log")%>';
+  var RUN_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/policy_once")%>';
+  var STATUS_URL = '<%=luci.dispatcher.build_url("admin/services/sqm_controller/get_status")%>';
+
+  // NSS 硬件模式：策略中心不可用提示
+  fetch(STATUS_URL, { cache: "no-store" }).then(function(r) { return r.json(); }).then(function(d) {
+    var nss = d && d.nss;
+    if (nss && nss.resolved_backend === "nss") {
+      var b = el("nss-banner");
+      if (b) {
+        b.style.display = "block";
+        el("nss-banner-text").textContent = "nssfq_codel 单队列不支持业务分类，策略中心仅可查看历史记录，无法下发调度。设备: " + (nss.model || "未知")
+      }
+    }
+  }).catch(function() {});
+  var MODE = {
+    auto:"智能自动",
+    balanced:"均衡模式",
+    gaming:"游戏模式",
+    live:"直播模式",
+    meeting:"会议模式",
+    download:"下载模式",
+    streaming:"直播模式",
+    bulk:"下载模式"
+  };
+  var CONG = { normal:"正常", mild:"轻度拥塞", severe:"严重拥塞" };
+  var CLS = { gaming:"低时延类（游戏/会议）", streaming:"流媒体类", bulk:"批量下载类", other:"默认/其他类", unknown:"未识别流量" };
+  var QUALITY = { high:"良好", medium:"一般", low:"偏低", idle:"空闲" };
+  var COLORS = { gaming:"gaming", streaming:"streaming", bulk:"bulk", other:"other", unknown:"unknown" };
+
+  function el(id) { return document.getElementById(id); }
+  function num(v, d) { var n = Number(v); return isFinite(n) ? n : (d || 0); }
+  function bool(v) { return v === true || v === "true" || v === 1 || v === "1"; }
+  function ts(v) { var n = Number(v); return isFinite(n) && n > 0 ? new Date(n * 1000).toLocaleString() : "--"; }
+  function pct(v, d) { var n = Number(v); return isFinite(n) ? n.toFixed(d == null ? 1 : d) + "%" : "--"; }
+  function kbps(v) {
+    var n = Number(v);
+    if (!isFinite(n) || n < 0) return "--";
+    if (n >= 1000000) return (n / 1000000).toFixed(2) + " Gbps";
+    if (n >= 1000) return (n / 1000).toFixed(2) + " Mbps";
+    return n.toFixed(2) + " kbps";
+  }
+  function text(v) { return (v === null || v === undefined || v === "") ? "--" : String(v); }
+  function zhMode(v) { return MODE[v] || v || "--"; }
+  function displayMode(d) {
+    d = d || {};
+    if (d.product_mode && d.product_mode !== "auto") return d.mode_label || zhMode(d.product_mode);
+    return zhMode(d.to || d.policy_mode || "");
+  }
+  function zhClass(v) { return CLS[v] || (v === "mixed" ? "混合" : (v === "none" ? "无主导" : (v || "--"))); }
+  function zhReason(v) {
+    var s = text(v);
+    if (s === "--") return s;
+    s = s.replace(/manual mode active/g, "手动模式已启用");
+    s = s.replace(/traffic analyzer failed, classification quality unavailable/g, "业务统计失败，分类质量暂不可用");
+    s = s.replace(/traffic sampling window is resetting, classification quality is warming up/g, "流量采样窗口正在初始化，分类质量预热中");
+    s = s.replace(/no traffic observed/g, "暂无流量");
+    s = s.replace(/classified coverage ([0-9.]+)%, classification unreliable/g, "主业务占比 $1%，分类结果不可靠");
+    s = s.replace(/classified coverage ([0-9.]+)%, classification coverage is low/g, "主业务占比 $1%，主类流量占比较低");
+    s = s.replace(/unknown flow scan failed: (.*)$/g, "未知流量扫描失败：$1");
+    s = s.replace(/configured product mode=([a-z_]+), target=([a-z_]+)/g, function(_, p, m) { return "已选择" + zhMode(p) + "，底层目标=" + zhMode(m); });
+    s = s.replace(/configured policy mode=([a-z_]+)/g, function(_, m) { return "已选择" + zhMode(m); });
+    s = s.replace(/classification unreliable \(unknown traffic ratio exceeds 70%\)/g, "未识别流量超过 70%，分类结果不可靠");
+    s = s.replace(/severe congestion, but classification unreliable \(unknown>70%\), protect low-latency with conservative floor/g, "严重拥塞，但未识别流量超过 70%，分类不可靠，使用保守保障保护低时延业务");
+    s = s.replace(/severe congestion, gaming traffic dominant, prioritize low latency/g, "严重拥塞，游戏流量占主导，优先保障低时延");
+    s = s.replace(/severe congestion, streaming traffic dominant, prioritize media/g, "严重拥塞，流媒体占主导，优先保障媒体流");
+    s = s.replace(/severe congestion, high unknown traffic \(>=30%\), conservative fallback to balanced/g, "严重拥塞且未识别流量较高（≥30%），保守回退到均衡模式");
+    s = s.replace(/severe congestion, protect interactive traffic by default/g, "严重拥塞，默认保护交互类低时延流量");
+    s = s.replace(/mild congestion/g, "轻度拥塞");
+    s = s.replace(/normal link/g, "链路正常");
+    s = s.replace(/dominant=([a-z_]+)/g, function(_, c) { return "主导业务=" + zhClass(c); });
+    s = s.replace(/target=([a-z_]+)/g, function(_, m) { return "目标模式=" + zhMode(m); });
+    s = s.replace(/but high unknown \(>=30%\), fallback to balanced/g, "但未识别流量较高（≥30%），回退到均衡模式");
+    s = s.replace(/high unknown traffic \(>=30%\)/g, "未识别流量较高（≥30%）");
+    s = s.replace(/cooldown active \((\d+)s remaining\)/g, "冷却中（剩余 $1 秒）");
+    s = s.replace(/debounce pending \((\d+)\/(\d+)\)/g, "防抖确认中（$1/$2）");
+    s = s.replace(/switch to ([a-z_]+)/g, function(_, m) { return "切换到" + zhMode(m); });
+    s = s.replace(/no change/g, "保持不变");
+    return s;
+  }
+
+  function decisionOf(e) {
+    var d = e && e.decision;
+    if (d && d.decision) d = d.decision;
+    d = d || {};
+    var ev = (e && e.evaluation) || (e && e.decision && e.decision.evaluation) || {};
+    return {
+      from: d.from || "",
+      to: d.to || "",
+      changed: bool(d.changed),
+      reason: d.reason || "",
+      confidence: num(d.confidence, num(ev.confidence, 0)),
+      policy_mode: d.policy_mode || "",
+      product_mode: d.product_mode || "",
+      mode_label: d.mode_label || ""
+    };
+  }
+
+  function trafficOf(e) {
+    var t = (e && e.traffic) || {};
+    var classes = t.classes || {};
+    var out = {};
+    ["gaming","streaming","bulk","other"].forEach(function(name) {
+      var item = classes[name] || {};
+      out[name] = {
+        kbps: num(item.kbps, num(item.value, 0)),
+        pct: num(item.pct, 0)
+      };
+    });
+    var total = num(t.total_kbps, num(t.tc_kbps, 0));
+    var classified = num(t.classified_kbps, out.gaming.kbps + out.streaming.kbps + out.bulk.kbps);
+    var coverage = num(t.classification_ratio, total > 0 ? classified / total * 100 : 0);
+    return {
+      total_kbps: total,
+      classified_kbps: classified,
+      classification_ratio: coverage,
+      dominant: t.dominant || "none",
+      unknown_pct: num(t.unknown_pct, num(t.unknown && t.unknown.pct, 0)),
+      health: t.health || "",
+      classes: out
+    };
+  }
+
+  function qualityOf(e, t) {
+    var q = (e && e.classification_quality) || {};
+    var level = q.quality || (t.unknown_pct > 70 ? "low" : (t.unknown_pct > 40 ? "medium" : "high"));
+    return {
+      quality: level,
+      reason: q.reason || "",
+      classified_ratio: num(q.classified_ratio, t.classification_ratio)
+    };
+  }
+
+  function normalizeEntry(e, fallbackDryRun) {
+    e = e || {};
+    var t = trafficOf(e);
+    var allocObj = e.allocation || {};
+    var allocPolicy = ((allocObj.inputs || {}).policy) || {};
+    var decision = decisionOf(e);
+    decision.product_mode = decision.product_mode || allocPolicy.product_mode || "";
+    decision.mode_label = decision.mode_label || allocPolicy.mode_label || "";
+    return {
+      time: e.time,
+      dry_run: e.dry_run === undefined ? fallbackDryRun : bool(e.dry_run),
+      tc_applied: bool(e.tc_applied),
+      tc_skipped_noop: bool(e.tc_skipped_noop),
+      success: e.success === undefined ? null : bool(e.success),
+      apply_error: e.error || e.snapshot_error || "",
+      congestion: e.congestion || {},
+      traffic: t,
+      quality: qualityOf(e, t),
+      decision: decision,
+      allocation: allocObj.allocation || allocObj || {},
+      dns_cache: e.dns_cache || {},
+      config: e.config || {}
+    };
+  }
+
+  function runStateOf(entry) {
+    entry = entry || {};
+    if (entry.dry_run) return { text: "模拟运行", kind: "ok" };
+    return { text: "实际执行", kind: "warn" };
+  }
+
+  function applyStateOf(entry) {
+    entry = entry || {};
+    if (entry.dry_run) return { text: "未下发", kind: "ok" };
+    if (entry.tc_applied) return { text: "已下发", kind: "ok" };
+    if (entry.tc_skipped_noop) return { text: "无需变更", kind: "ok" };
+    if (entry.success === false || entry.apply_error) return { text: "下发失败", kind: "bad" };
+    return { text: "未完成下发", kind: "warn" };
+  }
+
+  function chip(label, kind) {
+    return '<span class="sqm-chip ' + (kind || "") + '">' + label + '</span>';
+  }
+
+  function barRow(name, label, value, sub) {
+    var width = Math.max(0, Math.min(100, num(value, 0)));
+    return '<div class="sqm-bar-row"><div class="sqm-bar-head"><span>' + label + '</span><span>' + pct(width, 1) + (sub ? " / " + sub : "") + '</span></div><div class="sqm-bar-wrap"><div class="sqm-bar ' + COLORS[name] + '" style="width:' + width + '%"></div></div></div>';
+  }
+
+  function renderAllocation(entry, config) {
+    var alloc = entry.allocation || {};
+    var html = "";
+    ["gaming","streaming","bulk","other"].forEach(function(name) {
+      var item = alloc[name] || {};
+      var rate = num(item.rate_pct, 0);
+      var ceil = num(item.ceil_pct, 0);
+      html += barRow(name, CLS[name], rate, "最高可借用 " + pct(ceil, 0));
+    });
+    el("alloc-bars").innerHTML = html || '<div class="sqm-sub">暂无分配数据</div>';
+    el("alloc-hint").textContent = "最低保障表示该类业务的保底比例，最高可借用表示链路空闲时可借用的上限。";
+  }
+
+  function renderTraffic(entry) {
+    var c = entry.traffic.classes || {};
+    var html = "";
+    ["gaming","streaming","bulk","other"].forEach(function(name) {
+      html += barRow(name, CLS[name], c[name] ? c[name].pct : 0, c[name] ? kbps(c[name].kbps) : "--");
+    });
+    html += barRow("unknown", "未识别诊断", entry.traffic.unknown_pct, "诊断信号");
+    el("traffic-bars").innerHTML = html;
+  }
+
+  function renderLogs(entries) {
+    var tb = el("log-tbody");
+    tb.innerHTML = "";
+    if (!Array.isArray(entries) || !entries.length) {
+      tb.innerHTML = '<tr><td colspan="7">暂无策略记录</td></tr>';
+      return;
+    }
+    entries.slice(0, 10).forEach(function(raw) {
+      var e = normalizeEntry(raw, true);
+      var d = e.decision;
+      var applyState = applyStateOf(e);
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>" + ts(e.time) + "</td>" +
+        "<td>" + displayMode(d) + "</td>" +
+        "<td>" + applyState.text + "</td>" +
+        "<td>" + (CONG[e.congestion.level] || e.congestion.level || "--") + "</td>" +
+        "<td>" + pct(d.confidence * 100, 0) + "</td>" +
+        "<td>" + pct(e.traffic.unknown_pct, 1) + "</td>" +
+        "<td>" + zhReason(d.reason).substring(0, 80) + "</td>";
+      tb.appendChild(tr);
+    });
+  }
+
+  function renderSafety(status, current) {
+    status = status || {};
+    current = current || {};
+    var mode = status.policy_cron_mode || "unknown";
+    var present = bool(status.policy_cron_present);
+    var command = status.policy_cron_command || "";
+    var dryRun = current.dry_run !== undefined ? bool(current.dry_run) : null;
+    var applied = current.tc_applied !== undefined ? bool(current.tc_applied) : null;
+    var runState = runStateOf(current);
+    var applyState = applyStateOf(current);
+    var cls = "warn";
+    var msg = "无法确认策略运行方式，请检查定时任务和最近策略记录。";
+    var modeText = "未知";
+
+    if (!present) {
+      cls = "warn";
+      modeText = "未安装定时任务";
+      msg = "当前没有检测到策略定时任务，策略记录可能不会自动更新。";
+    } else if (mode === "dry_run") {
+      cls = "ok";
+      modeText = "模拟策略";
+      msg = "当前为模拟策略模式，系统会生成策略记录，但不会周期性修改队列。";
+    } else if (mode === "apply") {
+      cls = "bad";
+      modeText = "自动下发";
+      msg = "当前检测到自动下发策略，系统会周期性修改队列，请确认这是你主动启用的状态。";
+    } else {
+      modeText = "命令未知";
+      msg = "检测到策略定时任务，但无法识别执行方式，请查看命令内容。";
+    }
+
+    if (dryRun === true && applied === false && mode === "dry_run") {
+      msg += " 最近记录也显示为模拟运行、未下发。";
+    } else if (current.tc_skipped_noop) {
+      msg += " 最近一次实际执行判断队列无需变更。";
+    } else if (applied === true) {
+      cls = mode === "apply" ? "bad" : "warn";
+      msg += " 最近记录显示队列曾被下发。";
+    } else if (applyState.text === "下发失败") {
+      cls = "bad";
+      msg += " 最近一次实际执行未能完成下发。";
+    }
+
+    var alert = el("safety-alert");
+    alert.className = "sqm-alert " + cls;
+    alert.textContent = msg;
+    el("safety-cron-present").textContent = present ? "已安装 / " + text(status.policy_cron_expression) : "未安装";
+    el("safety-mode").textContent = modeText;
+    el("safety-last").textContent = current.time ? (runState.text + " / " + applyState.text + " / " + ts(current.time)) : "--";
+    el("safety-command").textContent = command || "--";
+  }
+
+  function render(data, status) {
+    if (!data || data.success === false) {
+      el("status-badge").className = "sqm-badge bad";
+      el("status-badge").textContent = "读取失败";
+      renderSafety(status, {});
+      el("raw").textContent = JSON.stringify(data || {}, null, 2);
+      return;
+    }
+
+    var entries = Array.isArray(data.entries) ? data.entries : [];
+    if (!entries.length) {
+      el("status-badge").className = "sqm-badge warn";
+      el("status-badge").textContent = "暂无记录";
+      el("mode-val").textContent = "--";
+      el("mode-sub").textContent = "等待定时任务生成策略记录";
+      el("reason-val").textContent = "--";
+      renderLogs([]);
+      renderSafety(status, {});
+      el("raw").textContent = JSON.stringify(data || {}, null, 2);
+      return;
+    }
+    var current = normalizeEntry(entries[0], true);
+    var d = current.decision;
+    var t = current.traffic;
+    var q = current.quality;
+    var cong = current.congestion || {};
+    var qKind = q.quality === "low" ? "bad" : (q.quality === "medium" ? "warn" : "ok");
+
+    el("status-badge").className = "sqm-badge " + qKind;
+    el("status-badge").textContent = "已更新";
+    el("mode-val").textContent = displayMode(d);
+    el("mode-sub").textContent = "从 " + zhMode(d.from) + " 到 " + displayMode(d) + (d.changed ? "，建议切换" : "，保持不变");
+    el("reason-val").textContent = zhReason(d.reason);
+    el("cong-val").textContent = CONG[cong.level] || cong.level || "--";
+    el("quality-val").textContent = QUALITY[q.quality] || q.quality || "--";
+    el("metrics-line").textContent = "RTT " + text((cong.readings || {}).avg_rtt_ms) + "ms / loss " + text((cong.readings || {}).loss_pct) + "% / jitter " + text((cong.readings || {}).jitter_ms) + "ms";
+    el("quality-line").textContent = zhReason(q.reason) || ("主业务占比 " + pct(q.classified_ratio, 1));
+
+    el("total-val").textContent = kbps(t.total_kbps);
+    el("total-sub").textContent = "主类流量 " + kbps(t.classified_kbps);
+    el("coverage-val").textContent = pct(t.classification_ratio, 1);
+    el("unknown-val").textContent = pct(t.unknown_pct, 1);
+    el("unknown-sub").textContent = t.unknown_pct > 70 ? "偏高，策略会保守" : (t.unknown_pct > 40 ? "中等，建议继续观察" : "处于可接受范围");
+    el("dominant-val").textContent = CLS[t.dominant] || t.dominant || "--";
+    el("dns-sub").textContent = "DNS 活跃 IP: " + text((current.dns_cache || {}).cache_entries);
+
+    var runState = runStateOf(current);
+    var applyState = applyStateOf(current);
+    var applyChipText = applyState.text === "已下发" ? "队列已下发" :
+      (applyState.text === "无需变更" ? "队列无需变更" :
+      (applyState.text === "下发失败" ? "队列下发失败" : "队列未下发"));
+
+    el("run-meta").innerHTML =
+      chip(runState.text, runState.kind) +
+      chip(applyChipText, applyState.kind) +
+      chip("置信度 " + pct(d.confidence * 100, 0), qKind) +
+      chip(ts(current.time || data.time), "");
+
+    renderAllocation(current, current.config || {});
+    renderTraffic(current);
+    renderLogs(entries);
+    renderSafety(status, current);
+    el("raw").textContent = JSON.stringify({ policy_log: data, status: status || {} }, null, 2);
+  }
+
+  function load() {
+    el("status-badge").className = "sqm-badge warn";
+    el("status-badge").textContent = "加载中";
+    Promise.all([
+      fetch(LOG_URL + "?limit=5&_=" + Date.now(), { cache:"no-store" }).then(function(r) { return r.json(); }),
+      fetch(STATUS_URL + "?_=" + Date.now(), { cache:"no-store" }).then(function(r) { return r.json(); }).catch(function() { return {}; })
+    ])
+      .then(function(results) { render(results[0], results[1]); })
+      .catch(function(err) {
+        el("status-badge").className = "sqm-badge bad";
+        el("status-badge").textContent = "失败";
+        renderSafety({}, {});
+        el("raw").textContent = String(err);
+      });
+  }
+
+  function runOnce() {
+    el("status-badge").className = "sqm-badge warn";
+    el("status-badge").textContent = "判断中";
+    fetch(RUN_URL, { cache:"no-store" })
+      .then(function(r) { return r.json(); })
+      .then(function() { setTimeout(load, 700); })
+      .catch(function(err) {
+        el("status-badge").className = "sqm-badge bad";
+        el("status-badge").textContent = "判断失败";
+        el("raw").textContent = String(err);
+      });
+  }
+
+  el("btn-refresh").addEventListener("click", load);
+  el("btn-run").addEventListener("click", runOnce);
+  load();
+})();
+</script>
+<%+footer%>

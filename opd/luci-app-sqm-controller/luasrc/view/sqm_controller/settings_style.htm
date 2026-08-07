@@ -1,0 +1,438 @@
+<style>
+.sqm-settings-page {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  color:#1d2939;
+}
+.sqm-settings-page > h2,
+.sqm-settings-page > .cbi-map-descr,
+.sqm-settings-page > .sqm-settings-status,
+.sqm-settings-page > .sqm-settings-basic,
+.sqm-settings-page > .sqm-settings-advanced,
+.sqm-settings-page > .cbi-page-actions,
+.sqm-settings-page > script,
+.sqm-settings-page > style {
+  grid-column:1 / -1;
+}
+.sqm-settings-page > h2 {
+  width:auto;
+  margin:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  color:#1d2939;
+  font-size:22px;
+}
+.sqm-settings-page > .cbi-map-descr {
+  margin:-6px 0 2px;
+  padding:0;
+  color:#667085;
+  font-size:13px;
+  line-height:1.6;
+}
+.sqm-settings-page > .cbi-section {
+  min-width:0;
+  margin:0;
+  padding:14px 16px;
+  border:1px solid #e3e7ee;
+  border-radius:8px;
+  background:#fff;
+  box-shadow:0 1px 2px rgba(15,23,42,.04);
+}
+.sqm-settings-page > .cbi-section > h3 {
+  margin:0 0 12px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:#1d2939;
+  font-size:15px;
+}
+.sqm-settings-page .cbi-section-node {
+  margin:0;
+  padding:0;
+}
+.sqm-settings-page .cbi-value {
+  min-width:0;
+  margin:0;
+  padding:9px 0;
+  border-bottom:1px solid #f0f2f5;
+}
+.sqm-settings-page .cbi-value:last-child,
+.sqm-settings-page .cbi-value.cbi-value-last {
+  border-bottom:0;
+}
+.sqm-settings-page .cbi-value-title {
+  width:34%;
+  padding-top:7px;
+  color:#475467;
+  font-size:13px;
+  line-height:1.45;
+}
+.sqm-settings-page .cbi-value-field {
+  width:66%;
+  min-width:0;
+}
+.sqm-settings-page .cbi-value-field > input[type="text"],
+.sqm-settings-page .cbi-value-field > input[type="number"],
+.sqm-settings-page .cbi-value-field > select {
+  width:100%;
+  max-width:430px;
+  box-sizing:border-box;
+}
+.sqm-settings-page .cbi-value-description {
+  clear:both;
+  margin:6px 0 0 34%;
+  padding:0;
+  color:#667085;
+  font-size:12px;
+  line-height:1.55;
+}
+.sqm-settings-page .cbi-value-description > div {
+  margin-top:0 !important;
+}
+.sqm-settings-status {
+  display:flex;
+  align-items:center;
+  min-height:48px;
+  padding:11px 15px !important;
+  border-color:#b7e4c7 !important;
+  border-left:4px solid #16a34a !important;
+  background:#f0fdf4 !important;
+}
+.sqm-settings-status > h3 {
+  width:auto !important;
+  flex:0 0 auto;
+  margin:0 18px 0 0 !important;
+  white-space:nowrap;
+}
+.sqm-settings-status .cbi-section-node {
+  flex:1;
+  min-width:0;
+}
+.sqm-settings-status .cbi-value {
+  display:flex;
+  align-items:center;
+  padding:0;
+  border:0;
+}
+.sqm-settings-status .cbi-value-title {
+  flex:0 0 auto;
+  width:auto;
+  padding:0;
+  color:#667085;
+  white-space:nowrap;
+}
+.sqm-settings-status .cbi-value-title::after {
+  content:'：';
+}
+.sqm-settings-status .cbi-value-field {
+  flex:0 0 auto;
+  width:auto;
+  margin-left:4px;
+  color:#15803d;
+  font-size:14px;
+  font-weight:600;
+  line-height:1.5;
+  white-space:nowrap;
+}
+.sqm-settings-status { order:1; }
+.sqm-settings-basic { order:2; }
+.sqm-settings-policy { order:3; }
+.sqm-settings-monitor { order:4; }
+.sqm-settings-advanced { order:5; }
+.sqm-settings-basic .cbi-section-node {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  column-gap:22px;
+}
+.sqm-settings-basic .cbi-value {
+  display:block;
+}
+.sqm-settings-basic .cbi-value-title,
+.sqm-settings-basic .cbi-value-field {
+  width:100%;
+}
+.sqm-settings-basic .cbi-value-title {
+  padding:0 0 6px;
+}
+.sqm-settings-basic .cbi-value-description {
+  margin:7px 0 0;
+}
+.sqm-settings-basic .cbi-value:last-child {
+  grid-column:1 / -1;
+}
+.sqm-settings-basic .cbi-value:last-child .cbi-value-field > select {
+  max-width:calc(50% - 11px);
+}
+.sqm-settings-advanced .cbi-section-node {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  column-gap:22px;
+}
+.sqm-settings-advanced .cbi-value {
+  display:block;
+  border-bottom:0;
+}
+.sqm-settings-advanced .cbi-value-title,
+.sqm-settings-advanced .cbi-value-field {
+  width:100%;
+}
+.sqm-settings-advanced .cbi-value-title {
+  padding:0 0 6px;
+}
+.sqm-settings-page ~ .cbi-page-actions {
+  position:static;
+  z-index:auto;
+  margin:2px 0 0;
+  padding:10px 12px;
+  border:1px solid #dbe2ea;
+  border-radius:8px;
+  background:rgba(255,255,255,.96);
+  box-shadow:none;
+  backdrop-filter:none;
+}
+.sqm-settings-page ~ .cbi-page-actions .cbi-button {
+  min-height:36px;
+}
+
+/* Keep CBI fields in a predictable label/control flow. Argon floats these
+ * elements by default, which breaks when sections are placed in a grid. */
+.sqm-settings-page .cbi-value-title,
+.sqm-settings-page .cbi-value-field {
+  float:none !important;
+  box-sizing:border-box;
+}
+.sqm-settings-page .cbi-value-title {
+  text-align:left !important;
+}
+.sqm-settings-page .cbi-value-field {
+  text-align:left;
+}
+.sqm-settings-basic .cbi-section-node,
+.sqm-settings-advanced .cbi-section-node {
+  display:block;
+}
+.sqm-settings-basic .cbi-value,
+.sqm-settings-advanced .cbi-value,
+.sqm-settings-policy .cbi-value,
+.sqm-settings-monitor .cbi-value {
+  display:grid !important;
+  grid-template-columns:180px minmax(0,600px);
+  justify-content:start;
+  align-items:start;
+  column-gap:18px;
+  min-height:42px;
+  padding:9px 0;
+}
+.sqm-settings-basic .cbi-value-title,
+.sqm-settings-advanced .cbi-value-title,
+.sqm-settings-policy .cbi-value-title,
+.sqm-settings-monitor .cbi-value-title {
+  width:auto !important;
+  padding:7px 0 0;
+}
+.sqm-settings-basic .cbi-value-field,
+.sqm-settings-advanced .cbi-value-field,
+.sqm-settings-policy .cbi-value-field,
+.sqm-settings-monitor .cbi-value-field {
+  width:auto !important;
+  min-width:0;
+}
+.sqm-settings-page .cbi-value-field > input[type="text"],
+.sqm-settings-page .cbi-value-field > input[type="number"],
+.sqm-settings-page .cbi-value-field > select,
+.sqm-settings-page .cbi-value-field > div > input[type="text"],
+.sqm-settings-page .cbi-value-field > div > input[type="number"],
+.sqm-settings-page .cbi-value-field > div > select {
+  width:100%;
+  max-width:600px;
+  box-sizing:border-box;
+}
+.sqm-settings-basic .cbi-value:last-child,
+.sqm-settings-basic .cbi-value:last-child .cbi-value-field > select {
+  grid-column:auto;
+  max-width:none;
+}
+.sqm-settings-page .cbi-value-description {
+  grid-column:2;
+  margin:2px 0 0 !important;
+  padding:0;
+  max-width:600px;
+  color:#667085;
+  font-size:12px;
+  line-height:1.5;
+}
+.sqm-settings-page .cbi-value-field > br {
+  display:none;
+}
+.sqm-settings-page .cbi-checkbox {
+  padding-top:5px;
+}
+@media (max-width:980px) {
+  .sqm-settings-page { grid-template-columns:1fr; }
+  .sqm-settings-page > .cbi-section { grid-column:1; }
+}
+@media (max-width:640px) {
+  .sqm-settings-page { gap:10px; }
+  .sqm-settings-page > .cbi-section { padding:13px 14px; }
+  .sqm-settings-status { display:block; }
+  .sqm-settings-status > h3 { margin:0 0 7px !important; }
+  .sqm-settings-basic .cbi-section-node,
+  .sqm-settings-advanced .cbi-section-node { grid-template-columns:1fr; }
+  .sqm-settings-basic .cbi-value:last-child { grid-column:1; }
+  .sqm-settings-basic .cbi-value:last-child .cbi-value-field > select { max-width:none; }
+  .sqm-settings-page .cbi-value { display:block; }
+  .sqm-settings-page .cbi-value-title,
+  .sqm-settings-page .cbi-value-field { width:100%; }
+  .sqm-settings-page .cbi-value-title { padding:0 0 6px; }
+  .sqm-settings-page .cbi-value-description { margin:7px 0 0; }
+  .sqm-settings-basic .cbi-value,
+  .sqm-settings-advanced .cbi-value,
+  .sqm-settings-policy .cbi-value,
+  .sqm-settings-monitor .cbi-value {
+    grid-template-columns:1fr;
+    row-gap:5px;
+  }
+  .sqm-settings-page .cbi-value-description { grid-column:1; }
+}
+</style>
+
+<style>
+/* Compact LuCI-style settings canvas: readable on wide screens without
+ * making every control span the entire router viewport. */
+.cbi-map.sqm-settings-page {
+  width:100% !important;
+  max-width:none !important;
+  margin:0 auto 0 0 !important;
+}
+.sqm-settings-page > h2,
+.sqm-settings-page > .cbi-map-descr {
+  max-width:960px;
+  margin-left:0 !important;
+  margin-right:auto !important;
+  text-align:left !important;
+}
+.sqm-settings-page > .cbi-section {
+  width:auto;
+  max-width:100%;
+}
+.sqm-settings-page ~ .cbi-page-actions {
+  width:100%;
+  max-width:none;
+  margin:2px auto 0 0;
+  box-sizing:border-box;
+}
+.sqm-settings-basic .cbi-section-node {
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  column-gap:28px;
+}
+.sqm-settings-basic .cbi-value,
+.sqm-settings-advanced .cbi-value,
+.sqm-settings-policy .cbi-value,
+.sqm-settings-monitor .cbi-value {
+  grid-template-columns:125px minmax(0,1fr);
+  column-gap:12px;
+}
+.sqm-settings-page .cbi-value-field > input[type="text"],
+.sqm-settings-page .cbi-value-field > input[type="number"],
+.sqm-settings-page .cbi-value-field > select,
+.sqm-settings-page .cbi-value-field > div > input[type="text"],
+.sqm-settings-page .cbi-value-field > div > input[type="number"],
+.sqm-settings-page .cbi-value-field > div > select {
+  max-width:320px;
+}
+.sqm-settings-basic .cbi-value:last-child {
+  grid-column:1 / -1;
+}
+.sqm-settings-basic .cbi-value.cbi-value-last {
+  grid-column:2;
+}
+.sqm-settings-basic .cbi-value:last-child .cbi-value-field,
+.sqm-settings-basic .cbi-value:last-child .cbi-value-description {
+  max-width:680px;
+}
+.sqm-settings-advanced .cbi-section-node {
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  column-gap:28px;
+}
+.sqm-settings-advanced .cbi-value {
+  grid-template-columns:1fr;
+}
+.sqm-settings-advanced .cbi-value-title {
+  padding-top:0;
+  padding-bottom:6px;
+}
+.sqm-settings-advanced .cbi-value-field,
+.sqm-settings-advanced .cbi-value-field > input,
+.sqm-settings-advanced .cbi-value-field > select {
+  max-width:100%;
+}
+.sqm-settings-page .cbi-value-description {
+  max-width:320px;
+}
+@media (max-width:760px) {
+  .cbi-map.sqm-settings-page {
+    width:calc(100% - 20px) !important;
+  }
+  .sqm-settings-page ~ .cbi-page-actions {
+    width:calc(100% - 20px);
+  }
+  .sqm-settings-basic .cbi-section-node {
+    display:block !important;
+  }
+  .sqm-settings-basic .cbi-value,
+  .sqm-settings-advanced .cbi-value,
+  .sqm-settings-policy .cbi-value,
+  .sqm-settings-monitor .cbi-value {
+    grid-template-columns:1fr !important;
+    width:100% !important;
+  }
+  .sqm-settings-page .cbi-value-field,
+  .sqm-settings-page .cbi-value-field > div {
+    width:100% !important;
+    max-width:100% !important;
+  }
+  .sqm-settings-basic .cbi-value:last-child {
+    grid-column:auto;
+  }
+  .sqm-settings-basic .cbi-value.cbi-value-last {
+    grid-column:auto;
+  }
+  .sqm-settings-advanced .cbi-section-node {
+    display:block !important;
+  }
+  .sqm-settings-page .cbi-value-field > input[type="text"],
+  .sqm-settings-page .cbi-value-field > input[type="number"],
+  .sqm-settings-page .cbi-value-field > select,
+  .sqm-settings-page .cbi-value-field > div > input[type="text"],
+  .sqm-settings-page .cbi-value-field > div > input[type="number"],
+  .sqm-settings-page .cbi-value-field > div > select {
+    max-width:100%;
+  }
+}
+</style>
+
+<script>
+(function() {
+  var map = document.currentScript && document.currentScript.closest('.cbi-map');
+  if (!map) map = document.querySelector('.cbi-map');
+  if (!map) return;
+
+  map.classList.add('sqm-settings-page');
+  var sections = map.querySelectorAll(':scope > .cbi-section');
+  for (var i = 0; i < sections.length; i++) {
+    var heading = sections[i].querySelector('h3');
+    var title = heading ? heading.textContent.replace(/^\s+|\s+$/g, '') : '';
+    if (title === '服务状态') sections[i].classList.add('sqm-settings-status');
+    else if (title === '基础设置') sections[i].classList.add('sqm-settings-basic');
+    else if (title === '策略设置') sections[i].classList.add('sqm-settings-policy');
+    else if (title === '高级设置') sections[i].classList.add('sqm-settings-advanced');
+    else if (title === '监控设置') sections[i].classList.add('sqm-settings-monitor');
+  }
+})();
+</script>
