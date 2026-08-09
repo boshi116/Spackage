@@ -373,22 +373,13 @@ if api.is_finded("smartdns") then
 		return m:get(section, self.option) or {"tcp://1.1.1.1"}
 	end
 	function o.write(self, section, value)
-		local t = {}
-		local t2 = {}
+		local new_t = {}
 		if type(value) == "table" then
-			local x
-			for _, x in ipairs(value) do
-				if x and #x > 0 then
-					if not t2[x] then
-						t2[x] = x
-						t[#t+1] = x
-					end
-				end
-			end
+			new_t = api.table_remove_duplicates(value)
 		else
-			t = { value }
+			new_t = { value }
 		end
-		return DynamicList.write(self, section, t)
+		return DynamicList.write(self, section, new_t)
 	end
 end
 
@@ -650,11 +641,11 @@ o.default = "0"
 o.rmempty = false
 
 o = s:taboption("log", ListValue, "loglevel", "Sing-Box/Xray " .. translate("Log Level"))
-o.default = "warning"
-o:value("debug")
-o:value("info")
-o:value("warning")
-o:value("error")
+o.default = "warn"
+o:value("debug", "Debug")
+o:value("info", "Info")
+o:value("warn", "Warning")
+o:value("error", "Error")
 
 o = s:taboption("log", Flag, "advanced_log_feature", translate("Advanced log feature"), translate("For professionals only."))
 o.default = "0"
@@ -696,10 +687,9 @@ s2.anonymous = true
 s2.addremove = true
 s2.extedit = api.url("socks_config", "%s")
 function s2.create(e, t)
-	local uuid = api.gen_short_uuid(5)
-	uuid = "socks_" .. uuid
-	TypedSection.create(e, uuid)
-	luci.http.redirect(e.extedit:format(uuid))
+	local uid = "socks_" .. api.gen_random_char(5)
+	TypedSection.create(e, uid)
+	luci.http.redirect(e.extedit:format(uid))
 end
 function s2.remove(e, t)
 	local socks = "Socks_" .. t
