@@ -1,9 +1,8 @@
 ## 📦 自用包AI最近自动更新
-- 更新时间：2026-08-10 22:16:48
-- 更新文件数：26
+- 更新时间：2026-08-11 09:12:06
+- 更新文件数：72
 - 更新插件：
-  - luci-app-minigate
+  - OpenClash
   - openwrt-passwall
-  - openwrt-passwall2
 ---
 
