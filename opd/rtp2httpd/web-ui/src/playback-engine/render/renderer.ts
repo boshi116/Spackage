@@ -1,26 +1,31 @@
 import Log from "../utils/logger";
 import { createFilter, type RenderParams, type VideoFilter } from "./filters/types";
 import { FsrPresenter } from "./fsr";
-import { isRenderResolutionEligible } from "./interlace-detector";
 import { PassthroughPresenter, type Presenter } from "./presenters";
 
 const TAG = "VideoRenderer";
 
-/** Field order of the interlaced source: top field first or bottom field first. */
-export type FieldOrder = "tff" | "bff";
+/** WebGL video rendering targets SD/HD broadcast frames; larger frames are gated out. */
+const GATE_MAX_WIDTH = 1920;
+const GATE_MAX_HEIGHT = 1088;
+
 /** `"passthrough"` means no GL source stage: the uploaded frame texture is presented directly. */
 export type RenderStageName = "passthrough" | "bwdif";
+
+/** Whether a frame size falls within the SD/HD WebGL render gate. */
+export function isRenderResolutionEligible(width: number, height: number): boolean {
+  return width > 0 && width <= GATE_MAX_WIDTH && height > 0 && height <= GATE_MAX_HEIGHT;
+}
 
 /**
  * Post-stage enhancement filters, applied in order between the source stage
  * and presentation. All are registered in the filter registry and must be
  * stateless (historyFrames = 0): the renderer re-runs the whole list per
- * frame and assumes channel/stage switches need no per-filter reset. Empty
- * for now — RCAS (inside the FSR upscale presenter) has taken over the
- * sharpening role the old standalone "sharpen" filter used to play; the
- * mechanism is kept for any future stateless filter.
+ * frame and assumes channel/stage switches need no per-filter reset.
+ * mosquito-nr runs at source resolution so FSR EASU does not reconstruct
+ * compression speckle around high-contrast edges.
  */
-const ENHANCEMENT_FILTER_NAMES: readonly string[] = [];
+const ENHANCEMENT_FILTER_NAMES: readonly string[] = ["mosquito-nr"];
 
 /**
  * Safety ceiling for the enhanced canvas backing store, so a very large
@@ -46,8 +51,8 @@ interface RenderTarget {
  * when enhancement sized the canvas to the display, plain blit otherwise).
  *
  * Rendering and presentation are decoupled for bwdif: both fields of a frame
- * are rendered up front when the frame arrives, the first field is presented
- * immediately, and the second field is presented by a requestAnimationFrame
+ * are rendered up front when the frame arrives, the top field is presented
+ * immediately (TFF), and the bottom field is presented by a requestAnimationFrame
  * clock on the vsync nearest half a frame duration after the first field's
  * estimated display time (see `secondFieldPresentAt`). A setTimeout here
  * would drift against the vsync grid and make each field's on-screen
@@ -70,7 +75,6 @@ export class VideoRenderer {
   private running = false;
   private contextLost = false;
   private stageName: RenderStageName = "passthrough";
-  private fieldOrder: FieldOrder = "tff";
   private readonly onContextLost?: () => void;
   private readonly onContextRestored?: () => void;
 
@@ -122,27 +126,6 @@ export class VideoRenderer {
    */
   private usesDevicePixelBox = true;
 
-  /**
-   * Called once per new decoded frame while running, before any upload or draw.
-   * Use it to drain async detection readbacks. Return true to request a detection
-   * sample for this frame.
-   */
-  onFrame: ((gl: WebGL2RenderingContext) => boolean) | null = null;
-
-  /**
-   * Called when onFrame requested a sample and frame upload succeeded. Must not
-   * issue blocking readbacks.
-   */
-  onSample:
-    | ((
-        gl: WebGL2RenderingContext,
-        curTexture: WebGLTexture,
-        prevTexture: WebGLTexture | null,
-        videoWidth: number,
-        videoHeight: number,
-      ) => void)
-    | null = null;
-
   /** Called when a presented frame is outside the render gate before resize handling catches up. */
   onFrameOutsideRenderGate: ((videoWidth: number, videoHeight: number) => void) | null = null;
 
@@ -182,20 +165,6 @@ export class VideoRenderer {
     return typeof HTMLVideoElement !== "undefined" && "requestVideoFrameCallback" in HTMLVideoElement.prototype;
   }
 
-  get isRunning(): boolean {
-    return this.running;
-  }
-
-  /** The active WebGL2 context, or null if not yet created or context is lost. */
-  get currentGl(): WebGL2RenderingContext | null {
-    return this.contextLost ? null : this.gl;
-  }
-
-  /** Update the source field order for subsequent bwdif frames. */
-  setFieldOrder(fieldOrder: FieldOrder): void {
-    this.fieldOrder = fieldOrder;
-  }
-
   /** Toggle post-stage picture enhancement without rebuilding the media pipeline. */
   setPictureEnhancementEnabled(enabled: boolean): void {
     if (this.pictureEnhancementEnabled === enabled) return;
@@ -226,17 +195,14 @@ export class VideoRenderer {
   }
 
   /** Reset source-specific state while retaining this canvas's context and compiled programs. */
-  resetStream(fieldOrder: FieldOrder = "tff"): void {
+  resetStream(): void {
     this.stageName = "passthrough";
     this.stageFilter = null;
-    this.fieldOrder = fieldOrder;
     this.releaseStreamResources();
   }
 
   /** Start the frame loop with the given source stage. Safe to call repeatedly. */
-  start(stageName: RenderStageName = this.stageName, fieldOrder: FieldOrder = "tff"): boolean {
-    this.fieldOrder = fieldOrder;
-
+  start(stageName: RenderStageName = this.stageName): boolean {
     if (this.running) {
       if (!this.setStage(stageName)) return false;
       this.primeCanvas();
@@ -256,7 +222,7 @@ export class VideoRenderer {
     this.running = true;
     this.primeCanvas();
     this.scheduleFrame();
-    Log.i(TAG, `Frame loop started (stage '${stageName}', ${fieldOrder})`);
+    Log.i(TAG, `Frame loop started (stage '${stageName}')`);
     return true;
   }
 
@@ -585,7 +551,7 @@ export class VideoRenderer {
     const height = this.video.videoHeight;
     if (!gl || this.contextLost || !isRenderResolutionEligible(width, height)) return;
     if (!this.uploadFrame(gl, width, height)) return;
-    this.drawCurrentOutput(this.fieldOrder === "tff" ? 0 : 1);
+    this.drawCurrentOutput(0);
   }
 
   private scheduleFrame(): void {
@@ -608,26 +574,20 @@ export class VideoRenderer {
       return;
     }
 
-    const sampleDue = this.onFrame?.(gl) ?? false;
     const frameDurationMs = this.frameDurationMs(metadata);
 
     if (!this.uploadFrame(gl, width, height)) return;
 
     if (this.stageName === "bwdif") {
-      // A new frame supersedes any not-yet-presented second field.
+      // A new frame supersedes any not-yet-presented second field. Always TFF:
+      // top field first, bottom field half a frame later.
       this.clearPendingSecondField();
-      const firstField = this.fieldOrder === "tff" ? 0 : 1;
-      this.drawCurrentOutput(firstField);
+      this.drawCurrentOutput(0);
       if (!this.video.paused && frameDurationMs > 10) {
-        this.queueSecondField(firstField === 0 ? 1 : 0, this.secondFieldPresentAt(now, frameDurationMs));
+        this.queueSecondField(1, this.secondFieldPresentAt(now, frameDurationMs));
       }
     } else {
       this.drawCurrentOutput(0);
-    }
-
-    if (sampleDue && this.onSample) {
-      const prevTexture = this.textures.length >= 2 ? this.textures[1] : null;
-      this.onSample(gl, this.textures[0], prevTexture, width, height);
     }
   }
 
@@ -724,7 +684,8 @@ export class VideoRenderer {
 
     const enhancementReady = this.pictureEnhancementEnabled && this.ensureEnhancementResources();
     const spatialOnly = this.textures.length <= stageFilter.historyFrames;
-    const params: RenderParams = { width, height, keepField: field, isSecondField: true, spatialOnly };
+    // Second-field input is always bwdif's framebuffer, already native orientation.
+    const params: RenderParams = { width, height, keepField: field, isSecondField: true, spatialOnly, flipY: false };
 
     const filters = enhancementReady ? this.enhancementFilters : [];
     const stageDest = filters.length > 0 ? this.ensureStageTarget(gl, width, height) : dest;
@@ -737,16 +698,7 @@ export class VideoRenderer {
     let enhanced = enhancementReady;
     if (filters.length > 0) {
       try {
-        let current = stageDest.texture;
-        for (let i = 0; i < filters.length; i++) {
-          const target =
-            i === filters.length - 1 ? dest : this.ensureEnhancementTarget(gl, i % 2 === 0 ? 0 : 1, width, height);
-          if (!target) throw new Error("Failed to create enhancement render target");
-          gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
-          gl.viewport(0, 0, width, height);
-          filters[i].render(gl, [current], params);
-          current = target.texture;
-        }
+        this.runEnhancementFilters(gl, stageDest.texture, params, dest);
       } catch (err) {
         Log.w(TAG, "Second field enhancement failed; presenting unenhanced field:", err);
         gl.bindFramebuffer(gl.FRAMEBUFFER, dest.fbo);
@@ -775,8 +727,8 @@ export class VideoRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvasWidth, canvasHeight);
     try {
-      // `dest` is always rendered by queueSecondField's stage filter (bwdif), so it's
-      // already in native (framebuffer) orientation and never needs a Y-flip.
+      // `dest` is framebuffer-backed (bwdif plus any enhancement), already in
+      // native orientation, and never needs a Y-flip.
       presenter.present(gl, dest.texture, dest.width, dest.height, canvasWidth, canvasHeight, false);
     } catch (err) {
       // Never let a failed present escape into the rAF present clock. Fall back
@@ -804,7 +756,17 @@ export class VideoRenderer {
     this.resizeCanvas(desiredSize.width, desiredSize.height);
 
     const spatialOnly = this.textures.length <= (stageFilter?.historyFrames ?? 0);
-    const params: RenderParams = { width, height, keepField: field, isSecondField: false, spatialOnly };
+    // A framebuffer-rendered stage output is already in native orientation; the raw
+    // video upload sampled directly (no stage filter) needs a Y-flip.
+    const sourceFlipY = !stageFilter;
+    const params: RenderParams = {
+      width,
+      height,
+      keepField: field,
+      isSecondField: false,
+      spatialOnly,
+      flipY: sourceFlipY,
+    };
 
     // No stage filter (plain passthrough) means the uploaded frame texture is already the
     // source: sampling it directly skips a redundant copy into an intermediate target.
@@ -820,16 +782,15 @@ export class VideoRenderer {
       sourceTexture = this.textures[0];
     }
 
-    // A framebuffer-rendered stage output is already in native orientation; the raw
-    // video upload sampled directly (no stage filter) needs the presenter to flip Y.
-    const flipY = !stageFilter;
-
     if (enhancementReady && this.upscalePresenter) {
       try {
         const enhanced = this.runEnhancementFilters(gl, sourceTexture, params);
+        // Enhancement writes an FBO, so present without the source Y-flip. An empty
+        // filter list returns `sourceTexture` unchanged and keeps sourceFlipY.
+        const presentFlipY = this.enhancementFilters.length > 0 ? false : sourceFlipY;
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, desiredSize.width, desiredSize.height);
-        this.upscalePresenter.present(gl, enhanced, width, height, desiredSize.width, desiredSize.height, flipY);
+        this.upscalePresenter.present(gl, enhanced, width, height, desiredSize.width, desiredSize.height, presentFlipY);
         return;
       } catch (err) {
         Log.w(TAG, "Picture enhancement render failed; falling back to canvas presenter:", err);
@@ -839,22 +800,34 @@ export class VideoRenderer {
     this.resizeCanvas(width, height);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
-    passthroughPresenter.present(gl, sourceTexture, width, height, width, height, flipY);
+    passthroughPresenter.present(gl, sourceTexture, width, height, width, height, sourceFlipY);
   }
 
   /**
    * Run the enhancement filter list over ping-pong targets at source
    * resolution. Returns the texture holding the final result (the stage
-   * output itself when the list is empty).
+   * output itself when the list is empty). When `lastTarget` is set, the
+   * last pass writes there instead of a ping-pong slot (second-field path).
    */
-  private runEnhancementFilters(gl: WebGL2RenderingContext, input: WebGLTexture, params: RenderParams): WebGLTexture {
+  private runEnhancementFilters(
+    gl: WebGL2RenderingContext,
+    input: WebGLTexture,
+    params: RenderParams,
+    lastTarget?: RenderTarget,
+  ): WebGLTexture {
     let current = input;
     for (let i = 0; i < this.enhancementFilters.length; i++) {
-      const target = this.ensureEnhancementTarget(gl, i % 2 === 0 ? 0 : 1, params.width, params.height);
+      const isLast = i === this.enhancementFilters.length - 1;
+      const target =
+        isLast && lastTarget
+          ? lastTarget
+          : this.ensureEnhancementTarget(gl, i % 2 === 0 ? 0 : 1, params.width, params.height);
       if (!target) throw new Error("Failed to create enhancement render target");
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
       gl.viewport(0, 0, params.width, params.height);
-      this.enhancementFilters[i].render(gl, [current], params);
+      // Only the first pass may sample a raw video upload; later FBOs are native.
+      const passParams = i === 0 ? params : { ...params, flipY: false };
+      this.enhancementFilters[i].render(gl, [current], passParams);
       current = target.texture;
     }
     return current;

@@ -16,8 +16,8 @@ export interface RenderParams {
   keepField: 0 | 1;
   /**
    * Whether this render is the temporally second field of the frame. Decides
-   * which neighboring frames hold the temporally adjacent fields (independent
-   * of keepField now that field order can be TFF or BFF).
+   * which neighboring frames hold the temporally adjacent fields. Field order
+   * is always TFF, so the second field is the bottom field.
    */
   isSecondField: boolean;
   /**
@@ -27,6 +27,12 @@ export interface RenderParams {
    * interpolation of the current frame.
    */
   spatialOnly: boolean;
+  /**
+   * Whether `textures[0]` is a raw DOM video upload (needs a Y-flip to match
+   * WebGL's bottom-left origin). Framebuffer-backed inputs (bwdif output,
+   * earlier enhancement passes) are already in native orientation.
+   */
+  flipY: boolean;
 }
 
 export interface VideoFilter {
