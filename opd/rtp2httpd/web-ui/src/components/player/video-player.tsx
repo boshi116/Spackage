@@ -13,6 +13,7 @@ import {
 import { createPortal } from "react-dom";
 import { usePlayerTouchGestures } from "../../hooks/use-player-touch-gestures";
 import { usePlayerTranslation } from "../../hooks/use-player-translation";
+import { useWallClockMinute } from "../../hooks/use-wall-clock-minute";
 import {
   getDocumentPictureInPicture,
   getDocumentPiPWindowOptions,
@@ -50,6 +51,8 @@ import mp2WasmUrl from "../../playback-engine/wasm/minimp3/mp2_decoder.wasm?url"
 import type { Channel, EPGProgram } from "../../types/player";
 import type { PictureInPictureMode } from "../../types/ui";
 import { PLAYER_OVERLAY_SURFACE_CLASS } from "./classnames";
+import type { PlaybackClock } from "./playback-clock";
+import { PlaybackTimeProvider } from "./playback-time-context";
 import { PlayerControls } from "./player-controls";
 import { PlayerGestureIndicatorOverlay } from "./player-gesture-overlay";
 import { PlayerSelectedGlassLayers } from "./player-selected-glass-layers";
@@ -62,10 +65,13 @@ interface VideoPlayerProps {
   locale: Locale;
   currentProgram?: EPGProgram | null;
   onSeek?: (seekTime: Date, goingLive: boolean) => void;
+  /** Channel EPG programmes used to split catchup playseek windows and to rebuild URLs on retry. */
+  catchupPrograms?: readonly Pick<EPGProgram, "start" | "end">[];
   /** Recalibrate MSE t=0 → wall-clock mapping (live mode). */
   onStreamStartTimeChange?: (time: Date) => void;
   streamStartTime: Date;
-  onCurrentVideoTimeChange: (time: number) => void;
+  /** Media clock fed from the active backend's position and published to the controls. */
+  clock: PlaybackClock;
   onChannelNavigate?: (target: "prev" | "next" | number) => void;
   /** Neighbours of the current channel, used to preview the target of a swipe-to-zap gesture. */
   prevChannel?: Channel | null;
@@ -202,24 +208,7 @@ function PlayerTopLeftOverlay({
   loading: boolean;
   loadingText: string;
 }) {
-  const [time, setTime] = useState(() => new Date());
-
-  useEffect(() => {
-    const tick = () => setTime(new Date());
-    tick();
-
-    const msUntilNextMinute = 60_000 - (Date.now() % 60_000);
-    let intervalId = 0;
-    const timeoutId = window.setTimeout(() => {
-      tick();
-      intervalId = window.setInterval(tick, 60_000);
-    }, msUntilNextMinute);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-      if (intervalId) window.clearInterval(intervalId);
-    };
-  }, []);
+  const time = new Date(useWallClockMinute());
 
   return (
     <div
@@ -263,10 +252,11 @@ function VideoPlayerComponent({
   locale,
   playMode,
   currentProgram = null,
+  catchupPrograms = [],
   onSeek,
   onStreamStartTimeChange,
   streamStartTime,
-  onCurrentVideoTimeChange,
+  clock,
   onChannelNavigate,
   prevChannel = null,
   nextChannel = null,
@@ -700,6 +690,7 @@ function VideoPlayerComponent({
       const seekTime = mseToWallClock(currentVideoTimeRef.current, streamStartTime);
       return buildCatchupSegments(source, seekTime, {
         overlapMs: playbackBackendKind === "native" ? 0 : undefined,
+        programs: catchupPrograms,
       });
     }
     return segments;
@@ -897,7 +888,7 @@ function VideoPlayerComponent({
     p.on("time-update", (time) => {
       if (slotPlayerRef(slotId).current !== p || slotId !== getActiveSlotId()) return;
       currentVideoTimeRef.current = time;
-      onCurrentVideoTimeChange(time);
+      clock.update(time);
       updateMediaSessionPosition();
     });
     p.on("ended", () => {
@@ -2061,9 +2052,14 @@ function VideoPlayerComponent({
           </div>
         )}
       </div>
-      {createPortal(playerSurface, playerPortalHost)}
+      <PlaybackTimeProvider clock={clock}>{createPortal(playerSurface, playerPortalHost)}</PlaybackTimeProvider>
     </div>
   );
 }
 
+// Deliberately NOT wrapped in memo(): this component relies on useEffectEvent, and react-dom
+// 19.2 only refreshes Effect Event implementations for plain function-component fibers, not
+// for the SimpleMemoComponent fiber memo() produces. Under memo() every Effect Event kept its
+// mount-time props (playMode stayed "live", streamStartTime stayed at page load), which broke
+// catchup seeking. PlayerPage instead avoids re-rendering on the 1 Hz playback clock.
 export { VideoPlayerComponent as VideoPlayer };

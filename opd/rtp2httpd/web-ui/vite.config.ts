@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -17,8 +18,8 @@ export default defineConfig(({ mode }) => {
       minify: !isDev,
       rolldownOptions: {
         input: {
-          status: resolve(__dirname, "status.html"),
-          player: resolve(__dirname, "player.html"),
+          status: resolve(import.meta.dirname, "status.html"),
+          player: resolve(import.meta.dirname, "player.html"),
         },
       },
     },
@@ -30,6 +31,9 @@ export default defineConfig(({ mode }) => {
         // "^/%E8%B6%85%E9%AB%98%E6%B8%85/.*": "http://router.ccca.cc:5140",
         // "^/%E9%AB%98%E6%B8%85/.*": "http://router.ccca.cc:5140",
       },
+    },
+    test: {
+      include: ["src/**/*.test.ts"],
     },
   };
 });
