@@ -15,19 +15,22 @@ void poller_close(int pfd) { close(pfd); }
 int poller_add(int pfd, int fd, uint32_t events) {
   struct kevent changes[2];
   int nchanges = 0;
+  unsigned short flags = EV_ADD | EV_ENABLE | (events & POLLER_LEVEL ? 0 : EV_CLEAR);
+  if (events & POLLER_ONESHOT)
+    flags |= EV_DISPATCH;
 
   if (events & POLLER_IN) {
-    EV_SET(&changes[nchanges], fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
+    EV_SET(&changes[nchanges], fd, EVFILT_READ, flags, 0, 0, NULL);
     nchanges++;
   }
   if (events & POLLER_OUT) {
-    EV_SET(&changes[nchanges], fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, NULL);
+    EV_SET(&changes[nchanges], fd, EVFILT_WRITE, flags, 0, 0, NULL);
     nchanges++;
   }
 
   if (nchanges == 0) {
     /* At minimum, add a read filter so the fd is tracked */
-    EV_SET(&changes[0], fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
+    EV_SET(&changes[0], fd, EVFILT_READ, flags, 0, 0, NULL);
     nchanges = 1;
   }
 
@@ -37,20 +40,23 @@ int poller_add(int pfd, int fd, uint32_t events) {
 int poller_mod(int pfd, int fd, uint32_t events) {
   struct kevent changes[4];
   int nchanges = 0;
+  unsigned short flags = EV_ADD | EV_ENABLE | (events & POLLER_LEVEL ? 0 : EV_CLEAR);
+  if (events & POLLER_ONESHOT)
+    flags |= EV_DISPATCH;
 
   /*
    * kqueue doesn't have a modify operation - we add/delete filters.
    * EV_ADD on an existing filter updates it; EV_DELETE removes it.
    */
   if (events & POLLER_IN) {
-    EV_SET(&changes[nchanges], fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
+    EV_SET(&changes[nchanges], fd, EVFILT_READ, flags, 0, 0, NULL);
   } else {
     EV_SET(&changes[nchanges], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
   }
   nchanges++;
 
   if (events & POLLER_OUT) {
-    EV_SET(&changes[nchanges], fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, NULL);
+    EV_SET(&changes[nchanges], fd, EVFILT_WRITE, flags, 0, 0, NULL);
   } else {
     EV_SET(&changes[nchanges], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
   }
@@ -89,6 +95,15 @@ int poller_del(int pfd, int fd) {
     }
   }
   return 0;
+}
+
+int poller_reset(int pfd, int fd, uint32_t events) {
+  /* EV_ADD on an existing filter preserves EV_CLEAR/EV_DISPATCH. Recreate
+   * filters only when the trigger mode changes; ordinary rearming stays cheap.
+   * Adding the new filters also reports data queued during this transition. */
+  if (poller_del(pfd, fd) < 0)
+    return -1;
+  return poller_add(pfd, fd, events);
 }
 
 int poller_wait(int pfd, poller_event_t *events, int max_events, int timeout_ms) {

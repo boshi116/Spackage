@@ -64,7 +64,6 @@ static void rtsp_parse_describe_sdp(rtsp_session_t *session, const struct phr_he
 static void rtsp_parse_play_metadata(rtsp_session_t *session, const struct phr_header *headers, size_t num_headers);
 static int rtsp_initiate_teardown(rtsp_session_t *session);
 static int rtsp_reconnect_for_teardown(rtsp_session_t *session);
-static void rtsp_force_cleanup(rtsp_session_t *session);
 static int rtsp_base64_encode(const uint8_t *input, size_t input_len, char *output, size_t output_size);
 static int rtsp_parse_www_authenticate(rtsp_session_t *session, const char *www_auth_header);
 static void rtsp_build_digest_response(rtsp_session_t *session, const char *method, const char *uri, char *response_out,
@@ -1003,8 +1002,7 @@ static int rtsp_handle_terminal_socket_event(rtsp_session_t *session, uint32_t e
     rtsp_force_cleanup(session);
     if (session->conn && session->conn->state != CONN_CLOSING) {
       session->conn->state = CONN_CLOSING;
-      connection_epoll_update_events(session->conn->epfd, session->conn->fd,
-                                     POLLER_IN | POLLER_OUT | POLLER_RDHUP | POLLER_HUP | POLLER_ERR);
+      connection_schedule_write(session->conn);
     }
     return STREAM_EVENT_OK;
   }
@@ -1218,8 +1216,7 @@ int rtsp_handle_socket_event(rtsp_session_t *session, uint32_t events) {
         rtsp_force_cleanup(session);
         if (session->conn && session->conn->state != CONN_CLOSING) {
           session->conn->state = CONN_CLOSING;
-          connection_epoll_update_events(session->conn->epfd, session->conn->fd,
-                                         POLLER_IN | POLLER_OUT | POLLER_RDHUP | POLLER_HUP | POLLER_ERR);
+          connection_schedule_write(session->conn);
         }
         return 0;
       }
@@ -2077,7 +2074,7 @@ static int rtsp_process_interleaved_buffer(rtsp_session_t *session, connection_t
       break; /* Wait for more data */
     }
 
-    /* Sanity check: bound against the zero-copy destination buffer. */
+    /* Sanity check: bound against the destination pool buffer. */
     if (packet_length > BUFFER_POOL_BUFFER_SIZE) {
       logger(LOG_ERROR,
              "RTSP: Received packet too large (%d bytes, max %d), attempting "
@@ -2233,7 +2230,7 @@ int rtsp_handle_udp_rtp_data(rtsp_session_t *session, connection_t *conn) {
       return total_bytes_written;
     }
 
-    /* Receive directly into zero-copy buffer (true zero-copy receive) */
+    /* Receive directly into a pool buffer for the send queue */
     int bytes_received = recv(session->rtp_socket, rtp_buf->data, BUFFER_POOL_BUFFER_SIZE, 0);
     if (bytes_received < 0) {
       buffer_ref_put(rtp_buf);
@@ -2266,7 +2263,10 @@ int rtsp_handle_udp_rtp_data(rtsp_session_t *session, connection_t *conn) {
  * Force cleanup - immediately close all sockets and reset session
  * Used when TEARDOWN cannot be sent or after TEARDOWN completes
  */
-static void rtsp_force_cleanup(rtsp_session_t *session) {
+void rtsp_force_cleanup(rtsp_session_t *session) {
+  if (!session || !session->initialized)
+    return;
+
   /* Close and remove RTSP control socket from poller */
   if (session->socket >= 0) {
     worker_cleanup_socket_from_epoll(session->epoll_fd, session->socket);
@@ -2389,7 +2389,7 @@ static int rtsp_initiate_teardown(rtsp_session_t *session) {
 
 int rtsp_session_cleanup(rtsp_session_t *session) {
   /* Skip cleanup if session was never initialized */
-  if (!session->initialized) {
+  if (!session || !session->initialized) {
     return 0; /* Nothing to clean up */
   }
 

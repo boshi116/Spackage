@@ -1,12 +1,17 @@
 #include "buffer_pool.h"
 #include "rtp2httpd.h"
+#include "send_queue.h"
 #include "status.h"
 #include "utils.h"
-#include "zerocopy.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
 #include <unistd.h>
+#if defined(__linux__) || defined(__FreeBSD__)
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#endif
 
 #define WORKER_STATS_INC(field)                                                                                        \
   do {                                                                                                                 \
@@ -27,11 +32,11 @@ void buffer_pool_update_stats(buffer_pool_t *pool) {
 
   worker_stats_t *stats = &status_shared->worker_stats[worker_id];
 
-  if (pool == &zerocopy_state.pool) {
+  if (pool == &send_buffer_state.pool) {
     stats->pool_total_buffers = pool->num_buffers;
     stats->pool_free_buffers = pool->num_free;
     stats->pool_max_buffers = pool->max_buffers;
-  } else if (pool == &zerocopy_state.control_pool) {
+  } else if (pool == &send_buffer_state.control_pool) {
     stats->control_pool_total_buffers = pool->num_buffers;
     stats->control_pool_free_buffers = pool->num_free;
     stats->control_pool_max_buffers = pool->max_buffers;
@@ -67,6 +72,7 @@ static buffer_pool_segment_t *buffer_pool_segment_create(size_t buffer_size, siz
     ref->data = segment->buffers + (i * buffer_size);
     ref->refcount = 0;
     ref->segment = segment;
+    ref->shared_fd = -1;
     ref->free_next = pool->free_list;
     pool->free_list = ref;
   }
@@ -101,7 +107,9 @@ int buffer_pool_init(buffer_pool_t *pool, size_t buffer_size, size_t initial_buf
 }
 
 static inline const char *buffer_pool_name(buffer_pool_t *pool) {
-  return (pool == &zerocopy_state.pool) ? "Buffer pool" : "Control pool";
+  if (pool == &send_buffer_state.batch_pool)
+    return "Multicast batch pool";
+  return (pool == &send_buffer_state.pool) ? "Buffer pool" : "Control pool";
 }
 
 static int buffer_pool_expand(buffer_pool_t *pool) {
@@ -129,9 +137,9 @@ static int buffer_pool_expand(buffer_pool_t *pool) {
   pool->num_buffers += buffers_to_add;
   pool->num_free += buffers_to_add;
 
-  if (pool == &zerocopy_state.pool) {
+  if (pool == &send_buffer_state.pool) {
     WORKER_STATS_INC(pool_expansions);
-  } else if (pool == &zerocopy_state.control_pool) {
+  } else if (pool == &send_buffer_state.control_pool) {
     WORKER_STATS_INC(control_pool_expansions);
   }
 
@@ -174,6 +182,12 @@ void buffer_ref_put(buffer_ref_t *ref) {
 
   ref->refcount--;
   if (ref->refcount <= 0) {
+    if (ref->owner) {
+      buffer_ref_t *owner = ref->owner;
+      free(ref);
+      buffer_ref_put(owner);
+      return;
+    }
     if (ref->type == BUFFER_TYPE_FILE) {
       if (ref->file_fd >= 0) {
         close(ref->file_fd);
@@ -182,7 +196,12 @@ void buffer_ref_put(buffer_ref_t *ref) {
       return;
     }
 
-    buffer_pool_t *pool = ref->segment ? ref->segment->parent : &zerocopy_state.pool;
+    if (ref->shared_fd >= 0) {
+      close(ref->shared_fd);
+      ref->shared_fd = -1;
+    }
+
+    buffer_pool_t *pool = ref->segment ? ref->segment->parent : &send_buffer_state.pool;
 
     if (ref->segment) {
       ref->segment->num_free++;
@@ -196,14 +215,98 @@ void buffer_ref_put(buffer_ref_t *ref) {
   }
 }
 
+buffer_ref_t *buffer_ref_view(buffer_ref_t *ref) {
+  if (!ref || ref->type != BUFFER_TYPE_MEMORY)
+    return NULL;
+  buffer_ref_t *view = calloc(1, sizeof(*view));
+  if (!view)
+    return NULL;
+  view->type = BUFFER_TYPE_MEMORY;
+  view->data = ref->data;
+  view->data_size = ref->data_size;
+  view->data_offset = ref->data_offset;
+  view->refcount = 1;
+  view->shared_fd = -1;
+  view->owner = ref->owner ? ref->owner : ref;
+  buffer_ref_get(view->owner);
+  return view;
+}
+
+size_t buffer_ref_capacity(const buffer_ref_t *ref) {
+  if (!ref || ref->type != BUFFER_TYPE_MEMORY)
+    return 0;
+  if (ref->owner)
+    ref = ref->owner;
+  return ref->segment ? ref->segment->parent->buffer_size : 0;
+}
+
+int buffer_ref_sendfile_fd(const buffer_ref_t *ref) {
+  if (!ref || ref->type != BUFFER_TYPE_MEMORY || ref->shared_fd == -2)
+    return -1;
+  return (ref->owner ? ref->owner : ref)->shared_fd;
+}
+
+/* One immutable RAM file per batch lets sendfile share the same kernel pages
+ * across clients. Never rewrite a published file: the kernel may retain its
+ * pages after sendfile returns, even after the last application reference is
+ * closed. A fresh snapshot keeps slow sockets safe when pool memory is reused.
+ * Unsupported kernels or allocation failures retain the normal sendmsg path. */
+void buffer_ref_snapshot(buffer_ref_t *ref) {
+#if (defined(__linux__) || defined(__FreeBSD__)) && defined(MFD_ALLOW_SEALING) && defined(F_ADD_SEALS)
+  if (!ref || ref->owner || ref->shared_fd >= 0 || !ref->data_size)
+    return;
+  int fd = memfd_create("rtp2httpd-batch", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+  if (fd < 0)
+    return;
+#ifdef __FreeBSD__
+  /* FreeBSD shared-memory writes cannot grow the object, unlike Linux memfd. */
+  if (ftruncate(fd, (off_t)ref->data_size) < 0) {
+    close(fd);
+    return;
+  }
+#endif
+  size_t written = 0;
+  while (written < ref->data_size) {
+    ssize_t n = write(fd, (uint8_t *)ref->data + ref->data_offset + written, ref->data_size - written);
+    if (n < 0 && errno == EINTR)
+      continue;
+    if (n <= 0) {
+      close(fd);
+      return;
+    }
+    written += (size_t)n;
+  }
+  if (fcntl(fd, F_ADD_SEALS, F_SEAL_WRITE | F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_SEAL) < 0) {
+    close(fd);
+    return;
+  }
+  ref->shared_fd = fd;
+#else
+  /* macOS sendfile only accepts regular files, not POSIX shared memory. */
+  (void)ref;
+#endif
+}
+
+buffer_ref_t *buffer_pool_alloc_batch(void) {
+  buffer_pool_t *pool = &send_buffer_state.batch_pool;
+  if (!pool->segments) {
+    size_t max_buffers = (size_t)config.buffer_pool_max_size * BUFFER_POOL_BUFFER_SIZE / BUFFER_POOL_BATCH_SIZE;
+    if (max_buffers < 4)
+      max_buffers = 4;
+    if (buffer_pool_init(pool, BUFFER_POOL_BATCH_SIZE, 4, max_buffers, 4, 2, 12) < 0)
+      return NULL;
+  }
+  return buffer_pool_alloc_from(pool);
+}
+
 buffer_ref_t *buffer_pool_alloc_from(buffer_pool_t *pool) {
   if (!pool)
     return NULL;
 
   if (!pool->free_list) {
-    if (pool == &zerocopy_state.pool) {
+    if (pool == &send_buffer_state.pool) {
       WORKER_STATS_INC(pool_exhaustions);
-    } else if (pool == &zerocopy_state.control_pool) {
+    } else if (pool == &send_buffer_state.control_pool) {
       WORKER_STATS_INC(control_pool_exhaustions);
     }
 
@@ -246,9 +349,9 @@ buffer_ref_t *buffer_pool_alloc_from(buffer_pool_t *pool) {
   return ref;
 }
 
-buffer_ref_t *buffer_pool_alloc(void) { return buffer_pool_alloc_from(&zerocopy_state.pool); }
+buffer_ref_t *buffer_pool_alloc(void) { return buffer_pool_alloc_from(&send_buffer_state.pool); }
 
-buffer_ref_t *buffer_pool_alloc_control(void) { return buffer_pool_alloc_from(&zerocopy_state.control_pool); }
+buffer_ref_t *buffer_pool_alloc_control(void) { return buffer_pool_alloc_from(&send_buffer_state.control_pool); }
 
 static void buffer_pool_try_shrink_pool(buffer_pool_t *pool, size_t min_buffers) {
   if (pool->num_free <= pool->high_watermark || pool->num_buffers <= min_buffers) {
@@ -311,9 +414,9 @@ static void buffer_pool_try_shrink_pool(buffer_pool_t *pool, size_t min_buffers)
 
       segments_freed++;
 
-      if (pool == &zerocopy_state.pool) {
+      if (pool == &send_buffer_state.pool) {
         WORKER_STATS_INC(pool_shrinks);
-      } else if (pool == &zerocopy_state.control_pool) {
+      } else if (pool == &send_buffer_state.control_pool) {
         WORKER_STATS_INC(control_pool_shrinks);
       }
 
@@ -339,6 +442,7 @@ static void buffer_pool_try_shrink_pool(buffer_pool_t *pool, size_t min_buffers)
 }
 
 void buffer_pool_try_shrink(void) {
-  buffer_pool_try_shrink_pool(&zerocopy_state.pool, BUFFER_POOL_INITIAL_SIZE);
-  buffer_pool_try_shrink_pool(&zerocopy_state.control_pool, CONTROL_POOL_INITIAL_SIZE);
+  buffer_pool_try_shrink_pool(&send_buffer_state.pool, BUFFER_POOL_INITIAL_SIZE);
+  buffer_pool_try_shrink_pool(&send_buffer_state.control_pool, CONTROL_POOL_INITIAL_SIZE);
+  buffer_pool_try_shrink_pool(&send_buffer_state.batch_pool, 4);
 }

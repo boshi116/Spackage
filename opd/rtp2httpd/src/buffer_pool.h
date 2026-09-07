@@ -8,17 +8,19 @@
 
 /* Buffer pool configuration - optimized for RTP packets with cache alignment */
 #define BUFFER_POOL_ALIGNMENT 64
-#define BUFFER_POOL_INITIAL_SIZE 1024
-#define BUFFER_POOL_EXPAND_SIZE 512
+#define BUFFER_POOL_INITIAL_SIZE 128
+#define BUFFER_POOL_EXPAND_SIZE 128
 #define BUFFER_POOL_BUFFER_SIZE 1536
-#define BUFFER_POOL_LOW_WATERMARK 256
+#define BUFFER_POOL_LOW_WATERMARK 32
 #define BUFFER_POOL_HIGH_WATERMARK (BUFFER_POOL_INITIAL_SIZE * 3)
+/* Keep shared output below 64 KiB, including the last complete RTP payload. */
+#define BUFFER_POOL_BATCH_SIZE 65536
 
 /* Control/API buffer pool configuration */
-#define CONTROL_POOL_INITIAL_SIZE 256
-#define CONTROL_POOL_EXPAND_SIZE 128
+#define CONTROL_POOL_INITIAL_SIZE 16
+#define CONTROL_POOL_EXPAND_SIZE 16
 #define CONTROL_POOL_MAX_BUFFERS 4096
-#define CONTROL_POOL_LOW_WATERMARK 64
+#define CONTROL_POOL_LOW_WATERMARK 4
 #define CONTROL_POOL_HIGH_WATERMARK (CONTROL_POOL_INITIAL_SIZE * 2)
 
 typedef enum {
@@ -27,7 +29,7 @@ typedef enum {
 } buffer_type_t;
 
 /**
- * Buffer reference counting for zero-copy lifecycle management
+ * Reference-counted storage for queued output
  * Supports both memory buffers (pool-managed) and file descriptors (for
  * sendfile)
  *
@@ -35,8 +37,8 @@ typedef enum {
  * 1. When buffer is free: linked via free_next in pool's free list
  * 2. When buffer is in use: can be queued for sending via send_next
  *
- * The send queue fields (iov, zerocopy_id) are only valid
- * when the buffer is in a send queue or pending completion queue.
+ * The send queue field (iov) is only valid
+ * when the buffer is in a send queue.
  */
 typedef struct buffer_ref_s {
   buffer_type_t type; /* Buffer type: memory or file */
@@ -50,11 +52,13 @@ typedef struct buffer_ref_s {
   };
   int refcount;                          /* Reference count */
   struct buffer_pool_segment_s *segment; /* Segment this buffer belongs to (BUFFER_TYPE_MEMORY) */
+  struct buffer_ref_s *owner;            /* Non-NULL for a view sharing another buffer's immutable data */
+  int shared_fd;                         /* Immutable batch snapshot, -1 if absent; views use their owner */
 
   /* Union: buffer is either in free list OR in send queue, never both */
   union {
     struct buffer_ref_s *free_next; /* For free list linkage */
-    struct buffer_ref_s *send_next; /* For send/pending queue linkage */
+    struct buffer_ref_s *send_next; /* For send queue linkage */
   };
 
   union {
@@ -66,7 +70,6 @@ typedef struct buffer_ref_s {
                            sends, BUFFER_TYPE_MEMORY only) */
     off_t file_offset;  /* Current offset in file */
   };
-  uint32_t zerocopy_id; /* ID for tracking MSG_ZEROCOPY completions */
 } buffer_ref_t;
 
 /**
@@ -103,6 +106,14 @@ void buffer_pool_cleanup(buffer_pool_t *pool);
 void buffer_pool_update_stats(buffer_pool_t *pool);
 void buffer_ref_get(buffer_ref_t *ref);
 void buffer_ref_put(buffer_ref_t *ref);
+/* Share data while keeping offsets and send links independent.
+ * The returned view owns a reference to the backing buffer; release with put. */
+buffer_ref_t *buffer_ref_view(buffer_ref_t *ref);
+size_t buffer_ref_capacity(const buffer_ref_t *ref);
+void buffer_ref_snapshot(buffer_ref_t *ref);
+int buffer_ref_sendfile_fd(const buffer_ref_t *ref);
+/* Worker-owned pool: queued batches can outlive their multicast source. */
+buffer_ref_t *buffer_pool_alloc_batch(void);
 buffer_ref_t *buffer_pool_alloc_from(buffer_pool_t *pool);
 buffer_ref_t *buffer_pool_alloc(void);
 buffer_ref_t *buffer_pool_alloc_control(void);

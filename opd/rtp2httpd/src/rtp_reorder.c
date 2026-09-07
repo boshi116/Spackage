@@ -68,7 +68,9 @@ void rtp_reorder_cleanup(rtp_reorder_t *r) {
 }
 
 /* Deliver single packet from buffer_ref */
-static int deliver_packet(buffer_ref_t *buf, connection_t *conn, int is_snapshot) {
+static int deliver_packet(rtp_reorder_t *r, buffer_ref_t *buf, connection_t *conn, int is_snapshot) {
+  if (r->deliver)
+    return r->deliver(r->deliver_arg, buf);
   if (is_snapshot) {
     return snapshot_process_packet(&conn->stream.snapshot, buf->data_size, (uint8_t *)buf->data + buf->data_offset,
                                    conn);
@@ -105,7 +107,7 @@ static int flush_consecutive(rtp_reorder_t *r, connection_t *conn, int is_snapsh
     if (!buf)
       break; /* Hole, stop */
 
-    int bytes = deliver_packet(buf, conn, is_snapshot);
+    int bytes = deliver_packet(r, buf, conn, is_snapshot);
     if (bytes > 0)
       total_bytes += bytes;
 
@@ -148,7 +150,7 @@ static int force_flush_until(rtp_reorder_t *r, uint16_t target_seq, connection_t
     buffer_ref_t *buf = r->slots[slot];
 
     if (buf) {
-      int bytes = deliver_packet(buf, conn, is_snapshot);
+      int bytes = deliver_packet(r, buf, conn, is_snapshot);
       if (bytes > 0)
         total_bytes += bytes;
       buffer_ref_put(buf);
@@ -226,6 +228,12 @@ int rtp_reorder_insert(rtp_reorder_t *r, buffer_ref_t *buf_ref, uint16_t seqn, c
   /* Case 1: Expected sequence -> store and flush */
   if (likely(seq_diff == 0)) {
     int slot = seqn & r->window_mask;
+    /* In-order traffic without FEC has nothing to retain in the window. */
+    if (likely(r->count == 0) && !(fec && fec_is_enabled(fec)) && !r->slots[slot]) {
+      int bytes = deliver_packet(r, buf_ref, conn, is_snapshot);
+      r->base_seq++;
+      return bytes;
+    }
     if (r->slots[slot]) {
       /* Old packet from ring wrap-around, release it */
       buffer_ref_put(r->slots[slot]);

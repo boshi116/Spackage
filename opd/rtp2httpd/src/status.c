@@ -18,6 +18,8 @@
 
 /* Global pointer to shared memory */
 status_shared_t *status_shared = NULL;
+/* Private to each process; refreshed in the child's post-fork initialization. */
+static uint32_t status_process_pid;
 
 /* Path for shared memory file in /tmp */
 static char shm_path[256] = {0};
@@ -311,6 +313,7 @@ static void append_log_entry(int64_t timestamp, loglevel_t level, const char *me
 
 int status_init(void) {
   int fd;
+  status_process_pid = (uint32_t)getpid();
 
   /* PID-keyed path: EEXIST can only be a stale leftover from a prior instance
    * with the same PID (no live process can hold our PID in this namespace),
@@ -560,6 +563,7 @@ void status_cleanup(void) {
 }
 
 void status_worker_init(void) {
+  status_process_pid = (uint32_t)getpid();
   if (log_event_recv_fd >= 0) {
     close(log_event_recv_fd);
     log_event_recv_fd = -1;
@@ -648,7 +652,7 @@ void status_unregister_client(int status_index) {
     return;
 
   client_stats_t *client = &status_shared->clients[status_index];
-  if (atomic_load_explicit(&client->owner_pid, memory_order_acquire) != (uint32_t)getpid())
+  if (atomic_load_explicit(&client->owner_pid, memory_order_acquire) != status_process_pid)
     return;
 
   if (!atomic_exchange_explicit(&client->active, 0, memory_order_acq_rel))
@@ -761,7 +765,7 @@ void status_update_client_bytes(int status_index, uint64_t bytes_sent, uint32_t 
     return;
 
   client_stats_t *client = &status_shared->clients[status_index];
-  if (atomic_load_explicit(&client->owner_pid, memory_order_acquire) != (uint32_t)getpid() ||
+  if (atomic_load_explicit(&client->owner_pid, memory_order_acquire) != status_process_pid ||
       !atomic_load_explicit(&client->active, memory_order_acquire))
     return;
 
@@ -779,7 +783,7 @@ void status_update_client_state(int status_index, client_state_type_t state) {
     return;
 
   client_stats_t *client = &status_shared->clients[status_index];
-  if (atomic_load_explicit(&client->owner_pid, memory_order_acquire) != (uint32_t)getpid() ||
+  if (atomic_load_explicit(&client->owner_pid, memory_order_acquire) != status_process_pid ||
       !atomic_load_explicit(&client->active, memory_order_acquire))
     return;
 
@@ -801,7 +805,7 @@ void status_update_client_queue(int status_index, size_t queue_bytes, size_t que
     return;
 
   client_stats_t *client = &status_shared->clients[status_index];
-  if (atomic_load_explicit(&client->owner_pid, memory_order_acquire) != (uint32_t)getpid() ||
+  if (atomic_load_explicit(&client->owner_pid, memory_order_acquire) != status_process_pid ||
       !atomic_load_explicit(&client->active, memory_order_acquire))
     return;
 
@@ -1022,7 +1026,7 @@ int status_build_sse_json(char *buffer, size_t buffer_capacity, int *p_sent_init
             buffer, buffer_capacity, &len,
             "{\"id\":%d,\"pid\":%d,\"activeClients\":%u,\"totalBandwidth\":%llu,"
             "\"totalBytes\":%llu,"
-            "\"send\":{\"total\":%llu,\"completions\":%llu,\"copied\":%llu,"
+            "\"send\":{\"total\":%llu,"
             "\"eagain\":%llu,\"enobufs\":%llu,\"batch\":%llu},"
             "\"pool\":{\"total\":%llu,\"free\":%llu,\"used\":%llu,\"max\":%llu,"
             "\"expansions\":%llu,\"exhaustions\":%llu,\"shrinks\":%llu,"
@@ -1032,7 +1036,6 @@ int status_build_sse_json(char *buffer, size_t buffer_capacity, int *p_sent_init
             "\"utilization\":%.1f}}",
             i, (int)ws->worker_pid, (unsigned int)w_active, (unsigned long long)w_bandwidth,
             (unsigned long long)w_total_bytes, (unsigned long long)ws->total_sends,
-            (unsigned long long)ws->total_completions, (unsigned long long)ws->total_copied,
             (unsigned long long)ws->eagain_count, (unsigned long long)ws->enobufs_count,
             (unsigned long long)ws->batch_sends, (unsigned long long)w_pool_total, (unsigned long long)w_pool_free,
             (unsigned long long)w_pool_used, (unsigned long long)ws->pool_max_buffers,
@@ -1126,7 +1129,7 @@ void handle_disconnect_client(connection_t *c) {
   }
 
   /* Check HTTP method */
-  if (strcasecmp(c->http_req.method, "POST") != 0 && strcasecmp(c->http_req.method, "DELETE") != 0) {
+  if (strcasecmp(c->http_req->method, "POST") != 0 && strcasecmp(c->http_req->method, "DELETE") != 0) {
     send_http_headers(c, STATUS_400, "application/json", NULL);
     snprintf(response, sizeof(response),
              "{\"success\":false,\"error\":\"Method not allowed. Use POST or "
@@ -1136,8 +1139,8 @@ void handle_disconnect_client(connection_t *c) {
   }
 
   /* Parse form data body to get client_id */
-  if (c->http_req.body_len > 0) {
-    if (http_parse_query_param(c->http_req.body, "client_id", client_id_str, sizeof(client_id_str)) != 0) {
+  if (c->http_req->body_len > 0) {
+    if (http_parse_query_param(c->http_req->body, "client_id", client_id_str, sizeof(client_id_str)) != 0) {
       send_http_headers(c, STATUS_400, "application/json", NULL);
       snprintf(response, sizeof(response),
                "{\"success\":false,\"error\":\"Missing 'client_id' parameter "
@@ -1203,7 +1206,7 @@ void handle_clear_logs(connection_t *c) {
   char response[256];
 
   /* Check HTTP method */
-  if (strcasecmp(c->http_req.method, "POST") != 0) {
+  if (strcasecmp(c->http_req->method, "POST") != 0) {
     send_http_headers(c, STATUS_400, "application/json", NULL);
     snprintf(response, sizeof(response), "{\"success\":false,\"error\":\"Method not allowed. Use POST\"}");
     connection_queue_output_and_flush(c, (const uint8_t *)response, strlen(response));
@@ -1245,7 +1248,7 @@ void handle_set_log_level(connection_t *c) {
   char level_str[32] = {0};
 
   /* Check HTTP method */
-  if (strcasecmp(c->http_req.method, "PUT") != 0 && strcasecmp(c->http_req.method, "PATCH") != 0) {
+  if (strcasecmp(c->http_req->method, "PUT") != 0 && strcasecmp(c->http_req->method, "PATCH") != 0) {
     send_http_headers(c, STATUS_400, "application/json", NULL);
     snprintf(response, sizeof(response),
              "{\"success\":false,\"error\":\"Method not allowed. Use PUT or "
@@ -1255,8 +1258,8 @@ void handle_set_log_level(connection_t *c) {
   }
 
   /* Parse form data body to get level */
-  if (c->http_req.body_len > 0) {
-    if (http_parse_query_param(c->http_req.body, "level", level_str, sizeof(level_str)) != 0) {
+  if (c->http_req->body_len > 0) {
+    if (http_parse_query_param(c->http_req->body, "level", level_str, sizeof(level_str)) != 0) {
       send_http_headers(c, STATUS_400, "application/json", NULL);
       snprintf(response, sizeof(response),
                "{\"success\":false,\"error\":\"Missing 'level' parameter in "
@@ -1295,7 +1298,7 @@ void handle_reload_config(connection_t *c) {
   char response[256];
 
   /* Check HTTP method */
-  if (strcasecmp(c->http_req.method, "POST") != 0) {
+  if (strcasecmp(c->http_req->method, "POST") != 0) {
     send_http_headers(c, STATUS_400, "application/json", NULL);
     snprintf(response, sizeof(response), "{\"success\":false,\"error\":\"Method not allowed. Use POST\"}");
     connection_queue_output_and_flush(c, (const uint8_t *)response, strlen(response));
@@ -1323,7 +1326,7 @@ void handle_restart_workers(connection_t *c) {
   char response[256];
 
   /* Check HTTP method */
-  if (strcasecmp(c->http_req.method, "POST") != 0) {
+  if (strcasecmp(c->http_req->method, "POST") != 0) {
     send_http_headers(c, STATUS_400, "application/json", NULL);
     snprintf(response, sizeof(response), "{\"success\":false,\"error\":\"Method not allowed. Use POST\"}");
     connection_queue_output_and_flush(c, (const uint8_t *)response, strlen(response));

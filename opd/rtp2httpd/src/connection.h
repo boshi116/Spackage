@@ -2,9 +2,9 @@
 #define CONNECTION_H
 
 #include "http.h"
+#include "send_queue.h"
 #include "service.h"
 #include "stream.h"
-#include "zerocopy.h"
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -27,15 +27,15 @@ typedef struct connection_s {
   int epfd;
   conn_state_t state;
   /* input parsing */
-  char inbuf[INBUF_SIZE];
+  char *inbuf;
   int in_len;
-  /* zero-copy send queue - all output goes through this */
-  zerocopy_queue_t zc_queue;
-  int zerocopy_enabled; /* Whether SO_ZEROCOPY is enabled on this socket */
+  /* Output send queue - all output goes through this */
+  send_queue_t send_queue;
   connection_buffer_class_t buffer_class;
   /* HTTP request parser */
-  http_request_t http_req;
-  int headers_sent; /* Track whether HTTP response headers have been sent */
+  http_request_t *http_req;
+  int request_is_head; /* Retained after the request parser is released */
+  int headers_sent;    /* Track whether HTTP response headers have been sent */
   /* service/stream */
   service_t *service;
   stream_context_t stream;
@@ -55,6 +55,7 @@ typedef struct connection_s {
   struct connection_s *next;
   struct connection_s *write_queue_next;
   int write_queue_pending;
+  int write_poll_armed; /* Waiting for a kernel writable notification */
 
   /* Backpressure and monitoring */
   size_t queue_limit_bytes;
@@ -103,6 +104,13 @@ connection_t *connection_create(int fd, int epfd, struct sockaddr_storage *clien
  */
 void connection_cleanup(connection_t *c);
 
+/* Release parsed request storage once no asynchronous handler borrows it. */
+void connection_release_request(connection_t *c);
+
+/* Publish queue statistics on the worker's periodic tick. Queue limits,
+ * counters and high-water marks are maintained locally on every operation. */
+void connection_report_queue(connection_t *c);
+
 /**
  * Handle read event on client connection
  * @param c Connection
@@ -137,12 +145,10 @@ int connection_set_nonblocking(int fd);
 int connection_set_tcp_nodelay(int fd);
 
 /**
- * Update epoll events for a file descriptor
- * @param epfd epoll file descriptor
- * @param fd File descriptor to update
- * @param events New event mask
+ * Schedule buffered output unless waiting for socket writability.
+ * @param c Client connection
  */
-void connection_epoll_update_events(int epfd, int fd, uint32_t events);
+void connection_schedule_write(connection_t *c);
 
 /**
  * Queue data to connection output buffer for reliable delivery
@@ -166,16 +172,16 @@ int connection_queue_output(connection_t *c, const uint8_t *data, size_t len);
 int connection_queue_output_and_flush(connection_t *c, const uint8_t *data, size_t len);
 
 /**
- * Queue data for zero-copy send (no memcpy)
+ * Queue data for sending (no memcpy)
  * Takes ownership of the buffer via reference counting
  * @param c Connection
  * @param buf_ref Buffer reference (must not be NULL)
  * @return 0 on success, -1 if queue full or invalid parameters
  */
-int connection_queue_zerocopy(connection_t *c, buffer_ref_t *buf_ref);
+int connection_queue_buffer(connection_t *c, buffer_ref_t *buf_ref);
 
 /**
- * Queue a file descriptor for zero-copy send using sendfile()
+ * Queue a file descriptor for sending using sendfile()
  * Takes ownership of the file descriptor (will close it when done)
  * @param c Connection
  * @param file_fd File descriptor to send (must be seekable)
@@ -185,11 +191,9 @@ int connection_queue_zerocopy(connection_t *c, buffer_ref_t *buf_ref);
  */
 int connection_queue_file(connection_t *c, int file_fd, off_t file_offset, size_t file_size);
 
-/* Slot-equivalent bytes currently queued (each pending buffer counts as a full
- * BUFFER_POOL_BUFFER_SIZE slot, matching the unit used by queue_limit_bytes). */
-static inline size_t connection_queue_bytes(const connection_t *c) {
-  return c->zc_queue.num_queued * BUFFER_POOL_BUFFER_SIZE;
-}
+/* Backing capacity currently queued, including shared multicast batches.
+ * Partial sends retain the entire backing buffer until the entry is removed. */
+static inline size_t connection_queue_bytes(const connection_t *c) { return c->send_queue.memory_bytes; }
 
 /* Record one upstream-pause edge.  Called by per-transport pause helpers
  * (http_proxy_pause_upstream, rtsp_pause_upstream) on the 0->1 transition. */
@@ -224,7 +228,7 @@ void connection_recompute_any_upstream_paused(connection_t *c);
 
 /**
  * Mark the connection for orderly shutdown after upstream EOF/error: switch
- * to CONN_CLOSING and re-arm the full event mask so the worker keeps draining
+ * to CONN_CLOSING and schedule a write so the worker keeps draining
  * any queued bytes to the client before tearing down.  No-op if the
  * connection is already CONN_CLOSING.
  */

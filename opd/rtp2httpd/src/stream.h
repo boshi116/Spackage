@@ -105,10 +105,10 @@ typedef struct stream_context_s {
   mcast_session_t mcast;
 
   /* RTSP session for SERVICE_RTSP */
-  rtsp_session_t rtsp;
+  rtsp_session_t *rtsp;
 
   /* HTTP proxy session for SERVICE_HTTP */
-  http_proxy_session_t http_proxy;
+  http_proxy_session_t *http_proxy;
 
   /* RTP reorder context */
   rtp_reorder_t reorder;
@@ -119,6 +119,11 @@ typedef struct stream_context_s {
   /* Snapshot context */
   snapshot_context_t snapshot;
 } stream_context_t;
+
+/* Shared multicast parsing uses the same validation and metadata rules. */
+int stream_payload_is_mpegts(const uint8_t *payload, int payload_len);
+void stream_metadata_note_media(stream_context_t *ctx, int packet_type, const uint8_t *payload, int payload_len,
+                                stream_media_origin_t origin);
 
 /**
  * Initialize a stream context for integration into a worker's unified epoll
@@ -174,6 +179,10 @@ int stream_tick(stream_context_t *ctx, int64_t now);
  */
 int stream_context_cleanup(stream_context_t *ctx);
 
+/** Final, synchronous destruction before freeing the parent connection.
+ * Cancels pending RTSP TEARDOWN and releases all owned resources. */
+void stream_context_destroy(stream_context_t *ctx);
+
 /**
  * Process RTP payload with reordering - either forward to client (streaming)
  * or capture I-frame (snapshot)
@@ -206,7 +215,7 @@ void stream_send_http_headers(connection_t *conn, const char *content_type, cons
  * connection is currently paused due to backpressure, this resumes it when
  * the queue has fallen below the low watermark.
  *
- * Called from connection_handle_write after a successful zerocopy_send.
+ * Called from connection_handle_write after a successful send_queue_send.
  * The struct must be at least zero-initialized (the embedded stream context
  * in connection_t is via calloc); passing uninitialized stack memory is
  * unsafe — `conn` and the `*.initialized` flags are dereferenced.

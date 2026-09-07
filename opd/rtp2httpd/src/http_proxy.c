@@ -894,9 +894,9 @@ static int http_proxy_try_receive_response(http_proxy_session_t *session) {
   int bytes_forwarded = 0;
 
   /*
-   * Two-phase receive strategy for zero-copy optimization:
+   * Two-phase receive strategy to avoid an extra payload copy:
    * Phase 1 (AWAITING_HEADERS): Use fixed buffer for header parsing
-   * Phase 2 (STREAMING): Recv directly to buffer pool for zero-copy send
+   * Phase 2 (STREAMING): Receive directly into the send buffer pool
    *                      OR buffer for rewriting if needs_body_rewrite
    */
 
@@ -923,7 +923,7 @@ static int http_proxy_try_receive_response(http_proxy_session_t *session) {
       return http_proxy_consume_rewrite_body(session, temp_buf, (size_t)received);
     }
 
-    /* Phase 2: Zero-copy streaming - recv directly to buffer pool */
+    /* Phase 2: Send queue streaming - recv directly to buffer pool */
 
     /* Pause upstream BEFORE recv when client queue is near limit.  Dropping
      * bytes mid-stream would corrupt the response body, so we instead push
@@ -956,9 +956,9 @@ static int http_proxy_try_receive_response(http_proxy_session_t *session) {
       return http_proxy_handle_upstream_end(session);
     }
 
-    /* Queue for zero-copy send */
+    /* Queue for sending */
     buf->data_size = received;
-    if (connection_queue_zerocopy(session->conn, buf) < 0) {
+    if (connection_queue_buffer(session->conn, buf) < 0) {
       buffer_ref_put(buf);
       logger(LOG_ERROR, "HTTP Proxy: Failed to queue body data");
       return -1;
@@ -966,8 +966,8 @@ static int http_proxy_try_receive_response(http_proxy_session_t *session) {
     buffer_ref_put(buf);
     bytes_forwarded = (int)received;
 
-    /* Let connection_queue_zerocopy's internal batching mechanism handle
-     * POLLER_OUT - it uses zerocopy_should_flush() for optimal batching */
+    /* Let connection_queue_buffer's internal batching mechanism handle
+     * POLLER_OUT - it uses send_queue_should_flush() for optimal batching */
     session->bytes_received += bytes_forwarded;
 
     /* Check if we've received all content */
@@ -1283,8 +1283,7 @@ static int http_proxy_parse_response_headers(http_proxy_session_t *session) {
 
     /* Flush headers immediately - don't use queue_output_and_flush which sets
      * CONN_CLOSING */
-    connection_epoll_update_events(session->conn->epfd, session->conn->fd,
-                                   POLLER_IN | POLLER_OUT | POLLER_RDHUP | POLLER_HUP | POLLER_ERR);
+    connection_schedule_write(session->conn);
   }
 
   /* HEAD responses have no body — go straight to COMPLETE */
@@ -1464,8 +1463,7 @@ int http_proxy_handle_socket_event(http_proxy_session_t *session, uint32_t event
     if (session->conn && session->conn->state != CONN_CLOSING) {
       logger(LOG_DEBUG, "HTTP Proxy: Transfer complete");
       session->conn->state = CONN_CLOSING;
-      connection_epoll_update_events(session->conn->epfd, session->conn->fd,
-                                     POLLER_IN | POLLER_OUT | POLLER_RDHUP | POLLER_HUP | POLLER_ERR);
+      connection_schedule_write(session->conn);
     }
   }
 
