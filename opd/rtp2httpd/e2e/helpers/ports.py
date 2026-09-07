@@ -22,7 +22,7 @@ from collections import deque
 # Below Linux ip_local_port_range (32768+) and macOS net.inet.ip.portrange (49152+).
 _RANGE_BASE = 14000
 _RANGE_SIZE = 2300
-_MAX_RANGES = 8  # 14000-32399 even with more than 8 xdist workers
+_DEFAULT_RANGES = 8
 _COOLDOWN = 64
 
 _lock = threading.Lock()
@@ -44,8 +44,15 @@ def xdist_worker_index() -> int:
 
 def worker_port_range() -> tuple[int, int]:
     """Return the inclusive-exclusive TCP/UDP listen range for this worker."""
-    start = _RANGE_BASE + (xdist_worker_index() % _MAX_RANGES) * _RANGE_SIZE
-    return start, start + _RANGE_SIZE
+    # xdist supplies the same worker count to every process. Subdivide the
+    # fixed non-ephemeral window when needed instead of wrapping worker IDs
+    # onto another worker's range (e.g. gw0 and gw8 on a 16-core machine).
+    range_count = max(_DEFAULT_RANGES, int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "1")))
+    range_size = (_RANGE_SIZE * _DEFAULT_RANGES) // range_count
+    if range_size < _COOLDOWN + 2:
+        raise RuntimeError(f"Too many E2E workers for isolated port allocation: {range_count}")
+    start = _RANGE_BASE + (xdist_worker_index() % range_count) * range_size
+    return start, start + range_size
 
 
 def ipv6_loopback_available() -> bool:

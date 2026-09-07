@@ -1081,10 +1081,11 @@ int rtsp_handle_socket_event(rtsp_session_t *session, uint32_t events) {
    * with a response outstanding, drain it first: a peer can deliver its final
    * response and EOF in a single edge-triggered event, and that response may be
    * exactly what completes the exchange (RTSP HEAD probes routinely see the
-   * DESCRIBE response and FIN together).  The read path below reports the
-   * close through this same helper once the response has been parsed. */
+   * DESCRIBE response and FIN together).  During TCP playback, final media
+   * must likewise be drained before closing the upstream. */
   else if ((events & (POLLER_HUP | POLLER_ERR | POLLER_RDHUP)) &&
-           !(session->awaiting_response && (events & POLLER_IN))) {
+           !((events & POLLER_IN) && (session->awaiting_response || (session->state == RTSP_STATE_PLAYING &&
+                                                                     session->transport_mode == RTSP_TRANSPORT_TCP)))) {
     return rtsp_handle_terminal_socket_event(session, events);
   }
 
@@ -1146,13 +1147,15 @@ int rtsp_handle_socket_event(rtsp_session_t *session, uint32_t events) {
       }
 
       /* The response that arrived with the close (if any) has now been parsed.
-       * Terminal successes returned above; everything else still needs a live
-       * connection, so honour the close now instead of letting the session wait
-       * for a reply that can never come.  A response that replaced the control
-       * connection (redirect, TEARDOWN reconnect) is exempt: the close belonged
-       * to the connection we just walked away from. */
+       * Terminal successes returned above. TCP playback falls through to drain
+       * media preserved after PLAY/keepalive and still queued in the socket.
+       * Other states need a live connection, so honour the close now instead
+       * of waiting for a reply that can never come. A response that replaced
+       * the control connection (redirect, TEARDOWN reconnect) is exempt: the
+       * close belonged to the connection we just walked away from. */
       if (session->connect_generation == connect_generation &&
-          (session->peer_closed || (events & (POLLER_HUP | POLLER_ERR | POLLER_RDHUP)))) {
+          (session->peer_closed || (events & (POLLER_HUP | POLLER_ERR | POLLER_RDHUP))) &&
+          !(session->state == RTSP_STATE_PLAYING && session->transport_mode == RTSP_TRANSPORT_TCP)) {
         return rtsp_handle_terminal_socket_event(session, events);
       }
 
@@ -1166,7 +1169,8 @@ int rtsp_handle_socket_event(rtsp_session_t *session, uint32_t events) {
         }
       }
 
-      if (response_result == RTSP_RESPONSE_KEEPALIVE) {
+      if (response_result == RTSP_RESPONSE_KEEPALIVE &&
+          !(session->peer_closed || (events & (POLLER_HUP | POLLER_ERR | POLLER_RDHUP)))) {
         /* For TCP mode, process any preserved interleaved data in buffer
          * (without recv - just drain what's already buffered) */
         if (session->transport_mode == RTSP_TRANSPORT_TCP && session->response_buffer_pos > 0 && session->conn) {
@@ -2146,6 +2150,7 @@ int rtsp_handle_tcp_interleaved_data(rtsp_session_t *session, connection_t *conn
     }
 
     int hit_eagain = 0;
+    int upstream_closed = 0;
 
     /* Fill response buffer from socket */
     while (session->response_buffer_pos < RTSP_RESPONSE_BUFFER_SIZE) {
@@ -2157,10 +2162,12 @@ int rtsp_handle_tcp_interleaved_data(rtsp_session_t *session, connection_t *conn
           break; /* No more data available */
         }
         logger(LOG_ERROR, "RTSP: TCP receive failed: %s", strerror(errno));
-        return -1; /* Upstream gone — caller will drain client */
+        upstream_closed = 1;
+        break;
       } else if (bytes_received == 0) {
         logger(LOG_INFO, "RTSP: Server closed connection (EOF received)");
-        return -1; /* EOF — caller will drain client */
+        upstream_closed = 1;
+        break;
       }
 
       session->response_buffer_pos += bytes_received;
@@ -2171,6 +2178,11 @@ int rtsp_handle_tcp_interleaved_data(rtsp_session_t *session, connection_t *conn
     if (result < 0)
       return result;
     total_forwarded += result;
+
+    /* recv can report EOF after filling only part of the buffer. Forward
+     * those final complete frames before the caller drains client output. */
+    if (upstream_closed)
+      return -1;
 
     /* If we hit EAGAIN, socket is fully drained */
     if (hit_eagain)

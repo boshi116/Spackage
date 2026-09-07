@@ -108,6 +108,9 @@ class _RTSPServerBase:
         """Called right after the PLAY 200 OK is sent.  Pump data here."""
         raise NotImplementedError
 
+    def _before_play(self) -> None:
+        """Optional synchronization point before sending the PLAY response."""
+
     def _session_id(self) -> str:
         """Session ID returned by OPTIONS/SETUP/PLAY (HMS uses OPTIONS session)."""
         return self._options_session_id or "t1"
@@ -243,6 +246,7 @@ class _RTSPServerBase:
                 elif method == "SETUP":
                     conn.sendall(self._setup_response(cseq, transport_hdr).encode())
                 elif method == "PLAY":
+                    self._before_play()
                     extra_headers = "".join("{}: {}\r\n".format(*item) for item in self._play_response_headers)
                     conn.sendall(
                         (
