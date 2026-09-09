@@ -1,8 +1,8 @@
 ## 📦 自用包AI最近自动更新
-- 更新时间：2026-09-09 00:59:19
-- 更新文件数：11
+- 更新时间：2026-09-09 10:32:59
+- 更新文件数：32
 - 更新插件：
-  - openwrt-passwall
-  - rtp2httpd
+  - luci-app-wechatpush
+  - openwrt-passwall2
 ---
 
