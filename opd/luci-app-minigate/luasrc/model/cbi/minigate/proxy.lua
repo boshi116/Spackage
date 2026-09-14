@@ -26,6 +26,14 @@ uc:foreach("minigate", "ddns", function(sec)
     end
 end)
 
+s = m:section(NamedSection, "global", "global", "HTTP 自动跳转",
+    "让每个已启用 HTTPS 的监听端口同时接受 HTTP；明文请求会以 308 跳转到同域名、同端口的 HTTPS。")
+s.anonymous = true
+
+o = s:option(Flag, "http_redirect", "启用 HTTP 跳转")
+o.default = "0"
+o.rmempty = false
+
 -- ================================
 -- 通配符域名
 -- ================================
