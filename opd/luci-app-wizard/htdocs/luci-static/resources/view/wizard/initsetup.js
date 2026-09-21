@@ -71,6 +71,7 @@ function getRadioBand(devName) {
 return view.extend({
 	initialValues: {},
 	initialShortcuts: [],
+	originalLanIp: null, // 持久快照，防止被 handleSave 覆盖
 	hasWireless: false,
 	hasNginx: false,
 	map: null,
@@ -96,7 +97,17 @@ return view.extend({
 
 	// 2. 统一聚合读取系统当前各子模块的实时配置
 	getSystemConfig: function() {
-		var isSideRouter = !!uci.get('network', 'lan', 'gateway') && uci.get('network', 'wan', 'auto') === '0';
+		var lanGw = getFirstIp(uci.get('network', 'lan', 'gateway'), '');
+		var wanSec = uci.get('network', 'wan');
+
+		// 判定 WAN 接口是否不存在或处于停用状态
+		var isWanDisabled = !wanSec ||
+			uci.get('network', 'wan', 'auto') === '0' ||
+			uci.get('network', 'wan', 'disabled') === '1' ||
+			uci.get('network', 'wan', 'proto') === 'none';
+
+		// 核心判定：配置了局域网网关，且 WAN 口被停用或不存在，即确认处于旁路由模式
+		var isSideRouter = !!lanGw && isWanDisabled;
 
 		var ap = null;
 		if (this.hasWireless) {
@@ -118,7 +129,7 @@ return view.extend({
 			wan_pppoe_user: uci.get('network', 'wan', 'username') || '',
 			wan_pppoe_pass: uci.get('network', 'wan', 'password') || '',
 			lan_ipaddr: getFirstIp(uci.get('network', 'lan', 'ipaddr'), '10.0.0.1'),
-			lan_gateway: getFirstIp(uci.get('network', 'lan', 'gateway'), ''),
+			lan_gateway: lanGw,
 			lan_dns: toArray(uci.get('network', 'lan', 'dns')),
 			dhcp: uci.get('dhcp', 'lan', 'ignore') === '1' ? '0' : '1',
 			ipv6: uci.get('network', 'wan6', 'auto') === '0' ? '0' : '1',
@@ -138,6 +149,7 @@ return view.extend({
 
 		var sys = this.getSystemConfig();
 		this.initialValues = Object.assign({}, sys);
+		this.originalLanIp = sys.lan_ipaddr; // 记录不可变初始 IP
 
 		// 缓存初始 shortcuts 配置快照，用于保存时比对差异
 		var shortcuts = uci.sections('wizard', 'shortcuts') || [];
@@ -403,16 +415,34 @@ return view.extend({
 				}
 			}
 
-			// D. 自定义 LAN DNS
-			if (has(changed, 'lan_dns')) {
-				if (cur.lan_dns && cur.lan_dns.length > 0) {
-					uci.set('network', 'lan', 'dns', cur.lan_dns);
+			// D. 自定义 LAN DNS（支持旁路由模式自动回落至网关或公网兜底 DNS）
+			if (has(changed, 'lan_dns') || has(changed, 'wan_proto') || has(changed, 'lan_gateway')) {
+				if (cur.wan_proto === 'siderouter') {
+					var effectiveDns = toArray(cur.lan_dns);
+
+					// 若 DNS 列表为空，按优先级进行智能兜底
+					if (effectiveDns.length === 0) {
+						var cleanGw = getFirstIp(cur.lan_gateway, '');
+						if (cleanGw) {
+							// 优先级 1：回落至主路由网关 IP
+							effectiveDns.push(cleanGw);
+						} else {
+							// 优先级 2：若网关也未填写，使用常用可靠公网 DNS 兜底
+							effectiveDns.push('223.5.5.5', '119.29.29.29');
+						}
+					}
+					uci.set('network', 'lan', 'dns', effectiveDns);
 				} else {
-					safeUnset('network', 'lan', 'dns');
+					// 常规主路由模式：用户未配则清除，让系统通过 WAN 动态获取
+					if (cur.lan_dns && cur.lan_dns.length > 0) {
+						uci.set('network', 'lan', 'dns', cur.lan_dns);
+					} else {
+						safeUnset('network', 'lan', 'dns');
+					}
 				}
 			}
 
-			// E. LAN 网关（独立变更或切换至旁路由模式时更新）
+			// E. LAN 网关
 			if (has(changed, 'lan_gateway') || has(changed, 'wan_proto')) {
 				if (cur.wan_proto === 'siderouter') {
 					if (cur.lan_gateway) {
@@ -475,32 +505,59 @@ return view.extend({
 		});
 	},
 
-	// 5. 重写 View 级别的 handleSaveApply：应用生效并实现 LAN IP 变更平滑迁移与自动跳转
+	// 5. 重写 View 级别的 handleSaveApply：前置检测 LAN IP 变动，强制非回滚提交并精准弹出倒计时
 	handleSaveApply: function(ev, mode) {
 		var self = this;
+
+		// 关键修复：在 handleSave 覆盖 initialValues 之前，立即计算并锁定是否修改了 LAN IP
+		var oldIp = (self.originalLanIp || self.initialValues.lan_ipaddr || '').split('/')[0].trim();
+		var newIp = (self.optMap['lan_ipaddr'] ? self.optMap['lan_ipaddr'].formvalue('default') : '') || '';
+		newIp = newIp.split('/')[0].trim();
+		var ipChanged = !!(newIp && oldIp && (newIp !== oldIp));
+
 		return this.handleSave(ev).then(function(hasChanges) {
 			if (!hasChanges) return false;
 
-			var oldIp = self.initialValues.lan_ipaddr;
-			var newIp = (self.optMap['lan_ipaddr'].formvalue('default') || '').split('/')[0].trim();
-			var ipChanged = newIp && (newIp !== oldIp);
+			if (ipChanged) {
+				var sec = 15;
+				var targetUrl = window.location.protocol + '//' + newIp + (window.location.pathname || '/cgi-bin/luci/');
+				var countSpan = E('strong', {}, String(sec));
 
-			return ui.changes.apply(mode == '0').then(function() {
-				if (ipChanged) {
-					var sec = 15;
-					ui.showModal(_('LAN IP Address Changed'), [
-						E('p', _('LAN IP changed to %s. Redirecting in %d seconds...').format(newIp, sec)),
-						E('div', { 'class': 'spinning', 'style': 'margin: 1em auto;' })
-					]);
-					var timer = window.setInterval(function() {
-						sec--;
-						if (sec <= 0) {
-							window.clearInterval(timer);
-							window.location.href = window.location.protocol + '//' + newIp + window.location.pathname;
-						}
-					}, 1000);
-				}
-			});
+				// 1. 核心操作：调用 apply_unchecked，进行强制永久提交，彻底绕过 90 秒回滚保护机制！
+				L.post(L.url('admin', 'uci', 'apply_unchecked')).catch(function() {});
+
+				// 2. 立即在前端呼出弹窗遮罩层
+				ui.showModal(_('LAN IP Address Changed'), [
+					E('p', {}, [_('LAN IP has been changed to '), E('strong', {}, newIp), '.']),
+					E('p', {}, [_('Applying changes without rollback. Redirecting to the new address in '), countSpan, _(' seconds...')]),
+					E('p', { 'class': 'alert-message notice', 'style': 'margin-top: 1em;' },
+						_('提示：更改网段后，若未能自动加载新页面，请尝试重新插拔网线或断开重连 Wi-Fi，以获取新网段的 IP 地址。')),
+					E('div', { 'class': 'spinning', 'style': 'margin: 1.5em auto;' }),
+					E('div', { 'class': 'right' }, [
+						E('button', {
+							'class': 'cbi-button cbi-button-action',
+							'click': function() {
+								window.location.href = targetUrl;
+							}
+						}, _('Redirect Now'))
+					])
+				]);
+
+				// 3. 启动倒计时并自动跳转
+				var timer = window.setInterval(function() {
+					sec--;
+					countSpan.textContent = String(sec);
+					if (sec <= 0) {
+						window.clearInterval(timer);
+						window.location.href = targetUrl;
+					}
+				}, 1000);
+
+				return true;
+			} else {
+				// 未改动 LAN IP 的常规操作，保留原生的回滚自愈保护
+				return ui.changes.apply(mode == '0');
+			}
 		});
 	},
 
