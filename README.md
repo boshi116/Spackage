@@ -1,8 +1,9 @@
 ## 📦 自用包AI最近自动更新
-- 更新时间：2026-10-28 11:30:49
-- 更新文件数：5
+- 更新时间：2026-10-29 02:39:03
+- 更新文件数：70
 - 更新插件：
-  - OpenAppFilter
+  - luci-app-minigate
+  - luci-theme-argon
   - openwrt-passwall
   - openwrt-passwall2
 ---
