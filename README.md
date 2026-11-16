@@ -1,7 +1,9 @@
 ## 📦 自用包AI最近自动更新
-- 更新时间：2026-11-16 12:16:01
-- 更新文件数：4
+- 更新时间：2026-11-17 06:41:27
+- 更新文件数：14
 - 更新插件：
-  - luci-app-wizard
+  - luci-app-netstat
+  - openwrt-passwall
+  - openwrt-passwall2
 ---
 
