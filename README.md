@@ -1,7 +1,9 @@
 ## 📦 自用包AI最近自动更新
-- 更新时间：2026-11-23 13:09:53
-- 更新文件数：2
+- 更新时间：2026-11-24 08:31:19
+- 更新文件数：45
 - 更新插件：
-  - smartdns
+  - luci-theme-argon
+  - openwrt-passwall
+  - openwrt-passwall2
 ---
 
